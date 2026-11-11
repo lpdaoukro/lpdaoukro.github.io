@@ -204,3 +204,19 @@ tr.cliquable { cursor: pointer; } tr.cliquable:hover td { background: #F0F6FC; }
 .rec-outils { flex: 1 1 160px; }
 .rec-outils input[type=range] { padding: 0; min-height: 30px; }
 [hidden] { display: none !important; }
+
+/* ---- Module élèves (v1.2) ---- */
+.grille-champs { display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 4px 12px; }
+.grille-champs label { margin-top: 6px; }
+#impression .cartes-page { display: grid; grid-template-columns: 85mm 85mm; grid-auto-rows: 54mm; gap: 4mm 8mm; justify-content: center; padding-top: 4mm; }
+#impression .carte-scolaire { border: 1px solid #555; border-radius: 3mm; overflow: hidden; display: flex; flex-direction: column; font-size: 7.5pt; position: relative; background: #fff; }
+#impression .cs-tete { display: flex; gap: 2mm; align-items: center; background: #1F4E78; color: #fff; padding: 1.2mm 2mm; -webkit-print-color-adjust: exact; print-color-adjust: exact; }
+#impression .cs-tete img { width: 8mm; height: 8mm; object-fit: contain; background: #fff; border-radius: 50%; }
+#impression .cs-tete b { display: block; font-size: 7.5pt; } #impression .cs-tete span { font-size: 7pt; letter-spacing: .4px; }
+#impression .cs-corps { flex: 1; display: flex; gap: 2.5mm; padding: 2mm; }
+#impression .cs-photo { width: 22mm; height: 28mm; border: 1px solid #999; background: #eee center/cover no-repeat; flex: none; -webkit-print-color-adjust: exact; print-color-adjust: exact; }
+#impression .cs-info { flex: 1; line-height: 1.35; }
+#impression .cs-nom { font-weight: 700; font-size: 9pt; }
+#impression .cs-sign { margin-top: 1.5mm; font-size: 6.5pt; font-style: italic; }
+#impression .cs-drapeau { display: flex; height: 2mm; -webkit-print-color-adjust: exact; print-color-adjust: exact; }
+#impression .cs-drapeau i { flex: 1; } #impression .cs-drapeau i:nth-child(1) { background: #F77F00; } #impression .cs-drapeau i:nth-child(2) { background: #fff; } #impression .cs-drapeau i:nth-child(3) { background: #009E60; }

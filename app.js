@@ -343,6 +343,8 @@ function formInscription() {
 /* ================= NAVIGATION ================= */
 const PAGES = {
   'ma-fiche':      { titre: 'Ma fiche', roles: ['intervenant', 'censeur', 'admin'], si: () => S.session.profil.intervenant || role() === 'intervenant', fn: pageMaFiche },
+  'eleves':        { titre: 'Élèves', roles: ['educateur', 'comptable', 'censeur', 'admin', 'intervenant'], fn: (c, a) => pageEleves(c, a) },
+  'effectifs':     { titre: 'Effectifs', roles: ['educateur', 'comptable', 'censeur', 'admin'], fn: c => pageEffectifs(c) },
   'pointage':      { titre: 'Pointage du jour', roles: ['censeur', 'admin'], fn: pagePointage },
   'tableau':       { titre: 'Tableau de bord', roles: ['censeur', 'admin'], fn: pageTableau },
   'intervenants':  { titre: 'Intervenants', roles: ['censeur', 'admin'], fn: pageIntervenants },
@@ -353,7 +355,10 @@ const PAGES = {
   'emplois':       { titre: 'Emplois du temps', roles: ['admin'], fn: pageEmplois },
   'comptes':       { titre: 'Comptes', roles: ['admin'], fn: pageComptes, pastille: 'comptesEnAttente' },
   'journal':       { titre: 'Journal', roles: ['admin'], fn: pageJournal },
-  'mon-compte':    { titre: 'Mon compte', roles: ['intervenant', 'censeur', 'admin'], cache: true, fn: pageMonCompte },
+  'mon-compte':    { titre: 'Mon compte', roles: ['intervenant', 'censeur', 'admin', 'educateur', 'comptable'], cache: true, fn: pageMonCompte },
+  'eleve':         { titre: 'Fiche élève', roles: ['educateur', 'comptable', 'censeur', 'admin', 'intervenant'], cache: true, fn: (c, a) => pageEleve(c, a) },
+  'import-eleves': { titre: 'Importer des élèves', roles: ['educateur', 'admin'], cache: true, fn: c => pageImportEleves(c) },
+  'param-eleves':  { titre: 'Classes et montants', roles: ['admin'], cache: true, fn: c => pageParamEleves(c) },
   'fiche':         { titre: 'Fiche', roles: ['censeur', 'admin'], cache: true, fn: pageFicheIntervenant }
 };
 let pastilles = stock.lire('pastilles', {});
@@ -370,7 +375,7 @@ function afficher() {
   $('#moi-nom').textContent = p.nom;
   $('#moi-photo').outerHTML = avatar(p.matricule, p.nom, 'petit').replace('class="avatar', 'id="moi-photo" class="avatar');
   let [page, arg] = (location.hash.slice(2) || '').split('/');
-  const def = role() === 'intervenant' ? 'ma-fiche' : 'pointage';
+  const def = role() === 'intervenant' ? 'ma-fiche' : ['educateur', 'comptable'].includes(role()) ? 'eleves' : 'pointage';
   if (!PAGES[page] || !PAGES[page].roles.includes(role())) { page = def; history.replaceState(null, '', '#/' + def); }
   menu(); majReseau();
   c.innerHTML = '<div class="chargement">Chargement…</div>';
@@ -872,11 +877,17 @@ async function pagePaiement(c) {
 
 /* ================= EXPORT EXCEL ================= */
 function chargerScript(src) {
-  return new Promise((ok, ko) => { if (document.querySelector(`script[src="${src}"]`) && window.XLSX) return ok(); const s = document.createElement('script'); s.src = src; s.onload = ok; s.onerror = () => ko(new Error("Impossible de charger l'outil Excel : vérifiez la connexion internet.")); document.head.appendChild(s); });
+  const pret = () => src.includes('xlsx') ? window.XLSX : window.mammoth;
+  return new Promise((ok, ko) => {
+    if (pret()) return ok();
+    const s = document.createElement('script'); s.src = src; s.onload = ok;
+    s.onerror = () => ko(new Error("Impossible de charger l'outil de lecture des fichiers : vérifiez la connexion internet."));
+    document.head.appendChild(s);
+  });
 }
 async function exporterExcel(nomFichier, feuilles) {
   try {
-    await chargerScript('https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js');
+    await chargerScript('lib/xlsx.full.min.js');
     const wb = XLSX.utils.book_new();
     feuilles.forEach(f => {
       const ws = XLSX.utils.aoa_to_sheet(f.lignes);
