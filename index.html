@@ -1,0 +1,34 @@
+<!doctype html>
+<html lang="fr">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <meta name="theme-color" content="#1F4E78">
+  <title>LP Daoukro — Présences et heures supplémentaires</title>
+  <link rel="manifest" href="manifest.webmanifest">
+  <link rel="icon" href="icone-192.png">
+  <link rel="apple-touch-icon" href="icone-192.png">
+  <link rel="stylesheet" href="style.css">
+</head>
+<body>
+  <header id="entete" hidden>
+    <div class="entete-gauche">
+      <img src="icone-192.png" alt="" class="logo">
+      <div>
+        <div class="etab">LP DAOUKRO</div>
+        <div class="sous-titre">Présences et heures supplémentaires</div>
+      </div>
+    </div>
+    <div class="entete-droite">
+      <button id="etat-reseau" class="reseau" title="Synchroniser maintenant"></button>
+      <button id="btn-moi" class="moi"><span id="moi-photo" class="avatar petit"></span><span id="moi-nom"></span></button>
+    </div>
+  </header>
+  <nav id="menu" hidden></nav>
+  <main id="contenu"><div class="chargement">Chargement…</div></main>
+  <div id="toast" class="toast" hidden></div>
+  <div id="impression"></div>
+  <script src="config.js"></script>
+  <script src="app.js"></script>
+</body>
+</html>

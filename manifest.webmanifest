@@ -1,0 +1,14 @@
+{
+  "name": "LP Daoukro — Présences et heures supplémentaires",
+  "short_name": "LP Daoukro",
+  "start_url": "./index.html",
+  "scope": "./",
+  "display": "standalone",
+  "background_color": "#1F4E78",
+  "theme_color": "#1F4E78",
+  "lang": "fr",
+  "icons": [
+    { "src": "icone-192.png", "sizes": "192x192", "type": "image/png", "purpose": "any maskable" },
+    { "src": "icone-512.png", "sizes": "512x512", "type": "image/png", "purpose": "any maskable" }
+  ]
+}
