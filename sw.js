@@ -1,6 +1,9 @@
 // Service worker : garde l'application sur le téléphone pour qu'elle s'ouvre même sans connexion.
-const VERSION = 'lpd-v1';
-const FICHIERS = ['./', 'index.html', 'style.css', 'app.js', 'config.js', 'manifest.webmanifest', 'icone-192.png', 'icone-512.png'];
+const VERSION = 'lpd-v2';
+const FICHIERS = ['./', 'index.html', 'style.css', 'app.js', 'config.js', 'manifest.webmanifest', 'icone-192.png', 'icone-512.png',
+  'medias/embleme-blanc.png', 'medias/embleme-noir-petit.png', 'medias/logo-complet.png',
+  'medias/accueil-1.jpg', 'medias/accueil-2.jpg', 'medias/accueil-3.jpg', 'medias/accueil-4.jpg',
+  'medias/atelier-1.jpg', 'medias/atelier-2.jpg', 'medias/atelier-3.jpg', 'medias/atelier-4.jpg', 'medias/atelier-5.jpg', 'medias/atelier-6.jpg', 'medias/atelier-7.jpg'];
 self.addEventListener('install', e => { e.waitUntil(caches.open(VERSION).then(c => c.addAll(FICHIERS)).then(() => self.skipWaiting())); });
 self.addEventListener('activate', e => {
   e.waitUntil(caches.keys().then(k => Promise.all(k.filter(x => x !== VERSION).map(x => caches.delete(x)))).then(() => self.clients.claim()));

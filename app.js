@@ -9,8 +9,8 @@ const fcfa = n => (Math.round(n || 0)).toLocaleString('fr-FR').replace(/ | /g
 const nb = n => (n === null || n === undefined || n === '') ? '—' : String(Math.round(n * 100) / 100);
 const pct = n => n === null || n === undefined ? '—' : Math.round(n * 100) + ' %';
 const JOURS = ['LUNDI', 'MARDI', 'MERCREDI', 'JEUDI', 'VENDREDI'];
-const MOIS = ['OCT', 'NOV', 'DEC', 'JAN', 'FEV', 'MARS', 'AVRIL', 'MAI', 'JUIN'];
-const MOIS_LIB = { OCT: 'Octobre', NOV: 'Novembre', DEC: 'Décembre', JAN: 'Janvier', FEV: 'Février', MARS: 'Mars', AVRIL: 'Avril', MAI: 'Mai', JUIN: 'Juin' };
+const MOIS = ['OCT', 'NOV', 'DEC', 'JAN', 'FEV', 'MARS', 'AVRIL', 'MAI', 'JUIN', 'JUIL'];
+const MOIS_LIB = { OCT: 'Octobre', NOV: 'Novembre', DEC: 'Décembre', JAN: 'Janvier', FEV: 'Février', MARS: 'Mars', AVRIL: 'Avril', MAI: 'Mai', JUIN: 'Juin', JUIL: 'Juillet' };
 const MOTIFS = ['Maladie', 'Mission', 'Permission', 'Formation', 'Grève', 'Sans motif', 'Autre'];
 const pad = n => String(n).padStart(2, '0');
 const dateLocale = (d = new Date()) => d.getFullYear() + '-' + pad(d.getMonth() + 1) + '-' + pad(d.getDate());
@@ -25,6 +25,15 @@ const normal = s => String(s || '').normalize('NFD').replace(/[̀-ͯ]/g, '').toU
 const cmp = (a, b) => normal(a) < normal(b) ? -1 : normal(a) > normal(b) ? 1 : 0;
 const debutMin = h => { const m = String(h || '').match(/(\d{1,2})h(\d{2})?/); return m ? (+m[1]) * 60 + (+(m[2] || 0)) : 9999; };
 const parHoraire = (a, b) => debutMin(a.horaire) - debutMin(b.horaire);
+/** Numéro de semaine du calendrier (norme officielle) d'une date AAAA-MM-JJ. */
+const isoSem = s => {
+  const d = versDate(s), j = new Date(d); j.setDate(d.getDate() + 3 - ((d.getDay() + 6) % 7));
+  const an = j.getFullYear(), p = new Date(an, 0, 4);
+  return { n: 1 + Math.round(((j - p) / 86400000 - 3 + ((p.getDay() + 6) % 7)) / 7), an };
+};
+const lundiDeW = w => ajouterJours(S.session.params.debut, 7 * (w - 1));
+const numSem = w => w ? isoSem(lundiDeW(w)).n : '';
+const libSem = lundi => { const i = isoSem(lundi); return `Semaine ${i.n} — ${i.an} (${frCourt(lundi)} au ${frCourt(ajouterJours(lundi, 4))})`; };
 const initiales = nom => String(nom || '?').split(/\s+/).slice(0, 2).map(x => x[0] || '').join('');
 const stock = {
   lire(k, def) { try { const v = localStorage.getItem('lpd_' + k); return v ? JSON.parse(v) : def; } catch (e) { return def; } },
@@ -157,6 +166,54 @@ function appliquerPhotos() {
     if (ph && !el.style.backgroundImage) { el.style.backgroundImage = `url('${ph}')`; el.textContent = ''; }
   });
 }
+/* Choix de la photo : appareil photo OU galerie, puis recadrage (glisser + zoom). */
+function zonePhotoHtml() {
+  return `<div class="photo-zone">
+    <div class="photo-choix"><div class="photo-apercu" data-apercu>Aucune photo</div>
+      <div><input type="file" data-cam accept="image/*" capture="user" hidden><input type="file" data-gal accept="image/*" hidden>
+        <div class="boutons-photo"><button type="button" class="btn secondaire" data-bcam>📷 Prendre une photo</button>
+        <button type="button" class="btn secondaire" data-bgal>🖼 Choisir dans la galerie</button></div>
+        <p class="aide">Visage bien visible, de face, sans lunettes de soleil.</p></div></div>
+    <div class="recadrage" hidden><canvas width="240" height="300"></canvas>
+      <div class="rec-outils"><label style="margin-top:0">Zoom</label><input type="range" min="1" max="3" step="0.01" value="1">
+      <p class="aide">Faites glisser la photo avec le doigt pour bien centrer le visage, puis validez.</p>
+      <button type="button" class="btn petit vert" data-ok>✔ Utiliser cette photo</button></div></div></div>`;
+}
+function activerZonePhoto(z, surPhoto, surErreur) {
+  const cv = $('canvas', z), g = cv.getContext('2d'), zoom = $('input[type=range]', z), rec = $('.recadrage', z), ap = $('[data-apercu]', z);
+  let img = null, ox = 0, oy = 0, glisse = null;
+  const echelle = () => Math.max(240 / img.width, 300 / img.height) * +zoom.value;
+  const borner = () => {
+    const sc = echelle(), mx = Math.max(0, (img.width * sc - 240) / 2), my = Math.max(0, (img.height * sc - 300) / 2);
+    ox = Math.max(-mx, Math.min(mx, ox)); oy = Math.max(-my, Math.min(my, oy));
+  };
+  const dessiner = () => {
+    if (!img) return; borner(); const sc = echelle();
+    g.fillStyle = '#fff'; g.fillRect(0, 0, 240, 300);
+    g.drawImage(img, 120 - img.width * sc / 2 + ox, 150 - img.height * sc / 2 + oy, img.width * sc, img.height * sc);
+  };
+  const exporter = () => {
+    let q = 0.82, d = cv.toDataURL('image/jpeg', q);
+    while (d.length > 45000 && q > 0.3) { q -= 0.08; d = cv.toDataURL('image/jpeg', q); }
+    ap.style.backgroundImage = `url('${d}')`; ap.textContent = ''; ap.classList.add('ok'); surPhoto(d);
+  };
+  const charger = f => {
+    if (!f) return;
+    const i = new Image();
+    i.onload = () => { img = i; ox = oy = 0; zoom.value = 1; rec.hidden = false; dessiner(); exporter(); URL.revokeObjectURL(i.src); };
+    i.onerror = () => surErreur('Image illisible. Choisissez une photo au format JPG ou PNG.');
+    i.src = URL.createObjectURL(f);
+  };
+  $('[data-bcam]', z).onclick = () => $('[data-cam]', z).click();
+  $('[data-bgal]', z).onclick = () => $('[data-gal]', z).click();
+  $('[data-cam]', z).onchange = e => charger(e.target.files[0]);
+  $('[data-gal]', z).onchange = e => charger(e.target.files[0]);
+  zoom.oninput = dessiner; zoom.onchange = exporter;
+  cv.onpointerdown = e => { glisse = { x: e.clientX, y: e.clientY, ox, oy }; cv.setPointerCapture(e.pointerId); };
+  cv.onpointermove = e => { if (!glisse) return; const r = 240 / cv.getBoundingClientRect().width; ox = glisse.ox + (e.clientX - glisse.x) * r; oy = glisse.oy + (e.clientY - glisse.y) * r; dessiner(); };
+  cv.onpointerup = cv.onpointercancel = () => { if (glisse) { glisse = null; exporter(); } };
+  $('[data-ok]', z).onclick = () => { exporter(); rec.hidden = true; };
+}
 function redimensionnerPhoto(fichier) {
   return new Promise((ok, ko) => {
     const img = new Image();
@@ -174,6 +231,26 @@ function redimensionnerPhoto(fichier) {
   });
 }
 
+/* ================= DIAPORAMA ================= */
+const PHOTOS_ACCUEIL = [1, 2, 3, 4].map(i => `medias/accueil-${i}.jpg`);      // sans visages : page publique de connexion
+const PHOTOS_ATELIERS = [1, 2, 3, 4, 5, 6, 7].map(i => `medias/atelier-${i}.jpg`); // après connexion
+function carrousel(images, mode) {
+  return `<div class="carrousel ${mode}">${images.map((src, i) => `<div class="diapo ${i === 0 ? 'visible' : ''}" style="background-image:url('${src}')"></div>`).join('')}
+    ${mode === 'bandeau' ? `<div class="legende"><b>Lycée Professionnel de Daoukro</b><span>« Je dois créer mon entreprise ! »</span></div>` : ''}</div>`;
+}
+let minuteurCarrousel;
+function lancerCarrousels() {
+  clearInterval(minuteurCarrousel);
+  if (matchMedia('(prefers-reduced-motion: reduce)').matches) return;
+  minuteurCarrousel = setInterval(() => {
+    $$('.carrousel').forEach(c => {
+      const d = $$('.diapo', c); if (d.length < 2) return;
+      const i = d.findIndex(x => x.classList.contains('visible'));
+      d[i].classList.remove('visible'); d[(i + 1) % d.length].classList.add('visible');
+    });
+  }, 5000);
+}
+
 /* ================= CONNEXION / INSCRIPTION ================= */
 function deconnecterLocal() {
   S.session = null; stock.effacer('session'); stock.effacer('ref'); S.ref = null;
@@ -185,8 +262,8 @@ function ecranConnexion(onglet = 'connexion') {
   $('#entete').hidden = true; $('#menu').hidden = true;
   const c = $('#contenu'); c.style.maxWidth = 'none'; c.style.padding = '0';
   c.innerHTML = `
-  <div class="ecran-connexion"><div class="boite-connexion">
-    <div class="titre"><img src="icone-192.png" alt="">
+  <div class="ecran-connexion">${carrousel(PHOTOS_ACCUEIL, 'fond')}<div class="boite-connexion">
+    <div class="titre"><img src="medias/logo-complet.png" alt="Logo du Lycée Professionnel de Daoukro" class="logo-complet">
       <h1>Lycée Professionnel de Daoukro</h1><div class="aide">Présences et heures supplémentaires</div>
       <div class="drapeau"><i></i><i></i><i></i></div></div>
     <div class="onglets"><button data-o="connexion">Se connecter</button><button data-o="inscription">Première connexion / nouveau code</button></div>
@@ -197,6 +274,7 @@ function ecranConnexion(onglet = 'connexion') {
     b.onclick = () => ecranConnexion(b.dataset.o);
   });
   if (onglet === 'connexion') formConnexion(); else formInscription();
+  lancerCarrousels();
 }
 
 function formConnexion() {
@@ -239,24 +317,16 @@ function formInscription() {
     z.innerHTML = `<div class="info">Bonjour <b>${esc(info.nom)}</b><br><span class="aide">${esc(info.fonction || '')}</span></div>
       <form id="f2">
       ${reinit ? '<p class="aide">Votre code a été réinitialisé : choisissez un nouveau code.</p>' : `
-      <label>Votre photo (obligatoire)</label>
-      <div class="photo-choix"><div class="photo-apercu" id="apercu">Aucune photo</div>
-        <div><input type="file" id="ph" accept="image/*" capture="user" hidden>
-        <button type="button" class="btn secondaire" id="btn-ph">📷 Prendre / choisir</button>
-        <p class="aide">Visage bien visible, de face, sans lunettes de soleil.</p></div></div>`}
+      <label>Votre photo (obligatoire)</label>${zonePhotoHtml()}`}
       <label>Choisissez votre code (4 chiffres)</label><input name="c1" class="code" type="password" inputmode="numeric" maxlength="4" required autocomplete="new-password">
       <label>Confirmez le code</label><input name="c2" class="code" type="password" inputmode="numeric" maxlength="4" required autocomplete="new-password">
       <p class="aide">Évitez 1234, 0000 ou votre date de naissance. Ne communiquez votre code à personne.</p>
-      <div id="msg"></div><button class="btn large vert" style="margin-top:8px">${reinit ? 'Enregistrer mon nouveau code' : "Envoyer mon inscription"}</button></form>`;
+      <div id="msg"></div><button class="btn large vert" id="btn-inscr" style="margin-top:8px">${reinit ? 'Enregistrer mon nouveau code' : "Envoyer mon inscription"}</button></form>`;
     if (!reinit) {
-      $('#btn-ph').onclick = () => $('#ph').click();
-      $('#ph').onchange = async e => {
-        try { photo = await redimensionnerPhoto(e.target.files[0]); const a = $('#apercu'); a.style.backgroundImage = `url('${photo}')`; a.textContent = ''; a.classList.add('ok'); }
-        catch (err) { $('#msg').innerHTML = `<div class="erreur">${esc(err.message)}</div>`; }
-      };
+      activerZonePhoto($('.photo-zone', z), d => { photo = d; }, err => { $('#msg').innerHTML = `<div class="erreur">${esc(err)}</div>`; });
     }
     $('#f2').onsubmit = async e => {
-      e.preventDefault(); const f = e.target, b = $('button[class*=vert]', f); $('#msg').innerHTML = '';
+      e.preventDefault(); const f = e.target, b = $('#btn-inscr'); $('#msg').innerHTML = '';
       if (!/^\d{4}$/.test(f.c1.value)) return $('#msg').innerHTML = '<div class="erreur">Le code doit comporter 4 chiffres.</div>';
       if (f.c1.value !== f.c2.value) return $('#msg').innerHTML = '<div class="erreur">Les deux codes ne sont pas identiques.</div>';
       if (!reinit && !photo) return $('#msg').innerHTML = '<div class="erreur">Ajoutez votre photo.</div>';
@@ -280,6 +350,7 @@ const PAGES = {
   'reclamations':  { titre: 'Réclamations', roles: ['intervenant', 'censeur', 'admin'], fn: pageReclamations, pastille: 'reclamations' },
   'paiement':      { titre: 'État de paiement', roles: ['censeur', 'admin'], fn: pagePaiement },
   'personnel':     { titre: 'Personnel', roles: ['censeur', 'admin'], fn: pagePersonnel },
+  'emplois':       { titre: 'Emplois du temps', roles: ['admin'], fn: pageEmplois },
   'comptes':       { titre: 'Comptes', roles: ['admin'], fn: pageComptes, pastille: 'comptesEnAttente' },
   'journal':       { titre: 'Journal', roles: ['admin'], fn: pageJournal },
   'mon-compte':    { titre: 'Mon compte', roles: ['intervenant', 'censeur', 'admin'], cache: true, fn: pageMonCompte },
@@ -304,7 +375,7 @@ function afficher() {
   menu(); majReseau();
   c.innerHTML = '<div class="chargement">Chargement…</div>';
   window.scrollTo(0, 0);
-  Promise.resolve(PAGES[page].fn(c, decodeURIComponent(arg || ''))).catch(e => {
+  Promise.resolve(PAGES[page].fn(c, decodeURIComponent(arg || ''))).then(lancerCarrousels).catch(e => {
     c.innerHTML = `<div class="erreur">${esc(e.message)}</div>${e instanceof HorsLigne ? '<p class="aide">Cette page a besoin de la connexion la première fois. Le pointage du jour, lui, fonctionne hors connexion.</p>' : ''}`;
   }).then(appliquerPhotos);
 }
@@ -335,7 +406,8 @@ async function pagePointage(c) {
   const auj = dateLocale(), fen = ref.params.fenetre;
   const admin = role() === 'admin';
   let date = stock.lire('date_pointage', auj); if (date > auj || (!admin && ecartJours(date, auj) > fen)) date = auj;
-  const filtre = { texte: '' };
+  const filtre = stock.lire('filtre_pointage', { fil: '', cls: '', p: '' });
+  const cleCls = c => String(c || '').toUpperCase().replace(/\s+/g, '');
   const dessiner = () => {
     const ref = S.ref;
     const js = jourSem(date), jour = JOURS[js], conge = congeDe(ref, date);
@@ -347,8 +419,18 @@ async function pagePointage(c) {
     if (js <= 4) ref.seances.filter(s => s.jour === jour && seanceActive(s, date)).forEach(s => (parP[s.p] = parP[s.p] || []).push(s));
     let ids = Object.keys(parP).filter(id => personnes[id]);
     ids.sort((a, b) => cmp(personnes[a].filiere, personnes[b].filiere) || cmp(personnes[a].nom, personnes[b].nom));
-    const t = normal(filtre.texte);
-    const visibles = ids.filter(id => !t || normal(personnes[id].nom).includes(t) || normal(personnes[id].filiere).includes(t));
+    // listes déroulantes : filière → classe → intervenant
+    const filieres = [...new Set(ids.map(id => personnes[id].filiere))].sort(cmp);
+    if (filtre.fil && !filieres.includes(filtre.fil)) filtre.fil = '';
+    const idsFil = ids.filter(id => !filtre.fil || personnes[id].filiere === filtre.fil);
+    const classes = {}; idsFil.forEach(id => parP[id].forEach(s => { if (s.classe) classes[cleCls(s.classe)] = classes[cleCls(s.classe)] || s.classe.toUpperCase(); }));
+    if (filtre.cls && !classes[filtre.cls]) filtre.cls = '';
+    const seancesVisibles = id => parP[id].filter(s => !filtre.cls || cleCls(s.classe) === filtre.cls).sort(parHoraire);
+    const idsCls = idsFil.filter(id => seancesVisibles(id).length);
+    if (filtre.p && !idsCls.includes(filtre.p)) filtre.p = '';
+    const visibles = idsCls.filter(id => !filtre.p || id === filtre.p);
+    stock.ecrire('filtre_pointage', filtre);
+    const rappel = rappelNonPointes(ref, auj, admin ? 14 : fen);
     let total = 0, faits = 0;
     ids.forEach(id => parP[id].forEach(s => { total++; if (etatPointage(ref, date, s.id).st) faits++; }));
     const rejets = S.rejets.filter(x => x.d === date);
@@ -357,11 +439,16 @@ async function pagePointage(c) {
       <div class="barre-pointage">
         <div class="ligne">
           <div><label>Date</label><input type="date" id="date" value="${date}" max="${auj}" ${admin ? '' : `min="${ajouterJours(auj, -fen)}"`}></div>
-          <div><label>Rechercher</label><input id="rech" placeholder="Nom ou filière" value="${esc(filtre.texte)}"></div>
+          <div><label>Filière</label><select id="f-fil"><option value="">Toutes les filières</option>${filieres.map(f => `<option ${f === filtre.fil ? 'selected' : ''}>${esc(f)}</option>`).join('')}</select></div>
+        </div>
+        <div class="ligne">
+          <div><label>Classe</label><select id="f-cls"><option value="">Toutes les classes</option>${Object.keys(classes).sort((a, b) => cmp(classes[a], classes[b])).map(k => `<option value="${esc(k)}" ${k === filtre.cls ? 'selected' : ''}>${esc(classes[k])}</option>`).join('')}</select></div>
+          <div><label>Intervenant</label><select id="f-p"><option value="">Tous les intervenants</option>${idsCls.map(id => `<option value="${id}" ${id === filtre.p ? 'selected' : ''}>${esc(personnes[id].nom)}</option>`).join('')}</select></div>
         </div>
         <div class="compteur" style="margin-top:6px"><b>${jourLong(date)}</b> · ${faits}/${total} séances pointées
           ${S.file.length ? ` · <span class="en-attente-sync">${S.file.length} en attente d'envoi</span>` : ''}</div>
       </div>
+      ${rappel && rappel.d !== date ? `<div class="alerte rappel"><span>⏰ ${rappel.d === ajouterJours(auj, -1) ? 'Hier' : 'Le ' + jourLong(rappel.d)}, <b>${rappel.n} séance(s)</b> n'ont pas été pointées.</span> <button class="btn petit orange" id="aller-rappel">Pointer ce jour</button></div>` : ''}
       ${!S.enLigne ? '<div class="alerte">Vous êtes hors connexion. Continuez à pointer : tout sera envoyé automatiquement dès le retour du réseau.</div>' : ''}
       ${conge ? `<div class="info">Jour de congé : <b>${esc(conge)}</b>. Les séances ne sont pas dues ; vous pouvez les marquer C.</div>` : ''}
       ${!modifiable ? `<div class="alerte">${date > auj ? 'On ne peut pas pointer un jour à venir.' : `Date de plus de ${fen} jours : seul l'administrateur peut corriger ce pointage.`}</div>` : ''}
@@ -369,7 +456,7 @@ async function pagePointage(c) {
       ${js > 4 ? '<div class="vide">Pas de cours le samedi ni le dimanche.</div>' : ''}
       ${js <= 4 && !ids.length ? '<div class="vide">Aucune séance prévue ce jour-là.</div>' : ''}
       <div id="liste">${visibles.map(id => {
-        const p = personnes[id], ss = parP[id].sort(parHoraire);
+        const p = personnes[id], ss = seancesVisibles(id);
         return `<div class="interv" data-p="${id}">
           <div class="interv-tete">${avatar(p.matricule, p.nom)}
             <div><div class="nom">${esc(p.nom)}</div><div class="det">${esc(p.filiere)} · ${esc(p.fonction || '')}
@@ -389,17 +476,30 @@ async function pagePointage(c) {
       }).join('')}</div>`;
     appliquerPhotos();
     $('#date').onchange = e => { date = e.target.value || auj; if (date > auj) date = auj; stock.ecrire('date_pointage', date); dessiner(); };
-    $('#rech').oninput = e => { filtre.texte = e.target.value; const pos = e.target.selectionStart; dessiner(); const r = $('#rech'); r.focus(); r.setSelectionRange(pos, pos); };
+    $('#f-fil').onchange = e => { filtre.fil = e.target.value; filtre.cls = ''; filtre.p = ''; dessiner(); };
+    $('#f-cls').onchange = e => { filtre.cls = e.target.value; filtre.p = ''; dessiner(); };
+    $('#f-p').onchange = e => { filtre.p = e.target.value; dessiner(); };
+    if ($('#aller-rappel')) $('#aller-rappel').onclick = () => { date = rappel.d; stock.ecrire('date_pointage', date); filtre.fil = filtre.cls = filtre.p = ''; dessiner(); window.scrollTo(0, 0); };
     $$('.choix button', c).forEach(b => b.onclick = () => {
       const sid = b.closest('.seance').dataset.s, actuel = etatPointage(ref, date, sid).st;
       pointer(date, sid, actuel === b.dataset.st ? '' : b.dataset.st, b.dataset.st === 'A' ? 'Sans motif' : (b.dataset.st === 'C' && conge ? 'Jour férié' : ''));
       dessiner();
     });
     $$('select[data-motif]', c).forEach(sel => sel.onchange = () => { pointer(date, sel.closest('.seance').dataset.s, 'A', sel.value); dessiner(); });
-    $$('[data-tous]', c).forEach(b => b.onclick = () => { parP[b.dataset.tous].forEach(s => pointer(date, s.id, 'P', '')); dessiner(); });
+    $$('[data-tous]', c).forEach(b => b.onclick = () => { seancesVisibles(b.dataset.tous).forEach(s => pointer(date, s.id, 'P', '')); dessiner(); });
   };
   redessinerPointage = () => { if (location.hash.startsWith('#/pointage') && !document.activeElement.matches('input,select')) dessiner(); };
   dessiner();
+}
+/** Jour d'école le plus récent (avant aujourd'hui) qui a encore des séances non pointées. */
+function rappelNonPointes(ref, auj, joursMax) {
+  for (let k = 1; k <= joursMax; k++) {
+    const d = ajouterJours(auj, -k), js = jourSem(d);
+    if (js > 4 || congeDe(ref, d) || d < ref.params.debut) continue;
+    const n = ref.seances.filter(s => s.jour === JOURS[js] && seanceActive(s, d) && !etatPointage(ref, d, s.id).st).length;
+    if (n) return { d, n };
+  }
+  return null;
 }
 function pointer(d, s, st, m) {
   S.file = S.file.filter(x => !(x.d === d && x.s === s));
@@ -425,8 +525,15 @@ function rendreFiche(c, F, opt) {
   const semC = Math.max(1, Math.min(params.nbSemaines, Math.floor(ecartJours(params.debut, dateLocale()) / 7) + 1));
   const sems = K.semaines.filter(s => s.w <= semC || s.total > 0);
   const nomsS = {}; F.seances.forEach(s => nomsS[s.id] = s);
+  const certif = {}; (F.certifications || []).forEach(x => certif[x.w] = x.le);
+  const auj = dateLocale();
+  const finie = s => ajouterJours(s.lundi, 4) <= auj;
+  const aCertifier = opt.moi ? K.semaines.filter(s => finie(s) && s.presences > 0 && !certif[s.w]).slice(-1)[0] : null;
   c.innerHTML = `
     ${bandeauAncien(opt.ancien)}
+    ${opt.moi ? carrousel(PHOTOS_ATELIERS, 'bandeau') : ''}
+    ${aCertifier ? `<div class="succes certif"><span>✍ Certifiez vos présences de la <b>${libSem(aCertifier.lundi)}</b> : ${aCertifier.presences} séance(s) pointée(s) présent, ${nb(aCertifier.total)} h faites.</span>
+      <button class="btn petit vert" data-certif="${aCertifier.w}">Je certifie mes présences</button></div>` : ''}
     ${!opt.moi ? '<p><a href="#/intervenants">← Retour à la liste</a></p>' : ''}
     <div class="carte"><div class="ident">${avatar(P.matricule, P.nom, 'grand')}
       <div style="flex:1 1 240px"><h1 style="margin-bottom:4px">${esc(P.nom)}</h1>
@@ -438,27 +545,28 @@ function rendreFiche(c, F, opt) {
       <div class="kpi"><div class="lib">Heures supp. réalisées</div><div class="val">${nb(K.hs)} h</div></div>
       <div class="kpi vert"><div class="lib">Heures supp. payées</div><div class="val">${nb(K.payees)} h</div></div>
       ${voitMontant ? `<div class="kpi orange"><div class="lib">Montant</div><div class="val">${fcfa(K.montant)}</div></div>` : ''}
-      <div class="kpi"><div class="lib">Semaine de la 120e heure</div><div class="val">${K.sem120 ? 'S' + pad(K.sem120) : '—'}</div></div>
+      <div class="kpi"><div class="lib">Semaine de la 120e heure</div><div class="val">${K.sem120 ? 'Sem. ' + numSem(K.sem120) : '—'}</div></div>
       <div class="kpi"><div class="lib">Taux de présence</div><div class="val">${pct(K.taux)}</div></div>
       <div class="kpi rouge"><div class="lib">Heures d'absence</div><div class="val">${nb(K.heuresAbsence)} h</div></div>
     </div>
     <div class="actions" style="margin-bottom:10px">
-      <select id="sem-imp" style="max-width:260px">${K.semaines.map(s => `<option value="${s.w}" ${s.w === semC ? 'selected' : ''}>S${pad(s.w)} — semaine du ${fr(s.lundi)}</option>`).join('')}</select>
+      <select id="sem-imp" style="max-width:260px">${K.semaines.map(s => `<option value="${s.w}" ${s.w === semC ? 'selected' : ''}>${libSem(s.lundi)}</option>`).join('')}</select>
       <button class="btn secondaire" id="imp-hebdo">🖨 Fiche hebdomadaire A4</button>
       <button class="btn secondaire" id="imp-bilan">🖨 Bilan annuel</button>
       ${opt.moi ? '<a class="btn secondaire" href="#/reclamations">✉ Faire une réclamation</a>' : ''}
     </div>
     <h2>Décompte semaine par semaine</h2>
     <p class="aide">Les heures supplémentaires sont attribuées d'abord au BTS, puis au BT, puis au CAP. Plafond : ${params.plafond} heures payées par an.</p>
-    <div class="table-defil"><table><thead><tr><th>Sem.</th><th>Du</th><th class="n">BTS</th><th class="n">BT</th><th class="n">CAP</th><th class="n">Total</th>
-      <th class="n">Service</th><th class="n">H. supp.</th><th class="n">Cumul</th><th class="n">Payées</th>${voitMontant ? '<th class="n">Montant</th>' : ''}<th class="n">Abs.</th><th>Repère</th></tr></thead><tbody>
-      ${sems.map(s => `<tr class="${s.repere.startsWith('120') ? 'repere-120' : ''}"><td>S${pad(s.w)}</td><td>${frCourt(s.lundi)}</td>
+    <div class="table-defil"><table><thead><tr><th>Semaine</th><th>Du</th><th class="n">BTS</th><th class="n">BT</th><th class="n">CAP</th><th class="n">Total</th>
+      <th class="n">Service</th><th class="n">H. supp.</th><th class="n">Cumul</th><th class="n">Payées</th>${voitMontant ? '<th class="n">Montant</th>' : ''}<th class="n">Abs.</th><th>Certifiée</th><th>Repère</th></tr></thead><tbody>
+      ${sems.map(s => `<tr class="${s.repere.startsWith('120') ? 'repere-120' : ''}"><td><b>${isoSem(s.lundi).n}</b></td><td>${frCourt(s.lundi)}</td>
         <td class="n">${nb(s.faites.BTS)}</td><td class="n">${nb(s.faites.BT)}</td><td class="n">${nb(s.faites.CAP)}</td><td class="n"><b>${nb(s.total)}</b></td>
         <td class="n">${nb(s.service)}</td><td class="n"><b>${nb(s.hs)}</b></td><td class="n">${nb(s.cumul)}</td><td class="n">${nb(s.payees)}</td>
-        ${voitMontant ? `<td class="n">${fcfa(s.montant)}</td>` : ''}<td class="n">${s.absences ? nb(s.absences) : ''}</td><td>${esc(s.repere)}${s.nonPointees ? ` <span class="badge attente">${s.nonPointees} non pointée(s)</span>` : ''}</td></tr>`).join('')}
+        ${voitMontant ? `<td class="n">${fcfa(s.montant)}</td>` : ''}<td class="n">${s.absences ? nb(s.absences) : ''}</td>
+        <td>${certif[s.w] ? `<span class="badge P" title="le ${esc(certif[s.w])}">✓ Oui</span>` : (opt.moi && finie(s) && s.presences > 0 ? `<button class="btn petit secondaire" data-certif="${s.w}">Certifier</button>` : (finie(s) && s.presences > 0 ? '<span class="badge attente">Non</span>' : ''))}</td><td>${esc(s.repere)}${s.nonPointees ? ` <span class="badge attente">${s.nonPointees} non pointée(s)</span>` : ''}</td></tr>`).join('')}
       <tr class="total"><td colspan="2">TOTAL</td><td class="n">${nb(sems.reduce((a, s) => a + s.faites.BTS, 0))}</td><td class="n">${nb(sems.reduce((a, s) => a + s.faites.BT, 0))}</td>
         <td class="n">${nb(sems.reduce((a, s) => a + s.faites.CAP, 0))}</td><td class="n">${nb(K.faites)}</td><td></td><td class="n">${nb(K.hs)}</td><td></td><td class="n">${nb(K.payees)}</td>
-        ${voitMontant ? `<td class="n">${fcfa(K.montant)}</td>` : ''}<td class="n">${nb(K.heuresAbsence)}</td><td></td></tr>
+        ${voitMontant ? `<td class="n">${fcfa(K.montant)}</td>` : ''}<td class="n">${nb(K.heuresAbsence)}</td><td></td><td></td></tr>
     </tbody></table></div>
     <div class="grille-2">
       <div><h2>Emploi du temps</h2><div class="table-defil"><table><thead><tr><th>Jour</th><th>Horaire</th><th>Matière</th><th>Classe</th><th>Niv.</th><th class="n">H</th></tr></thead><tbody>
@@ -470,6 +578,12 @@ function rendreFiche(c, F, opt) {
       </tbody></table></div></div>
     </div>`;
   $('#imp-hebdo').onclick = () => imprimerFicheHebdo(F, +$('#sem-imp').value);
+  $$('[data-certif]', c).forEach(b => b.onclick = async () => {
+    const s = K.semaines[+b.dataset.certif - 1];
+    if (!confirm(`Je certifie que mes présences de la ${libSem(s.lundi)} sont exactes (${nb(s.total)} heures faites).`)) return;
+    b.disabled = true;
+    try { const r = await api('certifierSemaine', { w: +b.dataset.certif }); toast(r.message); afficher(); } catch (e) { toast(e.message, 5000); b.disabled = false; }
+  });
   $('#imp-bilan').onclick = () => imprimerBilan(F);
 }
 
@@ -481,7 +595,7 @@ function imprimer(html) {
   window.addEventListener('afterprint', fin);
   setTimeout(() => { window.print(); setTimeout(() => { if (document.body.classList.contains('imprime') && !matchMedia('print').matches) fin(); }, 1500); }, 200);
 }
-const entete = titre => `<div class="ent">RÉPUBLIQUE DE CÔTE D'IVOIRE — ${esc(S.session.params.etablissement)} — ANNÉE SCOLAIRE ${esc(S.session.params.annee)}</div><div class="bandeau">${esc(titre)}</div>`;
+const entete = titre => `<img src="medias/embleme-noir-petit.png" class="embleme-print" alt=""><div class="ent">RÉPUBLIQUE DE CÔTE D'IVOIRE — ${esc(S.session.params.etablissement)} — ANNÉE SCOLAIRE ${esc(S.session.params.annee)}</div><div class="bandeau">${esc(titre)}</div>`;
 function identPrint(F) {
   const P = F.personne, K = F.calcul, ph = S.photos[P.matricule];
   return `${ph ? `<img class="photo-print" src="${ph}">` : ''}<div class="ident-print">
@@ -505,7 +619,7 @@ function imprimerFicheHebdo(F, w) {
   (F.rattrapages || []).filter(r => r.valide === 'OUI' && r.date >= s.lundi && r.date <= ajouterJours(s.lundi, 4)).forEach(r =>
     lignes.push(`<tr><td>${fr(r.date)}</td><td colspan="2">${esc(r.nature)} ${esc(r.horaire)}</td><td>—</td><td>${esc(r.classe)}</td><td>${esc(r.niveau)}</td><td class="n">${nb(r.heures)}</td><td><b>Présent</b></td><td>Validé</td></tr>`));
   imprimer(`<div class="page">${entete("FICHE HEBDOMADAIRE D'ÉMARGEMENT ET D'HEURES SUPPLÉMENTAIRES")}
-    <div style="text-align:center;font-weight:700;margin-bottom:6px">Semaine S${pad(w)} — du ${fr(s.lundi)} au ${fr(ajouterJours(s.lundi, 4))}</div>
+    <div style="text-align:center;font-weight:700;margin-bottom:6px">${libSem(s.lundi)}</div>
     ${identPrint(F)}
     <table><thead><tr><th>Date</th><th>Jour</th><th>Horaire</th><th>Matière</th><th>Classe</th><th>Niveau</th><th class="n">Heures</th><th>Statut</th><th>Motif</th></tr></thead>
     <tbody>${lignes.join('') || '<tr><td colspan="9">Aucune séance</td></tr>'}</tbody></table>
@@ -518,6 +632,7 @@ function imprimerFicheHebdo(F, w) {
     </tbody></table>
     <p style="font-size:9.5pt">Service dû : <b>${nb(s.service)} h</b> · Cumul des heures supp. depuis octobre : <b>${nb(s.cumul)} h</b> · Heures d'absence : <b>${nb(s.absences)} h</b>
       ${voit ? ` · Cumul du montant : <b>${fcfa(s.cumulMontant)}</b>` : ''} ${s.repere ? `<br><b style="color:#C00000">${esc(s.repere)}</b>` : ''}</p>
+    <p style="font-size:9.5pt">${(F.certifications || []).find(x => x.w === w) ? `✓ Présences certifiées par l'intervenant dans l'application le ${esc(F.certifications.find(x => x.w === w).le)}.` : 'Présences non encore certifiées dans l\'application.'}</p>
     <div class="signatures"><div>Signature de l'intervenant<br>(fin de semaine)</div><div>Visa du Censeur</div><div>Le Directeur</div></div></div>`);
 }
 function imprimerBilan(F) {
@@ -527,7 +642,7 @@ function imprimerBilan(F) {
     <h3>1. Heures par niveau</h3><table><thead><tr><th>Niveau</th><th class="n">Heures supp.</th><th class="n">Payées</th>${voit ? '<th class="n">Taux</th><th class="n">Montant</th>' : ''}</tr></thead><tbody>
     ${['BTS', 'BT', 'CAP'].map(n => `<tr><td>${n}</td><td class="n">${nb(K.hsNiv[n])}</td><td class="n">${voit ? nb(K.payeesNiv[n]) : '—'}</td>${voit ? `<td class="n">${fcfa(taux[n])}</td><td class="n">${fcfa(K.payeesNiv[n] * taux[n])}</td>` : ''}</tr>`).join('')}
     <tr class="total"><td>TOTAL</td><td class="n">${nb(K.hs)}</td><td class="n">${nb(K.payees)}</td>${voit ? `<td></td><td class="n">${fcfa(K.montant)}</td>` : ''}</tr></tbody></table>
-    <h3>2. Plafond de ${S.session.params.plafond} heures</h3><p>Semaine où la 120e heure a été atteinte : <b>${K.sem120 ? 'S' + pad(K.sem120) : 'non atteinte'}</b> ·
+    <h3>2. Plafond de ${S.session.params.plafond} heures</h3><p>Semaine où la 120e heure a été atteinte : <b>${K.sem120 ? 'semaine ' + numSem(K.sem120) : 'non atteinte'}</b> ·
       Heures au-delà du plafond (non payées) : <b>${nb(K.hs - K.payees)} h</b></p>
     <h3>3. Répartition mensuelle</h3><table><thead><tr><th>Mois</th><th class="n">Heures supp.</th><th class="n">Payées</th>${voit ? '<th class="n">Montant</th>' : ''}</tr></thead><tbody>
     ${parMois.map(x => `<tr><td>${MOIS_LIB[x.m]}</td><td class="n">${nb(x.hs)}</td><td class="n">${nb(x.p)}</td>${voit ? `<td class="n">${fcfa(x.mt)}</td>` : ''}</tr>`).join('')}</tbody></table>
@@ -541,15 +656,16 @@ function imprimerBilan(F) {
 /* ================= TABLEAU DE BORD ================= */
 async function pageTableau(c) {
   const { r: T, ancien } = await apiAvecCache('tableau', 'tableauDeBord');
-  pastilles = { comptesEnAttente: T.alertes.comptesEnAttente, reclamations: T.alertes.reclamations, rattrapagesAValider: T.alertes.rattrapagesAValider };
+  pastilles = { comptesEnAttente: (T.alertes.comptesEnAttente || 0) + (T.alertes.photosAValider || 0), reclamations: T.alertes.reclamations, rattrapagesAValider: T.alertes.rattrapagesAValider };
   stock.ecrire('pastilles', pastilles); menu();
   const K = T.kpi, A = T.alertes, maxM = Math.max(1, ...T.mois.map(m => m.montant));
   const al = [['Ont atteint le plafond de 120 heures', A.plafond], ['Proches du plafond (100 h et plus)', A.prochePlafond],
     ['3 absences sans motif ou plus dans un mois', A.sansMotif], ['Séances non pointées (jours passés)', A.nonPointees],
     ['Emplois du temps incomplets', A.edtIncomplets], ['Séances dont le niveau est à vérifier', A.niveauxAVerifier],
-    ['Absences non rattrapées', A.nonRattrapees], ['Rattrapages à valider', A.rattrapagesAValider], ['Réclamations en cours', A.reclamations]];
-  if (role() === 'admin') al.push(['Inscriptions à valider', A.comptesEnAttente]);
-  c.innerHTML = `${bandeauAncien(ancien)}<h1>Tableau de bord <span class="aide">— semaine S${pad(T.semaineCourante)}</span></h1>
+    ['Absences non rattrapées', A.nonRattrapees], [T.semainePrecedente ? `N'ont pas certifié la semaine ${T.semainePrecedente.iso}` : 'Semaines non certifiées', A.nonCertifiees || 0], ['Rattrapages à valider', A.rattrapagesAValider], ['Réclamations en cours', A.reclamations]];
+  if (role() === 'admin') al.push(['Inscriptions à valider', A.comptesEnAttente], ['Nouvelles photos à valider', A.photosAValider || 0]);
+  const sc = T.statsClasses || [];
+  c.innerHTML = `${bandeauAncien(ancien)}${carrousel(PHOTOS_ATELIERS, 'bandeau')}<h1>Tableau de bord <span class="aide">— semaine ${numSem(T.semaineCourante)}</span></h1>
     <div class="kpis">
       <div class="kpi"><div class="lib">Personnel du lycée</div><div class="val">${K.personnel}</div></div>
       <div class="kpi"><div class="lib">Intervenants</div><div class="val">${K.intervenants}</div></div>
@@ -579,8 +695,16 @@ async function pageTableau(c) {
       ${T.fonctions.map(f => `<tr><td>${esc(f.categorie)}</td><td><b>${esc(f.fonction)}</b></td><td class="n">${f.effectif}</td><td class="n">${f.intervient}</td><td class="n">${f.avecHs}</td><td class="n">${fcfa(f.montant)}</td></tr>`).join('')}
       <tr class="total"><td colspan="2">Total</td><td class="n">${K.personnel}</td><td class="n">${T.fonctions.reduce((a, f) => a + f.intervient, 0)}</td><td class="n">${T.fonctions.reduce((a, f) => a + f.avecHs, 0)}</td><td class="n">${fcfa(K.montant)}</td></tr>
     </tbody></table></div></div>
+    <div class="carte"><h2 style="margin-top:0">📚 Présences par classe</h2>
+      <p class="aide">Classées de la plus touchée à la moins touchée par les absences d'enseignants (heures de cours perdues).</p>
+      ${sc.length ? `<div class="table-defil"><table><thead><tr><th>Classe</th><th>Niveau</th><th class="n">Séances faites</th><th class="n">Séances perdues</th><th class="n">Heures faites</th><th class="n">Heures perdues</th><th class="n">Présence</th></tr></thead><tbody>
+        ${sc.map((x, i) => `<tr class="${i >= 12 ? 'cache-classe' : ''}" ${i >= 12 ? 'hidden' : ''}><td><b>${esc(x.classe)}</b></td><td><span class="badge ${esc(x.niveau)}">${esc(x.niveau)}</span></td><td class="n">${x.presentes}</td><td class="n">${x.absentes}</td>
+          <td class="n">${nb(x.heuresFaites)}</td><td class="n"><b style="color:${x.heuresPerdues ? '#C00000' : 'inherit'}">${nb(x.heuresPerdues)}</b></td><td class="n">${pct(x.taux)}</td></tr>`).join('')}
+      </tbody></table></div>${sc.length > 12 ? `<button class="btn petit secondaire" id="toutes-classes" style="margin-top:8px">Voir les ${sc.length} classes</button>` : ''}`
+      : '<div class="vide">Pas encore de pointage.</div>'}</div>
     <div class="carte"><h2 style="margin-top:0">💾 Sauvegarde</h2><p class="aide" style="margin:0">Une copie complète des données est faite automatiquement chaque vendredi à 19 h dans le Google Drive du lycée (dossier « SAUVEGARDES APPLI LP DAOUKRO », 12 dernières semaines conservées).</p></div>`;
   $$('tr[data-id]', c).forEach(tr => tr.onclick = () => { location.hash = '#/fiche/' + tr.dataset.id; });
+  if ($('#toutes-classes')) $('#toutes-classes').onclick = e => { $$('.cache-classe', c).forEach(tr => tr.hidden = false); e.target.remove(); };
 }
 
 /* ================= INTERVENANTS ================= */
@@ -592,10 +716,10 @@ async function pageIntervenants(c) {
     const l = T.intervenants.filter(i => (!t || normal(i.nom + ' ' + i.filiere + ' ' + i.specialite).includes(t)) && (!seulsHs || i.hs > 0 || i.hsPrevues > 0) && (!seulsAlertes || i.alertes.length));
     let f0 = null;
     $('#tab').innerHTML = l.map(i => {
-      const g = i.filiere !== f0 ? `<tr class="groupe"><td colspan="9">Filière : ${esc(i.filiere)}</td></tr>` : ''; f0 = i.filiere;
+      const g = i.filiere !== f0 ? `<tr class="groupe"><td colspan="10">Filière : ${esc(i.filiere)}</td></tr>` : ''; f0 = i.filiere;
       return g + `<tr class="cliquable" data-id="${i.id}"><td>${avatar(i.matricule, i.nom, 'petit')}</td><td><b>${esc(i.nom)}</b><div class="aide">${esc(i.specialite)} · ${esc(i.fonction)}</div></td>
         <td class="n">${nb(i.hsPrevues)}</td><td class="n"><b>${nb(i.hs)}</b></td><td class="n">${nb(i.payees)}</td><td class="n">${fcfa(i.montant)}</td>
-        <td class="n">${i.sem120 ? 'S' + pad(i.sem120) : ''}</td><td class="n">${pct(i.taux)}</td><td style="color:#C00000;font-size:.78rem">${i.alertes.map(esc).join('<br>')}</td></tr>`;
+        <td class="n">${i.sem120 ? numSem(i.sem120) : ''}</td><td class="n">${pct(i.taux)}</td><td>${i.certifPrec ? '<span class="badge P">✓</span>' : '<span class="badge attente">—</span>'}</td><td style="color:#C00000;font-size:.78rem">${i.alertes.map(esc).join('<br>')}</td></tr>`;
     }).join('') || '<tr><td colspan="9" class="vide">Aucun résultat.</td></tr>';
     $$('tr[data-id]', c).forEach(tr => tr.onclick = () => { location.hash = '#/fiche/' + tr.dataset.id; });
     appliquerPhotos();
@@ -604,7 +728,7 @@ async function pageIntervenants(c) {
     <div class="ligne recherche"><div><input id="r" placeholder="Rechercher un nom, une filière, une spécialité…"></div></div>
     <div class="actions" style="margin:0 0 10px"><label style="margin:0;font-weight:400"><input type="checkbox" id="hs" style="width:auto;min-height:0"> Avec heures supp. seulement</label>
       <label style="margin:0;font-weight:400"><input type="checkbox" id="al" style="width:auto;min-height:0"> Avec alertes seulement</label></div>
-    <div class="table-defil"><table><thead><tr><th></th><th>Nom (par filière)</th><th class="n">HS prév./sem.</th><th class="n">HS réal.</th><th class="n">Payées</th><th class="n">Montant</th><th class="n">120e h</th><th class="n">Présence</th><th>Alertes</th></tr></thead>
+    <div class="table-defil"><table><thead><tr><th></th><th>Nom (par filière)</th><th class="n">HS prév./sem.</th><th class="n">HS réal.</th><th class="n">Payées</th><th class="n">Montant</th><th class="n">120e h</th><th class="n">Présence</th><th>Sem. ${T.semainePrecedente ? T.semainePrecedente.iso : ''} certifiée</th><th>Alertes</th></tr></thead>
     <tbody id="tab"></tbody></table></div>`;
   $('#r').oninput = e => { texte = e.target.value; dessiner(); };
   $('#hs').onchange = e => { seulsHs = e.target.checked; dessiner(); };
@@ -698,7 +822,7 @@ async function pageReclamations(c) {
 /* ================= ÉTAT DE PAIEMENT ================= */
 async function pagePaiement(c) {
   const params = S.session.params;
-  const moisCourant = { 10: 'OCT', 11: 'NOV', 12: 'DEC', 1: 'JAN', 2: 'FEV', 3: 'MARS', 4: 'AVRIL', 5: 'MAI', 6: 'JUIN' }[new Date().getMonth() + 1] || 'OCT';
+  const moisCourant = { 9: 'OCT', 10: 'OCT', 11: 'NOV', 12: 'DEC', 1: 'JAN', 2: 'FEV', 3: 'MARS', 4: 'AVRIL', 5: 'MAI', 6: 'JUIN', 7: 'JUIL' }[new Date().getMonth() + 1] || 'OCT';
   let mois = stock.lire('mois_paiement', moisCourant);
   const charger = async () => {
     c.innerHTML = '<div class="chargement">Calcul en cours…</div>';
@@ -717,14 +841,52 @@ async function pagePaiement(c) {
     c.innerHTML = `${bandeauAncien(ancien)}<h1>État de paiement</h1>
       <div class="ligne" style="margin-bottom:10px"><div><label>Mois</label><select id="m">${MOIS.map(m => `<option value="${m}" ${m === mois ? 'selected' : ''}>${MOIS_LIB[m]}</option>`).join('')}</select></div>
       <div style="flex:0 0 auto"><button class="btn" id="imp">🖨 Imprimer l'état</button></div></div>
+      <div class="actions" style="margin:-4px 0 10px"><button class="btn secondaire" id="xls-mois">📥 Excel : état du mois</button><button class="btn secondaire" id="xls-annee">📥 Excel : récapitulatif annuel</button></div>
       <p class="aide">Taux : BTS ${fcfa(params.taux.BTS)}, BT ${fcfa(params.taux.BT)}, CAP ${fcfa(params.taux.CAP)} par heure. Plafond de ${params.plafond} heures par an déjà appliqué.</p>
       <div class="table-defil">${table}</div>`;
+    $('#xls-mois').onclick = () => exporterExcel(`Etat_paiement_${MOIS_LIB[mois]}.xlsx`, [{ nom: MOIS_LIB[mois], lignes: [
+      [`${params.etablissement} — État de paiement des heures supplémentaires — ${MOIS_LIB[mois]}`], [],
+      ['N°', 'Matricule', 'Nom et prénoms', 'Filière', 'Spécialité', 'H BTS', 'H BT', 'H CAP', 'Total heures', 'Montant BTS', 'Montant BT', 'Montant CAP', 'MONTANT (FCFA)'],
+      ...lignes.map((l, i) => [i + 1, l.matricule, l.nom, l.filiere, l.specialite, l.BTS, l.BT, l.CAP, l.heures, l.mBTS, l.mBT, l.mCAP, l.montant]),
+      ['', '', 'TOTAL', '', '', tot.BTS, tot.BT, tot.CAP, tot.heures, tot.mBTS, tot.mBT, tot.mCAP, tot.montant]] }]);
+    $('#xls-annee').onclick = async e => {
+      e.target.disabled = true;
+      try {
+        const R = await api('recapAnnuel');
+        const mo = R.moisOrdre;
+        exporterExcel('Recapitulatif_annuel_heures_supp.xlsx', [{ nom: 'Récapitulatif annuel', lignes: [
+          [`${params.etablissement} — Récapitulatif annuel des heures supplémentaires ${params.annee}`], [],
+          ['Matricule', 'Nom et prénoms', 'Filière', 'Spécialité', 'Fonction', ...mo.map(m => MOIS_LIB[m] || m), 'HS réalisées', 'HS payées', 'Payées BTS', 'Payées BT', 'Payées CAP', 'MONTANT TOTAL (FCFA)', 'Semaine de la 120e heure'],
+          ...R.lignes.map(l => [l.matricule, l.nom, l.filiere, l.specialite, l.fonction, ...mo.map(m => l.mois[m]), l.hs, l.payees, l.payeesNiv.BTS, l.payeesNiv.BT, l.payeesNiv.CAP, l.montant, l.sem120]),
+          ['', 'TOTAL', '', '', '', ...mo.map(m => R.lignes.reduce((a, l) => a + l.mois[m], 0)), R.lignes.reduce((a, l) => a + l.hs, 0), R.lignes.reduce((a, l) => a + l.payees, 0), '', '', '', R.lignes.reduce((a, l) => a + l.montant, 0), '']] }]);
+      } catch (err) { toast(err.message, 5000); }
+      e.target.disabled = false;
+    };
     $('#m').onchange = e => { mois = e.target.value; stock.ecrire('mois_paiement', mois); charger(); };
     $('#imp').onclick = () => imprimer(`<div class="page">${entete('ÉTAT DE PAIEMENT DES HEURES SUPPLÉMENTAIRES — ' + MOIS_LIB[mois].toUpperCase())}${table}
       <p><b>Arrêté le présent état à la somme de ${fcfa(tot.montant)} CFA pour le mois de ${MOIS_LIB[mois].toLowerCase()}.</b></p>
       <div class="signatures"><div>Le Censeur</div><div>L'Intendant</div><div>Le Directeur</div></div></div>`);
   };
   await charger();
+}
+
+/* ================= EXPORT EXCEL ================= */
+function chargerScript(src) {
+  return new Promise((ok, ko) => { if (document.querySelector(`script[src="${src}"]`) && window.XLSX) return ok(); const s = document.createElement('script'); s.src = src; s.onload = ok; s.onerror = () => ko(new Error("Impossible de charger l'outil Excel : vérifiez la connexion internet.")); document.head.appendChild(s); });
+}
+async function exporterExcel(nomFichier, feuilles) {
+  try {
+    await chargerScript('https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js');
+    const wb = XLSX.utils.book_new();
+    feuilles.forEach(f => {
+      const ws = XLSX.utils.aoa_to_sheet(f.lignes);
+      const larg = (f.lignes[2] || []).map((_, j) => ({ wch: Math.min(40, Math.max(10, ...f.lignes.slice(2).map(r => String(r[j] === undefined ? '' : r[j]).length + 2))) }));
+      ws['!cols'] = larg;
+      XLSX.utils.book_append_sheet(wb, ws, f.nom.slice(0, 31));
+    });
+    XLSX.writeFile(wb, nomFichier);
+    toast('Fichier Excel téléchargé ✓');
+  } catch (e) { toast(e.message, 5000); }
 }
 
 /* ================= PERSONNEL ================= */
@@ -759,7 +921,8 @@ async function pagePersonnel(c) {
 async function pageComptes(c) {
   const r = await api('comptes');
   const attente = r.comptes.filter(x => x.statut === 'EN ATTENTE');
-  if (attente.length) await chargerPhotos(attente.map(x => x.matricule));
+  const aCharger = attente.map(x => x.matricule).concat((r.photosAttente || []).map(x => x.matricule)).filter(m => !S.photos[m]);
+  if (aCharger.length) await chargerPhotos(aCharger);
   const actions = x => `${x.statut !== 'ACTIF' ? `<button class="btn petit vert" data-m="${esc(x.matricule)}" data-d="ACTIF">Activer</button>` : ''}
     ${x.statut === 'ACTIF' ? `<button class="btn petit secondaire" data-m="${esc(x.matricule)}" data-d="BLOQUÉ">Bloquer</button>` : ''}
     <button class="btn petit orange" data-r="${esc(x.matricule)}">Réinitialiser le code</button>`;
@@ -770,6 +933,11 @@ async function pageComptes(c) {
       <div style="flex:1 1 220px"><b style="font-size:1.05rem">${esc(x.nom)}</b><div class="aide">${esc(x.matricule)} · ${esc(x.fonction)} · ${esc(x.filiere || '')}</div>
       <div class="aide">Inscrit le ${esc(x.inscrit_le)} · rôle : ${esc(x.role)}</div>
       <div class="actions"><button class="btn vert" data-m="${esc(x.matricule)}" data-d="ACTIF">✔ Valider</button><button class="btn rouge" data-m="${esc(x.matricule)}" data-d="REFUSÉ">✖ Refuser</button></div></div></div>`).join('') || '<div class="vide">Aucune inscription en attente.</div>'}
+    <h2>Nouvelles photos à valider (${(r.photosAttente || []).length})</h2>
+    ${(r.photosAttente || []).map(x => `<div class="carte compte-attente"><div style="text-align:center">${avatar(x.matricule, x.nom, 'xl')}<div class="aide">Photo actuelle</div></div>
+      <div style="font-size:1.6rem">➜</div><div style="text-align:center"><span class="avatar xl" style="background-image:url('${x.photo}')"></span><div class="aide">Nouvelle photo</div></div>
+      <div style="flex:1 1 200px"><b>${esc(x.nom)}</b><div class="aide">${esc(x.matricule)} · ${esc(x.fonction)} · envoyée le ${esc(x.envoyee_le)}</div>
+      <div class="actions"><button class="btn vert" data-ph="${esc(x.matricule)}" data-pd="OUI">✔ Valider</button><button class="btn rouge" data-ph="${esc(x.matricule)}" data-pd="NON">✖ Refuser</button></div></div></div>`).join('') || '<div class="vide">Aucune nouvelle photo en attente.</div>'}
     <h2>Tous les comptes (${r.comptes.length})</h2>
     <div class="table-defil"><table><thead><tr><th></th><th>Nom</th><th>Rôle</th><th>Statut</th><th>Dernière connexion</th><th></th></tr></thead><tbody>
       ${r.comptes.sort((a, b) => cmp(a.nom, b.nom)).map(x => `<tr><td>${avatar(x.matricule, x.nom, 'petit')}</td><td><b>${esc(x.nom)}</b><div class="aide">${esc(x.matricule)}</div></td><td>${esc(x.role)}</td>
@@ -782,11 +950,100 @@ async function pageComptes(c) {
     b.disabled = true;
     try { const x = await api('validerCompte', { matricule: b.dataset.m, decision: b.dataset.d }); toast(x.message); afficher(); } catch (e) { toast(e.message); b.disabled = false; }
   });
+  $$('[data-ph]', c).forEach(b => b.onclick = async () => {
+    b.disabled = true;
+    try {
+      const x = await api('validerPhoto', { matricule: b.dataset.ph, decision: b.dataset.pd });
+      if (b.dataset.pd === 'OUI') { delete S.photos[b.dataset.ph]; await chargerPhotos([b.dataset.ph]); }
+      toast(x.message); afficher();
+    } catch (e) { toast(e.message); b.disabled = false; }
+  });
   $$('[data-r]', c).forEach(b => b.onclick = async () => {
     if (!confirm('Réinitialiser le code de ' + b.dataset.r + ' ? La personne choisira un nouveau code.')) return;
     try { const x = await api('reinitialiserCode', { matricule: b.dataset.r }); toast(x.message, 5000); afficher(); } catch (e) { toast(e.message); }
   });
   appliquerPhotos();
+}
+
+/* ================= EMPLOIS DU TEMPS (administrateur) ================= */
+async function pageEmplois(c) {
+  const ref = await chargerReferentiel(true);
+  if (!ref) throw new HorsLigne('Cette page a besoin de la connexion internet.');
+  const pers = ref.personnes.slice().sort((a, b) => cmp(a.filiere, b.filiere) || cmp(a.nom, b.nom));
+  const filieres = [...new Set(pers.map(p => p.filiere))];
+  let id = stock.lire('edt_id', '');
+  if (!pers.find(p => p.id === id)) id = '';
+  c.innerHTML = `<h1>Emplois du temps</h1>
+    <p class="aide">Choisissez un intervenant. Chaque modification s'applique à partir de la date que vous indiquez : les semaines passées et leurs pointages ne changent jamais.</p>
+    <div class="ligne"><div><label>Intervenant</label><select id="sel-p"><option value="">— choisir un intervenant —</option>
+      ${filieres.map(f => `<optgroup label="${esc(f)}">${pers.filter(p => p.filiere === f).map(p => `<option value="${p.id}" ${p.id === id ? 'selected' : ''}>${esc(p.nom)}</option>`).join('')}</optgroup>`).join('')}</select></div></div>
+    <div id="edt"></div>`;
+  $('#sel-p').onchange = e => { id = e.target.value; stock.ecrire('edt_id', id); charger(); };
+  const charger = async () => {
+    const z = $('#edt');
+    if (!id) { z.innerHTML = '<div class="vide">Aucun intervenant choisi.</div>'; return; }
+    z.innerHTML = '<div class="chargement">Chargement…</div>';
+    let E;
+    try { E = await api('emploiDuTemps', { id }); } catch (e) { z.innerHTML = `<div class="erreur">${esc(e.message)}</div>`; return; }
+    const auj = E.aujourdhui, CR = E.creneaux;
+    const actives = E.seances.filter(s => !s.au || s.au >= auj);
+    const finies = E.seances.filter(s => s.au && s.au < auj);
+    const hAuj = E.seances.filter(s => seanceActive(s, auj)).reduce((a, s) => a + s.heures, 0);
+    const ligneS = s => `<tr><td><b>${esc(s.horaire)}</b></td><td>${esc(s.matiere)}</td><td>${esc(s.classe)}</td><td><span class="badge ${esc(s.niveau)}">${esc(s.niveau)}</span></td><td class="n">${nb(s.heures)}</td>
+      <td class="aide">${s.du ? 'dès le ' + fr(s.du) : ''}${s.au ? ' jusqu\'au ' + fr(s.au) : ''}${s.aVerifier ? ' <span class="badge attente">niveau à vérifier</span>' : ''}</td>
+      <td style="white-space:nowrap"><button class="btn petit secondaire" data-mod="${s.id}">Modifier</button> <button class="btn petit rouge" data-sup="${s.id}">Supprimer</button></td></tr>`;
+    z.innerHTML = `<div class="carte"><div class="ident">${avatar(E.personne.matricule, E.personne.nom)}<div><b>${esc(E.personne.nom)}</b><div class="aide">${esc(E.personne.filiere)} · ${esc(E.personne.specialite)}</div>
+        <div class="aide">Aujourd'hui : <b>${nb(hAuj)} h</b> placées dans la grille${E.personne.heures_declarees !== '' ? ` · ${esc(E.personne.heures_declarees)} h déclarées` : ''}</div></div>
+        <div style="margin-left:auto"><button class="btn vert" id="ajouter">➕ Ajouter une séance</button></div></div></div>
+      <div id="formulaire"></div>
+      ${JOURS.map(j => { const l = actives.filter(s => s.jour === j).sort(parHoraire); return `<h3>${j}</h3>${l.length ? `<div class="table-defil"><table><thead><tr><th>Horaire</th><th>Matière</th><th>Classe</th><th>Niveau</th><th class="n">H</th><th>Validité</th><th></th></tr></thead><tbody>${l.map(ligneS).join('')}</tbody></table></div>` : '<div class="aide">Pas de cours.</div>'}`; }).join('')}
+      ${finies.length ? `<details style="margin-top:14px"><summary>Séances terminées (historique : ${finies.length})</summary><div class="table-defil"><table><tbody>
+        ${finies.sort((a, b) => JOURS.indexOf(a.jour) - JOURS.indexOf(b.jour) || parHoraire(a, b)).map(s => `<tr style="opacity:.6"><td>${esc(s.jour)}</td><td>${esc(s.horaire)}</td><td>${esc(s.matiere)}</td><td>${esc(s.classe)}</td><td>${esc(s.niveau)}</td><td class="aide">${s.du ? 'du ' + fr(s.du) + ' ' : ''}au ${fr(s.au)}</td></tr>`).join('')}</tbody></table></div></details>` : ''}`;
+    appliquerPhotos();
+    const form = (s, mode) => {
+      const f = $('#formulaire');
+      if (mode === 'sup') {
+        f.innerHTML = `<div class="carte" style="border-color:#C00000"><h2 style="margin-top:0">Supprimer la séance</h2>
+          <p><b>${esc(s.jour)} ${esc(s.horaire)}</b> · ${esc(s.matiere)} · ${esc(s.classe)}</p>
+          <label>Cette séance n'a plus lieu à partir du</label><input type="date" id="du" value="${auj}">
+          <p class="aide">Si la séance a déjà été pointée, elle est seulement arrêtée à cette date (l'historique est gardé). Sinon, elle est effacée.</p>
+          <div id="msg"></div><div class="actions"><button class="btn rouge" id="ok">Supprimer</button><button class="btn secondaire" id="annuler">Annuler</button></div></div>`;
+      } else {
+        const [d0, f0] = s ? s.horaire.split('-') : ['7h30', '9h20'];
+        f.innerHTML = `<div class="carte" style="border-color:#2E75B6"><h2 style="margin-top:0">${s ? 'Modifier la séance' : 'Nouvelle séance'}</h2>
+          <form id="fs"><div class="ligne"><div><label>Jour</label><select name="jour">${JOURS.map(j => `<option ${s && s.jour === j ? 'selected' : ''}>${j}</option>`).join('')}</select></div>
+            <div><label>Début</label><select name="debut">${CR.debut.map(h => `<option ${h === d0 ? 'selected' : ''}>${h}</option>`).join('')}</select></div>
+            <div><label>Fin</label><select name="fin">${CR.fin.map(h => `<option ${h === f0 ? 'selected' : ''}>${h}</option>`).join('')}</select></div></div>
+          <div class="ligne"><div><label>Matière</label><input name="matiere" value="${esc(s ? s.matiere : '')}" placeholder="ex. TP INSTALLATION ÉLECTRIQUE"></div>
+            <div><label>Classe</label><input name="classe" required value="${esc(s ? s.classe : '')}" placeholder="ex. 1 BT EF A"></div>
+            <div><label>Niveau</label><select name="niveau">${['BTS', 'BT', 'CAP'].map(n => `<option ${s && s.niveau === n ? 'selected' : ''}>${n}</option>`).join('')}</select></div></div>
+          <div class="ligne"><div><label>Date d'application</label><input type="date" name="du" value="${auj}" required></div>
+            <div class="aide" id="duree" style="align-self:center"></div></div>
+          <div id="msg"></div><div class="actions"><button class="btn vert">Enregistrer</button><button type="button" class="btn secondaire" id="annuler">Annuler</button></div></form></div>`;
+        const fs = $('#fs');
+        const maj = () => { const a = CR.debut.indexOf(fs.debut.value), b = CR.fin.indexOf(fs.fin.value); $('#duree').innerHTML = b >= a ? `Durée : <b>${b - a + 1} heure(s)</b>` : '<span style="color:#C00000">La fin doit être après le début.</span>'; };
+        fs.debut.onchange = fs.fin.onchange = maj; maj();
+        fs.onsubmit = async e => {
+          e.preventDefault(); const b = $('button.vert', fs); b.disabled = true;
+          try {
+            const r = await api('enregistrerSeance', Object.assign(Object.fromEntries(new FormData(fs)), { p: id, id: s ? s.id : '' }));
+            toast(r.message, 5000); await chargerReferentiel(true); charger();
+          } catch (err) { $('#msg').innerHTML = `<div class="erreur">${esc(err.message)}</div>`; b.disabled = false; }
+        };
+      }
+      $('#annuler').onclick = () => { f.innerHTML = ''; };
+      if (mode === 'sup') $('#ok').onclick = async () => {
+        $('#ok').disabled = true;
+        try { const r = await api('supprimerSeance', { id: s.id, du: $('#du').value }); toast(r.message, 5000); await chargerReferentiel(true); charger(); }
+        catch (err) { $('#msg').innerHTML = `<div class="erreur">${esc(err.message)}</div>`; $('#ok').disabled = false; }
+      };
+      f.scrollIntoView({ behavior: 'smooth', block: 'start' });
+    };
+    $('#ajouter').onclick = () => form(null, 'ajout');
+    $$('[data-mod]', z).forEach(b => b.onclick = () => form(E.seances.find(s => s.id === b.dataset.mod), 'mod'));
+    $$('[data-sup]', z).forEach(b => b.onclick = () => form(E.seances.find(s => s.id === b.dataset.sup), 'sup'));
+  };
+  charger();
 }
 
 async function pageJournal(c) {
@@ -802,6 +1059,9 @@ function pageMonCompte(c) {
   c.innerHTML = `<h1>Mon compte</h1>
     <div class="carte"><div class="ident">${avatar(p.matricule, p.nom, 'grand')}<dl><dt>Nom</dt><dd>${esc(p.nom)}</dd><dt>Matricule</dt><dd>${esc(p.matricule)}</dd>
       <dt>Fonction</dt><dd>${esc(p.fonction)}</dd><dt>Profil</dt><dd>${{ admin: 'Administrateur principal', censeur: 'Censeur', intervenant: 'Intervenant' }[p.role]}</dd></dl></div></div>
+    <div class="carte"><h2 style="margin-top:0">Changer ma photo</h2>
+      <p class="aide">${p.role === 'admin' ? 'Votre nouvelle photo remplace immédiatement l\'ancienne.' : 'Votre nouvelle photo s\'affichera après validation par l\'administrateur.'}</p>
+      ${zonePhotoHtml()}<div id="msg-ph"></div><button class="btn" id="env-ph" disabled style="margin-top:8px">Envoyer la nouvelle photo</button></div>
     <div class="carte"><h2 style="margin-top:0">Changer mon code</h2><form id="f">
       <div class="ligne"><div><label>Code actuel</label><input name="a" class="code" type="password" inputmode="numeric" maxlength="4" required></div>
       <div><label>Nouveau code</label><input name="n" class="code" type="password" inputmode="numeric" maxlength="4" required></div></div>
@@ -809,6 +1069,16 @@ function pageMonCompte(c) {
     ${S.file.length ? `<div class="alerte">${S.file.length} pointage(s) pas encore envoyé(s). Connectez-vous à internet avant de vous déconnecter, sinon ils seront perdus.</div>` : ''}
     <button class="btn rouge" id="dec">Se déconnecter</button>
     <p class="aide" style="margin-top:20px">Astuce : sur téléphone, utilisez « Ajouter à l'écran d'accueil » dans le menu du navigateur pour installer l'application avec son icône.</p>`;
+  let nouvellePhoto = '';
+  activerZonePhoto($('.photo-zone', c), d => { nouvellePhoto = d; $('#env-ph').disabled = false; }, err => { $('#msg-ph').innerHTML = `<div class="erreur">${esc(err)}</div>`; });
+  $('#env-ph').onclick = async () => {
+    $('#env-ph').disabled = true;
+    try {
+      const r = await api('changerPhoto', { photo: nouvellePhoto });
+      if (r.directe) { S.photos[p.matricule] = nouvellePhoto; stock.ecrire('photos', S.photos); }
+      $('#msg-ph').innerHTML = `<div class="succes">${esc(r.message)}</div>`;
+    } catch (err) { $('#msg-ph').innerHTML = `<div class="erreur">${esc(err.message)}</div>`; $('#env-ph').disabled = false; }
+  };
   $('#f').onsubmit = async e => {
     e.preventDefault(); const f = e.target;
     try { const r = await api('changerCode', { ancien: f.a.value, nouveau: f.n.value }); $('#msg').innerHTML = `<div class="succes">${esc(r.message)}</div>`; f.reset(); }
