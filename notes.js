@@ -454,14 +454,25 @@ async function vueBulletinsClasse(c, classe, sem) {
     <div id="bc-apercu"></div>`;
   $('#bc-sem').onchange = e => { stock.ecrire('notes_sem', +e.target.value); vueBulletinsClasse(c, classe, +e.target.value); };
   const prep = async ids => { toast('Préparation des bulletins…'); await Promise.all([chargerPhotosEleves(ids), preparerQR()]); };
+  // v1.8 : bulletins validés retenus en cas de retard de paiement (sauf autorisation)
+  let BQ = {}; if (K.validation) { try { BQ = (await api('fraisBlocages', { classe: K.classe, document: 'BULLETIN', semestre: sem })).bloques; } catch (e) { BQ = {}; } }
+  Object.keys(BQ).forEach(id => { const td = $(`[data-imp="${id}"]`, c); if (td) td.insertAdjacentHTML('beforebegin', `<span class="badge A" title="Retard de paiement : ${fcfa(BQ[id].retard)}">🔒 impayé</span> `); });
   $$('[data-voir]', c).forEach(b => b.onclick = async () => {
     await prep([b.dataset.voir]);
     $('#bc-apercu').innerHTML = `<h2>Aperçu du bulletin</h2><div class="apercu-bulletin">${bulletinHtml(K, K.eleves.find(e => e.id === b.dataset.voir))}</div>`;
     $('#bc-apercu').scrollIntoView({ behavior: 'smooth' });
   });
   const ex = () => $('#bc-2ex').checked ? 2 : 1;
-  $$('[data-imp]', c).forEach(b => b.onclick = async () => { await prep([b.dataset.imp]); const h = bulletinHtml(K, K.eleves.find(e => e.id === b.dataset.imp)); imprimer(h.repeat(ex())); });
-  $('#bc-imp').onclick = async () => { await prep(K.eleves.map(e => e.id)); imprimer(K.eleves.filter(e => e.situation === 'INSCRIT' || e.moy !== null).map(e => bulletinHtml(K, e).repeat(ex())).join('')); };
+  $$('[data-imp]', c).forEach(b => b.onclick = async () => {
+    const el = K.eleves.find(e => e.id === b.dataset.imp);
+    if (BQ[el.id]) { if (!(await documentAutorise(el, 'BULLETIN', sem))) return; delete BQ[el.id]; }
+    await prep([b.dataset.imp]); imprimer(bulletinHtml(K, el).repeat(ex()));
+  });
+  $('#bc-imp').onclick = async () => {
+    const l = K.eleves.filter(e => (e.situation === 'INSCRIT' || e.moy !== null) && !BQ[e.id]), nb = Object.keys(BQ).length;
+    if (nb && !confirm(`${nb} bulletin(s) retenu(s) pour impayé ne seront pas imprimés (🔒 dans la liste). Ils pourront être imprimés un par un après autorisation.\n\nImprimer les ${l.length} autres ?`)) return;
+    await prep(l.map(e => e.id)); imprimer(l.map(e => bulletinHtml(K, e).repeat(ex())).join(''));
+  };
   $('#bc-pv').onclick = () => imprimerPV(K);
   $('#bc-mat').onclick = () => imprimerMatrice(K);
   $('#bc-prem').onclick = () => imprimerPremiers(K);
@@ -643,6 +654,9 @@ async function pageDirection(c) {
     <div class="actions" style="margin-bottom:12px"><a class="btn" href="#/bulletins">📄 Bulletins à valider</a><a class="btn secondaire" href="#/tableau">⏱ Heures supplémentaires</a><a class="btn secondaire" href="#/effectifs">📊 Effectifs</a><a class="btn secondaire" href="#/absences">📅 Absences</a></div>
     ${T.bulletins.classes.some(k => k.moy !== null) ? `<h2>Résultats par classe</h2><div class="table-defil"><table><thead><tr><th>Classe</th><th class="n">Moyenne</th><th class="n">≥ 10</th><th>État</th></tr></thead><tbody>
       ${T.bulletins.classes.filter(k => k.moy !== null).map(k => `<tr class="cliquable" onclick="location.hash='#/bulletins/${encodeURIComponent(k.classe)}'"><td><b>${esc(k.classe)}</b></td><td class="n">${n2(k.moy)}</td><td class="n">${k.taux === null ? '—' : String(k.taux).replace('.', ',') + ' %'}</td><td><span class="badge ${STATUTS_BUL[k.statut][0]}">${STATUTS_BUL[k.statut][1]}</span></td></tr>`).join('')}</tbody></table></div>` : ''}
+    ${T.recettes ? `<h2>💰 Recettes</h2><div class="kpis"><div class="kpi vert"><div class="lib">Encaissé (année)</div><div class="val">${fcfa(T.recettes.total)}</div></div><div class="kpi"><div class="lib">Encaissé aujourd'hui</div><div class="val">${fcfa(T.recettes.jour)}</div></div>
+      <div class="kpi ${T.recettes.taux >= 75 ? 'vert' : 'orange'}"><div class="lib">Taux de recouvrement</div><div class="val">${T.recettes.taux === null ? '—' : String(T.recettes.taux).replace('.', ',') + ' %'}</div></div><div class="kpi rouge"><div class="lib">Élèves en retard</div><div class="val">${T.recettes.retards}</div></div></div>
+      <div class="actions" style="margin-bottom:12px"><a class="btn secondaire" href="#/finances/etats">📊 États financiers</a><a class="btn secondaire" href="#/finances/reductions">Réductions à accorder</a></div>` : ''}
     ${T.discipline ? `<h2>⚖ Discipline</h2><div class="kpis"><div class="kpi ${T.discipline.attente ? 'rouge' : 'vert'}"><div class="lib">Sanctions à valider</div><div class="val">${T.discipline.attente}</div></div>
       <div class="kpi orange"><div class="lib">Incidents (30 jours)</div><div class="val">${T.discipline.incidents30}</div></div><div class="kpi"><div class="lib">Incidents à traiter</div><div class="val">${T.discipline.aTraiter}</div></div>
       <div class="kpi rouge"><div class="lib">Élèves exclus aujourd'hui</div><div class="val">${T.discipline.exclus}</div></div></div>

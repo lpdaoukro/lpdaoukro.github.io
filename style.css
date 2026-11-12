@@ -412,3 +412,12 @@ nav#menu { display: block; padding: 0; overflow: visible; }
 table.hbarres td { border: 0; padding: 4px 6px; }
 .barre { height: 14px; background: var(--bleu); border-radius: 4px; min-width: 2px; }
 .lettre { font-size: 12pt; line-height: 1.75; margin: 20px 10px; }
+
+/* ===== v1.8 Frais de scolarité ===== */
+#impression .recu { height: 133mm; overflow: hidden; font-size: 10pt; position: relative; }
+#impression .recu p { margin: 3px 0; }
+#impression .recu table { margin: 2mm 0; }
+#impression .recu td, #impression .recu th { padding: 1.2mm 2mm; }
+.recu-haut { display: flex; gap: 4mm; align-items: flex-start; } .recu-haut > div:first-child { flex: 1; }
+.recu-annule { position: absolute; top: 55mm; left: 30mm; font-size: 40pt; color: rgba(192,0,0,.35); border: 4px solid rgba(192,0,0,.35); padding: 0 8mm; transform: rotate(-15deg); font-weight: 800; }
+tr.barre-ligne td { color: #999; }

@@ -156,13 +156,8 @@ async function pageEleve(c, id) {
              : `<div class="ident"><dl>${champs.map(([k, lib, type]) => champLecture(k, lib, type, e)).join('')}</dl></div>`}</div>`).join('')}
     ${edit ? `<div id="msg"></div><button class="btn vert large" id="enr">${nouveau ? '✔ Inscrire l\'élève' : '✔ Enregistrer les modifications'}</button>` : ''}
     </form>
-    ${!nouveau && e.inscr_montant !== undefined ? `<div class="carte" style="margin-top:12px"><h2 style="margin-top:0">💰 Paiement de l'inscription</h2>
-      <div class="ident"><dl><dt>Montant prévu</dt><dd>${prevu && prevu.inscription !== '' ? fcfa(prevu.inscription) : 'non défini (à saisir)'}</dd>
-        <dt>Montant payé</dt><dd>${e.inscr_montant !== '' ? fcfa(+e.inscr_montant) : '<span style="color:#C00000">Non payé</span>'}</dd>
-        <dt>Reçu n°</dt><dd>${esc(e.inscr_recu || '—')}</dd><dt>Date</dt><dd>${frD(e.inscr_date) || '—'}</dd></dl></div>
-      ${comptable() ? `<form id="fp" class="ligne" style="margin-top:8px"><div><label>Montant (FCFA)</label><input name="montant" type="number" min="0" step="500" required value="${e.inscr_montant !== '' ? e.inscr_montant : (prevu && prevu.inscription !== '' ? prevu.inscription : '')}"></div>
-        <div><label>N° de reçu</label><input name="recu" required value="${esc(e.inscr_recu || '')}"></div><div><label>Date</label><input name="date" type="date" required value="${/^\d{4}/.test(e.inscr_date || '') ? e.inscr_date : dateLocale()}"></div>
-        <div style="flex:0 0 auto"><button class="btn">Enregistrer le paiement</button></div></form><div id="msg-p"></div>` : ''}</div>` : ''}
+    ${!nouveau && ['admin', 'comptable', 'directeur', 'censeur', 'educateur'].includes(role()) ? `<div class="carte" style="margin-top:12px"><h2 style="margin-top:0">💰 Frais de scolarité</h2>
+      <p class="aide">Inscription en ligne, paquet de rames, scolarité, frais d'examen, reçus et reste à payer.</p><a class="btn" href="#/frais-eleve/${e.id}">💰 Voir les frais de l'élève</a></div>` : ''}
     ${!nouveau && edit ? `<div class="carte"><h2 style="margin-top:0">Situation de l'élève</h2>
       <form id="fs" class="ligne"><div><label>Situation</label><select name="situation">${D.situations.map(s => `<option ${s === e.situation ? 'selected' : ''}>${s}</option>`).join('')}</select></div>
       <div><label>Date</label><input type="date" name="date" value="${dateLocale()}"></div><div><label>Motif</label><input name="motif" placeholder="ex. transfert au LP de Bouaké" value="${esc(e.motif_situation || '')}"></div>
@@ -196,7 +191,7 @@ async function pageEleve(c, id) {
   };
   if (!nouveau) {
     $('#p-fiche').onclick = () => imprimerFicheEleve(e, cl);
-    if ($('#p-certif')) $('#p-certif').onclick = () => imprimerCertificat(e, cl);
+    if ($('#p-certif')) $('#p-certif').onclick = async () => { if (await documentAutorise(e, 'CERTIFICAT')) imprimerCertificat(e, cl); };
     if ($('#p-carte')) $('#p-carte').onclick = () => imprimerCartes([e]);
   }
 }
@@ -339,12 +334,8 @@ async function pageParamEleves(c) {
   const ref = await chargerReferentiel();
   const profs = (ref ? ref.personnes : []).slice().sort((a, b) => cmp(a.nom, b.nom));
   const ppId = cl => { const p = profs.find(x => x.nom === cl.pp); return p ? p.id : ''; };
-  c.innerHTML = `<p><a href="#/eleves">← Élèves</a></p><h1>Classes et montants</h1>
-    <div class="carte"><h2 style="margin-top:0">💰 Montants par niveau et par statut</h2>
-      <p class="aide">Laissez vide tant que le montant n'est pas connu : le comptable le saisira à chaque paiement. Une fois rempli, il est proposé automatiquement.</p>
-      <form id="fm"><div class="table-defil"><table><thead><tr><th>Niveau</th><th>Statut</th><th class="n">Frais d'inscription (FCFA)</th><th class="n">Scolarité (FCFA)</th></tr></thead><tbody>
-      ${D.montants.map((m, i) => `<tr><td><b>${esc(m.niveau)}</b></td><td>${esc(m.statut)}</td><td><input type="number" min="0" step="500" name="i${i}" value="${m.inscription}"></td><td><input type="number" min="0" step="500" name="s${i}" value="${m.scolarite}"></td></tr>`).join('')}
-      </tbody></table></div><button class="btn" style="margin-top:10px">Enregistrer les montants</button></form></div>
+  c.innerHTML = `<p><a href="#/eleves">← Élèves</a></p><h1>Classes</h1>
+    <div class="info">💰 Les montants (inscription, scolarité, frais d'examen) se règlent désormais dans <a href="#/finances/tarifs">Finances → Tarifs</a>.</div>
     <div class="carte"><h2 style="margin-top:0">🏫 Classes</h2>
       <p class="aide">« Classes dans les emplois du temps » : les noms utilisés dans les emplois du temps (séparés par ;). Ils servent à montrer à chaque enseignant les élèves de ses classes.</p>
       ${D.classes.slice().sort((a, b) => NIV_ORDRE.indexOf(a.niveau) - NIV_ORDRE.indexOf(b.niveau) || a.annee - b.annee || cmp(a.code, b.code)).map(cl => `<form class="f-cl carte" style="background:#FAFBFC">
@@ -358,11 +349,6 @@ async function pageParamEleves(c) {
         <div style="flex:0 1 90px"><label>Niveau</label><select name="niveau">${NIV_ORDRE.map(n => `<option>${n}</option>`).join('')}</select></div><div style="flex:0 1 80px"><label>Année</label><input name="annee" type="number" min="1" max="3" value="1"></div></div>
         <div class="ligne"><div><label>Filière</label><input name="filiere"></div><div><label>Classes dans les emplois du temps</label><input name="classe_edt"></div><div style="flex:0 0 auto"><button class="btn vert petit">Ajouter</button></div></div></form></div>
     <div class="info">Internat : le régime interne s'active dans la feuille PARAMETRES du classeur (ligne INTERNAT_ACTIF = OUI).</div>`;
-  $('#fm').onsubmit = async ev => {
-    ev.preventDefault(); const fd = new FormData(ev.target);
-    const montants = D.montants.map((m, i) => ({ niveau: m.niveau, statut: m.statut, inscription: fd.get('i' + i), scolarite: fd.get('s' + i) }));
-    try { const r = await api('enregistrerMontants', { montants }); toast(r.message); EL.donnees = null; } catch (err) { toast(err.message, 5000); }
-  };
   $$('.f-cl', c).forEach(fo => fo.onsubmit = async ev => {
     ev.preventDefault(); const b = $('button', fo); b.disabled = true;
     try { const r = await api('enregistrerClasse', Object.fromEntries(new FormData(fo))); toast(r.message); EL.donnees = null; afficher(); }
@@ -419,4 +405,18 @@ async function imprimerCartes(eleves) {
     <div class="cs-drapeau"><i></i><i></i><i></i></div></div>`;
   const pages = []; for (let i = 0; i < eleves.length; i += 10) pages.push(eleves.slice(i, i + 10));
   imprimer(pages.map(p => `<div class="page cartes-page">${p.map(carte).join('')}</div>`).join(''));
+}
+
+/** Certificat / bulletin : vérifie les impayés (retenus sauf dérogation). Le directeur peut accorder la dérogation sur place. */
+async function documentAutorise(e, document, semestre) {
+  let r; try { r = await api('fraisBlocages', { ids: [e.id], document, semestre }); } catch (err) { if (err instanceof HorsLigne) { toast('Connexion nécessaire pour vérifier les frais de scolarité.', 5000); return false; } return true; }
+  const b = r.bloques[e.id]; if (!b) return true;
+  const doc = document === 'CERTIFICAT' ? 'le certificat de scolarité' : 'le bulletin';
+  if (['admin', 'directeur'].includes(role()) || (document === 'BULLETIN' && role() === 'comptable')) {
+    const m = prompt(`${e.nom} ${e.prenoms} a ${fcfa(b.retard)} de frais en retard (reste ${fcfa(b.reste)}).\nPour délivrer quand même ${doc}, indiquez le motif :`, '');
+    if (!m) return false;
+    try { await api('autoriserDocument', { id_eleve: e.id, document, semestre, motif: m }); return true; } catch (err) { toast(err.message, 5000); return false; }
+  }
+  toast(`Impayé de ${fcfa(b.retard)} : ${doc} est retenu. Le directeur peut accorder une dérogation (page « Frais » de l'élève).`, 7000);
+  return false;
 }
