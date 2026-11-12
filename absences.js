@@ -2,7 +2,7 @@
 'use strict';
 
 const AB = { ref: stock.lire('ref_appel', null), file: stock.lire('file_appels', []), rejets: stock.lire('rejets_appels', []) };
-const suiviAbsences = () => ['admin', 'censeur', 'educateur'].includes(role());
+const suiviAbsences = () => ['admin', 'censeur', 'educateur', 'directeur'].includes(role());
 const MOTIFS_JUSTIF = ['Maladie', 'Cas familial', 'Convocation', 'Autre'];
 const horo = (d = new Date()) => `${dateLocale(d)} ${pad(d.getHours())}:${pad(d.getMinutes())}:${pad(d.getSeconds())}`;
 const hhmm = (d = new Date()) => `${pad(d.getHours())}:${pad(d.getMinutes())}`;

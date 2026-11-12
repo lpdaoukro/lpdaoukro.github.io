@@ -248,3 +248,28 @@ tr.alerte-ligne td { background: #FFF7E0; } tr.nj td:first-child { border-left: 
 #impression .sign-2 { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; margin-top: 10px; text-align: center; font-weight: 700; font-size: 9.5pt; }
 #impression .sign-2 div { border: 1px solid #999; height: 60px; padding-top: 4px; }
 #impression .aide-print { font-size: 9pt; text-align: right; color: #444; }
+
+/* ---- Module notes et bulletins (v1.4) ---- */
+.grille-notes th.cliquable { cursor: pointer; text-decoration: underline dotted; }
+.grille-notes td, .grille-notes th { white-space: nowrap; }
+.saisie-note { width: 78px; flex: none; text-align: center; font-size: 1.05rem; font-weight: 700; min-height: 42px; }
+.note-erreur { border-color: var(--rouge) !important; background: #FDECEC; }
+.profs-chips { display: flex; flex-wrap: wrap; gap: 6px; align-items: center; }
+.profs-chips .badge a { color: inherit; text-decoration: none; margin-left: 4px; }
+.apercu-bulletin { background: #fff; border: 1px solid var(--bord); border-radius: 10px; padding: 14px; overflow-x: auto; position: relative; }
+.apercu-bulletin .page { min-width: 700px; position: relative; }
+.bulletin { position: relative; font-size: 9pt; }
+.bulletin .filigrane { position: absolute; top: 40%; left: 0; right: 0; text-align: center; font-size: 72pt; font-weight: 800; color: rgba(192, 0, 0, .12); transform: rotate(-28deg); pointer-events: none; z-index: 0; }
+.bul-ident { display: flex; gap: 10px; align-items: flex-start; margin: 6px 0; line-height: 1.5; }
+.bul-photo { width: 22mm; height: 28mm; object-fit: cover; border: 1px solid #999; flex: none; background: #f2f2f2; }
+.bul-table { width: 100%; border-collapse: collapse; }
+.bul-table th, .bul-table td { border: 1px solid #888; padding: 2px 4px; font-size: 8.5pt; }
+.bul-table th { background: #1F4E78; color: #fff; -webkit-print-color-adjust: exact; print-color-adjust: exact; }
+.bul-table td.c { text-align: center; } .bul-table td.petit, .bulletin .petit { font-size: 7.5pt; }
+.bul-table tr.groupe td { background: #DDEBF7; font-weight: 700; -webkit-print-color-adjust: exact; print-color-adjust: exact; }
+.bul-table tr.sous-total td { background: #F2F2F2; font-style: italic; -webkit-print-color-adjust: exact; print-color-adjust: exact; }
+.bul-table tr.total td { font-weight: 700; background: #E2EFDA; -webkit-print-color-adjust: exact; print-color-adjust: exact; }
+.bul-bas { display: grid; grid-template-columns: 1.1fr 1fr 1.4fr; gap: 6px; margin-top: 6px; }
+.bul-cadre { border: 1px solid #888; padding: 4px 6px; line-height: 1.5; }
+.bul-moy { font-size: 11pt; } .bul-dec { font-weight: 700; min-height: 1.3em; }
+#impression .petit-print th, #impression .petit-print td { font-size: 8pt; padding: 2px 3px; }

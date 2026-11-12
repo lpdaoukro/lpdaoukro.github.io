@@ -91,11 +91,11 @@ const bandeauAncien = t => t ? `<div class="alerte">Hors connexion : affichage d
 function majReseau(etat) {
   if (etat !== undefined) S.enLigne = etat;
   const b = $('#etat-reseau'); if (!b) return;
-  const n = S.file.length + (typeof nbAppelsEnAttente === 'function' ? nbAppelsEnAttente() : 0);
+  const n = S.file.length + (typeof nbAppelsEnAttente === 'function' ? nbAppelsEnAttente() : 0) + (typeof nbNotesEnAttente === 'function' ? nbNotesEnAttente() : 0);
   b.className = 'reseau ' + (!S.enLigne ? 'hors-ligne' : n ? 'attente' : 'en-ligne');
   b.textContent = !S.enLigne ? (n ? `Hors ligne · ${n} en attente` : 'Hors ligne') : n ? `${n} en attente…` : 'En ligne ✓';
 }
-window.addEventListener('online', () => { majReseau(true); synchroniser(); if (typeof synchroniserAppels === 'function') synchroniserAppels(); });
+window.addEventListener('online', () => { majReseau(true); synchroniser(); if (typeof synchroniserAppels === 'function') synchroniserAppels(); if (typeof synchroniserNotes === 'function') synchroniserNotes(); });
 window.addEventListener('offline', () => majReseau(false));
 let syncEnCours = false;
 async function synchroniser(silencieux = true) {
@@ -128,7 +128,7 @@ async function synchroniser(silencieux = true) {
     if (!(e instanceof HorsLigne) && !silencieux) toast(e.message, 5000);
   } finally { syncEnCours = false; majReseau(); }
 }
-setInterval(() => { if (navigator.onLine) { synchroniser(); if (typeof synchroniserAppels === 'function') synchroniserAppels(); } }, 60000);
+setInterval(() => { if (navigator.onLine) { synchroniser(); if (typeof synchroniserAppels === 'function') synchroniserAppels(); if (typeof synchroniserNotes === 'function') synchroniserNotes(); } }, 60000);
 let delaiSync;
 const syncBientot = () => { clearTimeout(delaiSync); delaiSync = setTimeout(() => synchroniser(), 1500); };
 
@@ -342,27 +342,32 @@ function formInscription() {
 
 /* ================= NAVIGATION ================= */
 const PAGES = {
+  'direction':     { titre: 'Direction', roles: ['directeur', 'admin'], fn: c => pageDirection(c) },
   'ma-fiche':      { titre: 'Ma fiche', roles: ['intervenant', 'censeur', 'admin'], si: () => S.session.profil.intervenant || role() === 'intervenant', fn: pageMaFiche },
   'appel':         { titre: 'Appel', roles: ['intervenant', 'educateur', 'admin'], fn: (c, a) => pageAppel(c, a) },
-  'absences':      { titre: 'Absences élèves', roles: ['educateur', 'censeur', 'admin'], fn: (c, a) => pageAbsences(c, a) },
-  'eleves':        { titre: 'Élèves', roles: ['educateur', 'comptable', 'censeur', 'admin', 'intervenant'], fn: (c, a) => pageEleves(c, a) },
-  'effectifs':     { titre: 'Effectifs', roles: ['educateur', 'comptable', 'censeur', 'admin'], fn: c => pageEffectifs(c) },
+  'notes':         { titre: 'Notes', roles: ['intervenant', 'censeur', 'admin', 'directeur'], fn: c => pageNotes(c) },
+  'bulletins':     { titre: 'Bulletins', roles: ['directeur', 'censeur', 'admin'], fn: (c, a) => pageBulletins(c, a) },
+  'absences':      { titre: 'Absences élèves', roles: ['educateur', 'censeur', 'admin', 'directeur'], fn: (c, a) => pageAbsences(c, a) },
+  'eleves':        { titre: 'Élèves', roles: ['educateur', 'comptable', 'censeur', 'admin', 'intervenant', 'directeur'], fn: (c, a) => pageEleves(c, a) },
+  'effectifs':     { titre: 'Effectifs', roles: ['educateur', 'comptable', 'censeur', 'admin', 'directeur'], fn: c => pageEffectifs(c) },
   'pointage':      { titre: 'Pointage du jour', roles: ['censeur', 'admin'], fn: pagePointage },
-  'tableau':       { titre: 'Tableau de bord', roles: ['censeur', 'admin'], fn: pageTableau },
-  'intervenants':  { titre: 'Intervenants', roles: ['censeur', 'admin'], fn: pageIntervenants },
+  'tableau':       { titre: 'Heures supp.', roles: ['censeur', 'admin', 'directeur'], fn: pageTableau },
+  'intervenants':  { titre: 'Intervenants', roles: ['censeur', 'admin', 'directeur'], fn: pageIntervenants },
   'rattrapages':   { titre: 'Rattrapages', roles: ['intervenant', 'censeur', 'admin'], fn: pageRattrapages, pastille: 'rattrapagesAValider' },
   'reclamations':  { titre: 'Réclamations', roles: ['intervenant', 'censeur', 'admin'], fn: pageReclamations, pastille: 'reclamations' },
-  'paiement':      { titre: 'État de paiement', roles: ['censeur', 'admin'], fn: pagePaiement },
-  'personnel':     { titre: 'Personnel', roles: ['censeur', 'admin'], fn: pagePersonnel },
+  'paiement':      { titre: 'État de paiement', roles: ['censeur', 'admin', 'directeur'], fn: pagePaiement },
+  'personnel':     { titre: 'Personnel', roles: ['censeur', 'admin', 'directeur'], fn: pagePersonnel },
   'emplois':       { titre: 'Emplois du temps', roles: ['admin'], fn: pageEmplois },
   'comptes':       { titre: 'Comptes', roles: ['admin'], fn: pageComptes, pastille: 'comptesEnAttente' },
   'journal':       { titre: 'Journal', roles: ['admin'], fn: pageJournal },
-  'mon-compte':    { titre: 'Mon compte', roles: ['intervenant', 'censeur', 'admin', 'educateur', 'comptable'], cache: true, fn: pageMonCompte },
-  'eleve':         { titre: 'Fiche élève', roles: ['educateur', 'comptable', 'censeur', 'admin', 'intervenant'], cache: true, fn: (c, a) => pageEleve(c, a) },
+  'conseil':       { titre: 'Conseil de classe', roles: ['intervenant', 'censeur', 'admin', 'directeur', 'educateur'], cache: true, fn: (c, a) => pageConseil(c, a) },
+  'matieres':      { titre: 'Matières et coefficients', roles: ['admin'], cache: true, fn: c => pageMatieres(c) },
+  'mon-compte':    { titre: 'Mon compte', roles: ['intervenant', 'censeur', 'admin', 'educateur', 'comptable', 'directeur'], cache: true, fn: pageMonCompte },
+  'eleve':         { titre: 'Fiche élève', roles: ['educateur', 'comptable', 'censeur', 'admin', 'intervenant', 'directeur'], cache: true, fn: (c, a) => pageEleve(c, a) },
   'import-eleves': { titre: 'Importer des élèves', roles: ['educateur', 'admin'], cache: true, fn: c => pageImportEleves(c) },
   'param-eleves':  { titre: 'Classes et montants', roles: ['admin'], cache: true, fn: c => pageParamEleves(c) },
-  'absences-eleve': { titre: "Absences d'un élève", roles: ['educateur', 'censeur', 'admin'], cache: true, fn: (c, a) => pageAbsencesEleve(c, a) },
-  'fiche':         { titre: 'Fiche', roles: ['censeur', 'admin'], cache: true, fn: pageFicheIntervenant }
+  'absences-eleve': { titre: "Absences d'un élève", roles: ['educateur', 'censeur', 'admin', 'directeur'], cache: true, fn: (c, a) => pageAbsencesEleve(c, a) },
+  'fiche':         { titre: 'Fiche', roles: ['censeur', 'admin', 'directeur'], cache: true, fn: pageFicheIntervenant }
 };
 let pastilles = stock.lire('pastilles', {});
 function menu() {
@@ -379,7 +384,7 @@ function afficher() {
   $('#moi-nom').textContent = p.nom;
   $('#moi-photo').outerHTML = avatar(p.matricule, p.nom, 'petit').replace('class="avatar', 'id="moi-photo" class="avatar');
   let [page, arg] = (location.hash.slice(2) || '').split('/');
-  const def = role() === 'intervenant' ? 'ma-fiche' : ['educateur', 'comptable'].includes(role()) ? 'eleves' : 'pointage';
+  const def = role() === 'intervenant' ? 'ma-fiche' : role() === 'directeur' ? 'direction' : ['educateur', 'comptable'].includes(role()) ? 'eleves' : 'pointage';
   if (!PAGES[page] || !PAGES[page].roles.includes(role())) { page = def; history.replaceState(null, '', '#/' + def); }
   menu(); majReseau();
   c.innerHTML = '<div class="chargement">Chargement…</div>';
@@ -392,7 +397,7 @@ function afficher() {
 }
 window.addEventListener('hashchange', afficher);
 document.addEventListener('DOMContentLoaded', () => {
-  $('#etat-reseau').onclick = () => { if (!navigator.onLine) return toast('Pas de connexion : les pointages et les appels partiront automatiquement au retour du réseau.'); synchroniser(false); if (typeof synchroniserAppels === 'function') synchroniserAppels(false); };
+  $('#etat-reseau').onclick = () => { if (!navigator.onLine) return toast('Pas de connexion : les pointages et les appels partiront automatiquement au retour du réseau.'); synchroniser(false); if (typeof synchroniserAppels === 'function') synchroniserAppels(false); if (typeof synchroniserNotes === 'function') synchroniserNotes(false); };
   $('#btn-moi').onclick = () => { location.hash = '#/mon-compte'; };
   if ('serviceWorker' in navigator) navigator.serviceWorker.register('sw.js').catch(() => {});
   afficher();
