@@ -453,7 +453,7 @@ async function vueBulletinsClasse(c, classe, sem) {
       <td style="white-space:nowrap"><button class="btn petit secondaire" data-voir="${e.id}">👁 Voir</button> <button class="btn petit secondaire" data-imp="${e.id}">🖨</button></td></tr>`).join('')}</tbody></table></div>
     <div id="bc-apercu"></div>`;
   $('#bc-sem').onchange = e => { stock.ecrire('notes_sem', +e.target.value); vueBulletinsClasse(c, classe, +e.target.value); };
-  const prep = async ids => { toast('Préparation des photos…'); await chargerPhotosEleves(ids); };
+  const prep = async ids => { toast('Préparation des bulletins…'); await Promise.all([chargerPhotosEleves(ids), preparerQR()]); };
   $$('[data-voir]', c).forEach(b => b.onclick = async () => {
     await prep([b.dataset.voir]);
     $('#bc-apercu').innerHTML = `<h2>Aperçu du bulletin</h2><div class="apercu-bulletin">${bulletinHtml(K, K.eleves.find(e => e.id === b.dataset.voir))}</div>`;
@@ -482,6 +482,11 @@ async function vueBulletinsClasse(c, classe, sem) {
 }
 
 /* ===================== BULLETIN AU MODÈLE DU LYCÉE ===================== */
+// silhouette grise en filigrane quand l'élève n'a pas encore de photo
+const SILHOUETTE = `<svg class="silhouette" viewBox="0 0 88 108" xmlns="http://www.w3.org/2000/svg" aria-label="Emplacement de la photo">
+  <rect width="88" height="108" fill="#F2F2F2"/><circle cx="44" cy="40" r="18" fill="#D0D0D0"/>
+  <path d="M10 108 C10 80 26 66 44 66 C62 66 78 80 78 108 Z" fill="#D0D0D0"/>
+  <text x="44" y="102" text-anchor="middle" font-size="9" font-family="Arial" fill="#A6A6A6" letter-spacing="1">PHOTO</text></svg>`;
 function bulletinHtml(K, e) {
   const P = S.session.params, ph = EL.photos[e.id], provisoire = !K.validation, s2 = K.semestre === 2;
   const cl = (D => D ? D.classes.find(k => k.code === K.classe) : null)(EL.donnees);
@@ -493,9 +498,9 @@ function bulletinHtml(K, e) {
     K.matieres.filter(m => m.groupe === g).forEach(m => {
       const mo = e.moyennes[m.id], ne = mo === null || mo === undefined;
       const profs = `<td class="prof ${m.profs.length > 34 ? 'serre' : ''}">${esc(m.profs)}</td>`;
-      if (!s2) lignes += `<tr><td>${esc(m.matiere)}</td><td class="c">${n2(mo)}</td><td class="c">${nb(m.coef)}</td><td class="c">${ne ? '<i>Non évalué</i>' : n2(mo * m.coef)}</td><td class="c">${rangObj(e.rangs[m.id])}</td>${profs}<td>${ne ? '' : esc(e.app[m.id] || '')}</td></tr>`;
+      if (!s2) lignes += `<tr><td>${esc(m.matiere)}</td><td class="c">${n2(mo)}</td><td class="c">${nb(m.coef)}</td><td class="c ne">${ne ? '<i>Non évalué</i>' : n2(mo * m.coef)}</td><td class="c">${rangObj(e.rangs[m.id])}</td>${profs}<td>${ne ? '' : esc(e.app[m.id] || '')}</td></tr>`;
       else { const m1 = e.s1 ? e.s1.moyennes[m.id] : null, an = e.annuelles[m.id];
-        lignes += `<tr><td>${esc(m.matiere)}</td><td class="c">${n2(m1)}</td><td class="c">${n2(mo)}</td><td class="c">${nb(m.coef)}</td><td class="c">${ne ? '<i>NE</i>' : n2(mo * m.coef)}</td><td class="c">${rangObj(e.rangs[m.id])}</td><td class="c">${n2(an)}</td><td class="c">${rangObj(e.rangs['AN-' + m.id])}</td>${profs}<td>${ne ? '' : esc(e.app[m.id] || '')}</td></tr>`; }
+        lignes += `<tr><td>${esc(m.matiere)}</td><td class="c">${n2(m1)}</td><td class="c">${n2(mo)}</td><td class="c">${nb(m.coef)}</td><td class="c ne">${ne ? '<i>NE</i>' : n2(mo * m.coef)}</td><td class="c">${rangObj(e.rangs[m.id])}</td><td class="c">${n2(an)}</td><td class="c">${rangObj(e.rangs['AN-' + m.id])}</td>${profs}<td>${ne ? '' : esc(e.app[m.id] || '')}</td></tr>`; }
     });
     const u = e.unites[g];
     if (!s2) lignes += `<tr class="unite"><td>${esc(g)}</td><td class="c">${n2(u.moy)}</td><td class="c">${nb(u.coef)}</td><td class="c">${n2(u.pts)}</td><td class="c">${rangTxt(u.rang, u.ex)}</td><td colspan="2"></td></tr>`;
@@ -507,15 +512,16 @@ function bulletinHtml(K, e) {
   const qr = qrSvg(`${P.etablissement} | Bulletin ${SEM_LIB[K.semestre]} ${P.annee} | ${e.nom} ${e.prenoms} | Matricule ${e.matricule || '-'} | Classe ${K.classe} | Moyenne ${n2(e.moy) || '-'} | Rang ${e.rang || '-'}/${K.stats.classes}${s2 ? ' | MGA ' + (n2(e.annuelle) || '-') : ''}`, 19);
   const dateVisa = K.validation ? fr(String(K.validation.le).slice(0, 10)) : fr(dateLocale());
   const sanc = e.sanc || [];
-  return `<div class="page bulletin off">${provisoire ? '<div class="filigrane">PROVISOIRE</div>' : ''}
+  return `<div class="page bulletin off une-page">${provisoire ? '<div class="filigrane">PROVISOIRE</div>' : ''}
     ${enteteOfficiel(`<div class="off-titre"><span>BULLETIN DE NOTES : ${SEM_LIB[K.semestre]}</span><span>Année Scolaire : ${esc(P.annee)}</span></div>`)}
     <div class="bul-nom"><span>${esc(e.nom)} ${esc(e.prenoms)}</span><span>Matricule : ${esc(e.matricule || '—')}</span></div>
     <div class="bul-id ${s2 ? 's2' : ''}">${!s2 ? `<div class="bul-qr">${qr}</div>` : ''}
       <div><b>Filière :</b> ${esc(cl ? cl.libelle.replace(/\s[A-D]$/, '') : K.libelle)}<br><b>Classe :</b> ${esc(K.classe)}<br><b>Effectif :</b> ${effectif}${s2 ? `<br><b>Né(e) le :</b> ${esc(naiss)}${e.lieu_naissance ? ' à ' + esc(e.lieu_naissance) : ''}` : ''}</div>
       <div><b>Régime :</b> ${esc(e.regime || '')}<br><b>Interne :</b> ${interne}<br><b>Affecté(e) :</b> ${affecte}<br><b>Redoublant(e) :</b> ${e.redoublant === 'OUI' ? 'Oui' : 'Non'}</div>
       <div><b>Sexe :</b> ${e.sexe === 'F' ? 'Féminin' : e.sexe === 'M' ? 'Masculin' : ''}<br><b>Nationalité :</b> ${esc(e.nationalite || '')}${!s2 ? `<br><b>Né(e) le :</b> ${esc(naiss)}${e.lieu_naissance ? ' à ' + esc(e.lieu_naissance) : ''}` : ''}</div>
-      <div class="bul-photo2">${ph ? `<img src="${ph}">` : ''}</div></div>
-    <table class="bul-grille"><thead><tr>${!s2 ? '<th>Matière</th><th>Moy</th><th>Coef.</th><th>M*Coeff.</th><th>Rang</th><th>Professeurs</th><th>Appréciation/Émargement</th>'
+      <div class="bul-photo2">${ph ? `<img src="${ph}">` : SILHOUETTE}</div></div>
+    <table class="bul-grille">${!s2 ? '<colgroup><col style="width:25%"><col style="width:6%"><col style="width:5%"><col style="width:9%"><col style="width:6%"><col style="width:27%"><col style="width:22%"></colgroup>'
+      : '<colgroup><col style="width:21%"><col style="width:6%"><col style="width:6%"><col style="width:5%"><col style="width:8%"><col style="width:6%"><col style="width:6%"><col style="width:6%"><col style="width:22%"><col style="width:14%"></colgroup>'}<thead><tr>${!s2 ? '<th>Matière</th><th>Moy</th><th>Coef.</th><th>M*Coeff.</th><th>Rang</th><th>Professeurs</th><th>Appréciation/Émargement</th>'
       : '<th>Matière</th><th>SEM 1</th><th>SEM 2</th><th>Coef.</th><th>M*Coeff.</th><th>Rang SEM 2</th><th>Moy. An</th><th>Rg An</th><th>Professeurs</th><th>Appr./Émarg.</th>'}</tr></thead>
       <tbody>${lignes}${totaux}</tbody></table>
     <div class="bul-abs"><span>Absences justifiées : <b>${nb(e.abs.hJ + e.abs.hS)} Heure(s)</b></span><span>Absences non justifiées : <b>${nb(e.abs.hNJ)} Heure(s)</b></span><span>Retards : <b>${e.abs.retards}</b></span></div>

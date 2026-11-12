@@ -355,3 +355,47 @@ nav#menu { display: block; padding: 0; overflow: visible; }
 .tab-conseil select { min-width: 150px; } .cases-sanc label { display: block; font-weight: 400; font-size: .78rem; white-space: nowrap; margin: 0; }
 .cases-sanc input { width: auto; min-height: 0; }
 .off .bul-id.s2 { grid-template-columns: 1.3fr 1fr 1.2fr 22mm; } .off .bul-id.s2 > div:first-child { border-right: 0; display: block; }
+/* v1.6.1 : bulletin compact, sur une seule page A4 */
+@media print { @page bul { size: A4; margin: 7mm 8mm; } #impression .page.bulletin { page: bul; } }
+.bulletin.off { font-size: 8pt; }
+.off .bul-grille { table-layout: fixed; }
+.off .bul-grille th, .off .bul-grille td { padding: 0.3mm 1mm !important; line-height: 1.15; font-size: 7.5pt !important; overflow: hidden; }
+.off .bul-grille td.ne { white-space: nowrap; font-size: 6.5pt !important; }
+.off .bul-grille td.prof { font-size: 6.5pt !important; } .off .bul-grille td.prof.serre { font-size: 5.5pt !important; }
+.off .bul-grille tr.totaux td { font-size: 9pt !important; }
+
+.bulletin.off .off-cadre { min-height: 15mm; padding: 1mm 2mm; } .bulletin.off .off-cadre img { height: 12mm; }
+.bulletin.off .off-titre { font-size: 11pt; margin: 0.8mm 0; } .bulletin.off .bul-nom { font-size: 11pt; padding: 0.5mm 2mm; }
+.bulletin.off .bul-id { line-height: 1.4; font-size: 8pt; }
+.bulletin.off .bul-appc { min-height: 9mm; } .bulletin.off .bul-pp { margin-top: 4mm; }
+.bulletin.off .bul-visa { min-height: 22mm; } .bulletin.off .bul-dir { margin-top: 13mm; }
+.bulletin.off .off-pied { margin-top: 2mm; }
+/* v1.6.2 : bulletin lisible, qui remplit la page */
+.bulletin.off { font-size: 9pt; }
+.off .bul-grille th, .off .bul-grille td { font-size: 8.8pt !important; padding: 0.4mm 1.2mm !important; vertical-align: middle; }
+.off .bul-grille td.ne { font-size: 7.5pt !important; }
+.off .bul-grille td.prof { font-size: 7.5pt !important; } .off .bul-grille td.prof.serre { font-size: 6.5pt !important; }
+.off .bul-grille tr.totaux td { font-size: 10.5pt !important; }
+.bulletin.off .off-cadre b { font-size: 9.5pt; } .bulletin.off .off-cadre span { font-size: 7.5pt; } .bulletin.off .off-cadre img { height: 14mm; }
+.bulletin.off .off-titre { font-size: 12.5pt; } .bulletin.off .bul-nom { font-size: 12.5pt; }
+.bulletin.off .bul-id { font-size: 9pt; line-height: 1.5; }
+.bulletin.off .bul-abs, .bulletin.off .off-case, .bulletin.off .bul-st { font-size: 9pt; }
+.bulletin.off .bul-t { font-size: 10.5pt; } .bulletin.off .bul-appc, .bulletin.off .bul-visa, .bulletin.off .bul-pp { font-size: 9.5pt; }
+.bulletin.off .off-pied { font-size: 7pt; }
+/* v1.6.3 : bordures nettes et en-têtes centrés */
+.off table th, .off table td { border: 1px solid #000 !important; }
+.off table { border: 1.5px solid #000 !important; }
+.off table th { text-align: center !important; vertical-align: middle !important; }
+.off .bul-grille td.prof { text-align: center !important; }
+.off .off-cadre { border: 1.2px solid #000; }
+.off .off-titre { border: 1.5px solid #000; }
+.off .bul-nom { border: 1.2px solid #000; }
+.off .bul-id { border: 1.2px solid #000; border-top: 0; }
+.off .bul-id > div:first-child, .off .bul-photo2 { border-color: #000 !important; }
+.off .bul-abs, .off .bul-3, .off .bul-bas2 { border: 1.2px solid #000; }
+.off .bul-3 { border-top: 0; } .off .bul-3 > div, .off .bul-bas2 > div:first-child { border-right: 1px solid #000; }
+.off .bul-3.bul-bilan { border-top: 1.2px solid #000; }
+.off .bul-t { border-bottom: 1px solid #000; }
+.off .bul-rappel, .off .bul-rappel th, .off .bul-rappel td { border: 0 !important; }
+.off .off-pied { border-top: 1px solid #000; }
+.off .bul-photo2 .silhouette { width: 22mm; height: 27mm; display: block; -webkit-print-color-adjust: exact; print-color-adjust: exact; }

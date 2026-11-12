@@ -630,8 +630,34 @@ function rendreFiche(c, F, opt) {
 }
 
 /* ================= IMPRESSIONS (A4) ================= */
+/** Les documents marqués « une-page » sont réduits si besoin pour tenir sur une seule feuille A4. */
+function ajusterPages(z) {
+  const pages = $$('.page.une-page', z); if (!pages.length) return;
+  const mm = 96 / 25.4;
+  z.style.cssText = 'display:block;position:absolute;left:-10000px;top:0;visibility:hidden';
+  pages.forEach(p => {
+    const paysage = p.classList.contains('paysage');
+    p.style.width = (paysage ? 281 : 194) + 'mm'; p.style.zoom = '';
+    const haut = (paysage ? 192 : 279) * mm;
+    let h = p.scrollHeight;
+    // page pas pleine : on agrandit les lignes de notes pour occuper toute la feuille (8 mm au plus par ligne)
+    const lignes = $$('.bul-grille tbody tr', p);
+    if (h < haut && lignes.length) {
+      const extra = (haut - h) / lignes.length;
+      lignes.forEach(tr => { tr.style.height = Math.min(tr.offsetHeight + extra, 8 * mm) + 'px'; });
+      h = p.scrollHeight;
+      const reste = haut - h;   // ce qui reste : pour les cadres d'appréciation et de visa
+      if (reste > 4 * mm) $$('.bul-appc, .bul-visa', p).forEach(x => { x.style.minHeight = (x.offsetHeight + Math.min(reste / 2, 25 * mm)) + 'px'; });
+      h = p.scrollHeight;
+    }
+    if (h > haut) p.style.zoom = String(Math.floor(haut / h * 1000) / 1000);
+    p.style.width = '';
+  });
+  z.style.cssText = '';
+}
 function imprimer(html) {
   const z = $('#impression'); z.innerHTML = html;
+  ajusterPages(z);
   const tour = imprimer.tour = (imprimer.tour || 0) + 1;
   document.body.classList.add('imprime');
   const fin = () => { window.removeEventListener('afterprint', fin); if (tour !== imprimer.tour) return; document.body.classList.remove('imprime'); z.innerHTML = ''; };
