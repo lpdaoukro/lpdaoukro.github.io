@@ -399,3 +399,16 @@ nav#menu { display: block; padding: 0; overflow: visible; }
 .off .bul-rappel, .off .bul-rappel th, .off .bul-rappel td { border: 0 !important; }
 .off .off-pied { border-top: 1px solid #000; }
 .off .bul-photo2 .silhouette { width: 22mm; height: 27mm; display: block; -webkit-print-color-adjust: exact; print-color-adjust: exact; }
+
+/* ===== v1.7 Discipline ===== */
+.onglets a { flex: 1; text-align: center; padding: 9px 6px; border-radius: 8px; font-weight: 600; font-size: .88rem; color: var(--gris); text-decoration: none; white-space: nowrap; }
+.onglets a.actif { background: #fff; color: var(--bleu); box-shadow: 0 1px 3px rgba(0,0,0,.1); }
+@media (max-width: 600px) { .onglets { overflow-x: auto; } .onglets a { flex: 0 0 auto; padding: 9px 10px; } }
+.puce { display: inline-block; background: var(--gris-clair); border-radius: 14px; padding: 3px 10px; margin: 2px; font-size: .88rem; color: #222; }
+.puce a { color: #b00; text-decoration: none; margin-left: 4px; font-weight: 700; }
+.sig-liste { max-height: 260px; overflow-y: auto; margin: 6px 0; }
+.sig-el { display: flex; align-items: center; gap: 8px; padding: 7px 4px; border-bottom: 1px solid #eee; font-weight: 400; margin: 0; }
+.sig-el input { width: auto; min-height: 0; }
+table.hbarres td { border: 0; padding: 4px 6px; }
+.barre { height: 14px; background: var(--bleu); border-radius: 4px; min-width: 2px; }
+.lettre { font-size: 12pt; line-height: 1.75; margin: 20px 10px; }

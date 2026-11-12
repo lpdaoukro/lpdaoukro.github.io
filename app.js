@@ -348,6 +348,7 @@ const PAGES = {
   'appel':         { titre: 'Appel', roles: ['intervenant', 'educateur', 'admin'], fn: (c, a) => pageAppel(c, a) },
   'notes':         { titre: 'Notes', roles: ['intervenant', 'censeur', 'admin', 'directeur'], fn: c => pageNotes(c) },
   'bulletins':     { titre: 'Bulletins', roles: ['directeur', 'censeur', 'admin'], fn: (c, a) => pageBulletins(c, a) },
+  'discipline':    { titre: 'Discipline', roles: ['intervenant', 'educateur', 'censeur', 'admin', 'directeur'], fn: (c, a) => pageDiscipline(c, a) },
   'absences':      { titre: 'Absences élèves', roles: ['educateur', 'censeur', 'admin', 'directeur'], fn: (c, a) => pageAbsences(c, a) },
   'eleves':        { titre: 'Élèves', roles: ['educateur', 'comptable', 'censeur', 'admin', 'intervenant', 'directeur'], fn: (c, a) => pageEleves(c, a) },
   'effectifs':     { titre: 'Effectifs', roles: ['educateur', 'comptable', 'censeur', 'admin', 'directeur'], fn: c => pageEffectifs(c) },
@@ -368,13 +369,15 @@ const PAGES = {
   'import-eleves': { titre: 'Importer des élèves', roles: ['educateur', 'admin'], cache: true, fn: c => pageImportEleves(c) },
   'param-eleves':  { titre: 'Classes et montants', roles: ['admin'], cache: true, fn: c => pageParamEleves(c) },
   'absences-eleve': { titre: "Absences d'un élève", roles: ['educateur', 'censeur', 'admin', 'directeur'], cache: true, fn: (c, a) => pageAbsencesEleve(c, a) },
-  'fiche':         { titre: 'Fiche', roles: ['censeur', 'admin', 'directeur'], cache: true, fn: pageFicheIntervenant }
+  'fiche':         { titre: 'Fiche', roles: ['censeur', 'admin', 'directeur'], cache: true, fn: pageFicheIntervenant },
+  'incident':      { titre: 'Incident', roles: ['intervenant', 'educateur', 'censeur', 'admin', 'directeur'], cache: true, fn: (c, a) => pageIncident(c, a) },
+  'discipline-eleve': { titre: 'Fiche disciplinaire', roles: ['intervenant', 'educateur', 'censeur', 'admin', 'directeur'], cache: true, fn: (c, a) => pageDisciplineEleve(c, a) }
 };
 let pastilles = stock.lire('pastilles', {});
 const GROUPES_MENU = [
   { id: 'accueil', titre: '🏠 Accueil', pages: ['direction', 'ma-fiche'] },
   { id: 'personnel', titre: '👨‍🏫 Personnel', pages: ['pointage', 'tableau', 'intervenants', 'rattrapages', 'reclamations', 'paiement', 'personnel'] },
-  { id: 'eleves', titre: '🎓 Élèves', pages: ['eleves', 'effectifs', 'appel', 'absences'] },
+  { id: 'eleves', titre: '🎓 Élèves', pages: ['eleves', 'effectifs', 'appel', 'absences', 'discipline'] },
   { id: 'notes', titre: '📝 Notes', pages: ['notes', 'bulletins'] },
   { id: 'admin', titre: '⚙ Administration', pages: ['emplois', 'comptes', 'journal'] }
 ];

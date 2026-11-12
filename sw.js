@@ -1,6 +1,6 @@
 // Service worker : garde l'application sur le téléphone pour qu'elle s'ouvre même sans connexion.
-const VERSION = 'lpd-v11';
-const FICHIERS = ['./', 'index.html', 'style.css', 'app.js', 'eleves.js', 'absences.js', 'notes.js', 'config.js', 'manifest.webmanifest', 'icone-192.png', 'icone-512.png',
+const VERSION = 'lpd-v12';
+const FICHIERS = ['./', 'index.html', 'style.css', 'app.js', 'eleves.js', 'absences.js', 'notes.js', 'discipline.js', 'config.js', 'manifest.webmanifest', 'icone-192.png', 'icone-512.png',
   'medias/embleme-blanc.png', 'medias/embleme-noir-petit.png', 'medias/logo-complet.png',
   'medias/armoiries.png', 'medias/ministere.png',
   'medias/accueil-1.jpg', 'medias/accueil-2.jpg', 'medias/accueil-3.jpg', 'medias/accueil-4.jpg', 'medias/accueil-5.jpg', 'medias/accueil-6.jpg', 'medias/accueil-7.jpg', 'medias/accueil-8.jpg', 'medias/accueil-9.jpg', 'medias/accueil-10.jpg', 'medias/accueil-11.jpg',
