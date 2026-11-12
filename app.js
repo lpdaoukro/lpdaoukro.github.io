@@ -632,8 +632,9 @@ function rendreFiche(c, F, opt) {
 /* ================= IMPRESSIONS (A4) ================= */
 function imprimer(html) {
   const z = $('#impression'); z.innerHTML = html;
+  const tour = imprimer.tour = (imprimer.tour || 0) + 1;
   document.body.classList.add('imprime');
-  const fin = () => { document.body.classList.remove('imprime'); z.innerHTML = ''; window.removeEventListener('afterprint', fin); };
+  const fin = () => { window.removeEventListener('afterprint', fin); if (tour !== imprimer.tour) return; document.body.classList.remove('imprime'); z.innerHTML = ''; };
   window.addEventListener('afterprint', fin);
   setTimeout(() => { window.print(); setTimeout(() => { if (document.body.classList.contains('imprime') && !matchMedia('print').matches) fin(); }, 1500); }, 200);
 }
@@ -914,7 +915,7 @@ async function pagePaiement(c) {
 
 /* ================= EXPORT EXCEL ================= */
 function chargerScript(src) {
-  const pret = () => src.includes('xlsx') ? window.XLSX : window.mammoth;
+  const pret = () => src.includes('xlsx') ? window.XLSX : src.includes('qrcode') ? window.qrcode : window.mammoth;
   return new Promise((ok, ko) => {
     if (pret()) return ok();
     const s = document.createElement('script'); s.src = src; s.onload = ok;

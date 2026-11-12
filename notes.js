@@ -33,7 +33,7 @@ async function synchroniserNotes(silencieux = true) {
     if (nbR) toast(`${nbR} évaluation(s) refusée(s) par le serveur : voir la page « Notes ».`, 6000);
     else if (!silencieux) toast('Notes envoyées ✓');
     if (NT.file.length) { syncNotesEnCours = false; return synchroniserNotes(silencieux); }
-    if (role() === 'intervenant') { try { NT.ref = await api('notesReferentiel'); sauverNT(); } catch (e) { /* rien */ } }
+    if (role() === 'intervenant') { try { NT.ref = await api('notesReferentiel'); REF_J = NT.ref; sauverNT(); } catch (e) { /* rien */ } }
     NT.parClasse = {};
     if (typeof redessinerNotes === 'function' && redessinerNotes) redessinerNotes();
   } catch (e) {
@@ -48,15 +48,35 @@ function evaluationsDe(ref) {
   return Object.values(m);
 }
 const semDe = (d, P) => { const s = P.semestres.find(x => d >= x.du && d <= x.au); return s ? s.n : 0; };
+let REF_J = null;   // justifications et sorties des élèves (pour savoir si une absence à une évaluation est justifiée)
+function absJustifiee(id, d) {
+  if (!REF_J) return false;
+  if ((REF_J.sorties || []).includes(id + '|' + d)) return true;
+  return ((REF_J.justifs || {})[id] || []).some(p => d >= p[0] && d <= p[1]);
+}
+/** ABS justifiée : ne compte pas ; ABS non justifiée : 0 ; NN : ne compte pas. */
 function moyenneMatiere(evals, idEl) {
   let p = 0, q = 0;
-  evals.forEach(v => { const n = v.notes[idEl]; if (n === undefined || n === '' || n === 'ABS' || n === 'NN') return; p += (+n) / v.bareme * 20 * v.coef; q += v.coef; });
+  evals.forEach(v => {
+    let n = v.notes[idEl]; if (n === undefined || n === '' || n === 'NN') return;
+    if (n === 'ABS') { if (absJustifiee(idEl, v.date)) return; n = 0; }
+    p += (+n) / v.bareme * 20 * v.coef; q += v.coef;
+  });
   return q ? p / q : null;
+}
+function noteAffichee(v, idEl) {
+  const n = v.notes[idEl];
+  if (n === undefined) return '';
+  if (n === 'ABS') return absJustifiee(idEl, v.date) ? 'ABS J' : 'ABS NJ → 0';
+  return String(n).replace('.', ',');
 }
 
 /* ===================== PAGE NOTES (enseignant / direction) ===================== */
 let redessinerNotes = null;
 async function chargerRefNotes(classe) {
+  const r = await chargerRefNotes0(classe); REF_J = r; return r;
+}
+async function chargerRefNotes0(classe) {
   if (role() === 'intervenant') {
     try { NT.ref = await api('notesReferentiel'); sauverNT(); }
     catch (e) { if (!(e instanceof HorsLigne) || !NT.ref) throw e; }
@@ -123,7 +143,7 @@ async function pageNotes(c) {
       ${v ? `<div class="alerte">🔒 ${esc(v)}</div>` : ''}
       <div class="actions" style="margin-bottom:10px">${!v ? '<button class="btn vert" id="n-nouv">➕ Nouvelle évaluation</button>' : ''}<button class="btn secondaire" id="n-fiche">🖨 Fiche de notes</button>${!v && role() !== 'directeur' ? '<button class="btn secondaire" id="n-app">✍ Appréciations</button>' : ''}</div>
       <div class="table-defil"><table class="grille-notes"><thead><tr><th>Élève</th>${ev.map(x => `<th class="n cliquable" data-ev="${x.id}" title="Modifier">${esc(x.libelle || x.type)}<div class="aide">${frCourt(x.date)} · /${nb(x.bareme)} · c${nb(x.coef)}${x.attente ? ' ⏳' : ''}</div></th>`).join('')}<th class="n">Moy./20</th></tr></thead>
-      <tbody>${el.map(e => { const mo = moyenneMatiere(ev, e.id); return `<tr><td><b>${esc(e.nom)}</b> ${esc(e.prenoms)}${app[e.id] ? `<div class="aide">« ${esc(app[e.id])} »</div>` : ''}</td>${ev.map(x => `<td class="n">${esc(x.notes[e.id] === undefined ? '' : String(x.notes[e.id]).replace('.', ','))}</td>`).join('')}<td class="n"><b>${n2(mo)}</b></td></tr>`; }).join('')}</tbody></table></div>
+      <tbody>${el.map(e => { const mo = moyenneMatiere(ev, e.id); return `<tr><td><b>${esc(e.nom)}</b> ${esc(e.prenoms)}${app[e.id] ? `<div class="aide">« ${esc(app[e.id])} »</div>` : ''}</td>${ev.map(x => `<td class="n">${esc(noteAffichee(x, e.id))}</td>`).join('')}<td class="n"><b>${n2(mo)}</b></td></tr>`; }).join('')}</tbody></table></div>
       ${!ev.length ? '<div class="info">Aucune évaluation ce semestre. Touchez « Nouvelle évaluation ».</div>' : '<p class="aide">Touchez le titre d\'une évaluation pour la modifier.</p>'}`;
     $('#n-retour').onclick = e => { e.preventDefault(); liste(); };
     if ($('#n-nouv')) $('#n-nouv').onclick = () => { st.ev = null; vueEval(); };
@@ -144,7 +164,7 @@ async function pageNotes(c) {
         <div><label>Date</label><input type="date" name="date" value="${x.date}" max="${dateLocale()}" required></div>
         <div><label>Noté sur</label><input type="number" name="bareme" min="1" max="100" value="${x.bareme}" required></div>
         <div><label>Coefficient</label><input type="number" name="coef" min="0.5" max="20" step="0.5" value="${x.coef}" required></div></div>
-        <p class="aide">Pour chaque élève : la note, ou <b>A</b> pour absent, <b>N</b> pour non noté (non comptés dans la moyenne). La touche Entrée passe à l'élève suivant.</p></div>
+        <p class="aide">Pour chaque élève : la note, ou <b>A</b> pour absent (absence justifiée : non comptée ; absence non justifiée : <b>0</b>), <b>N</b> pour non noté, par exemple élève arrivé en cours d'année ou dispensé (jamais compté). La touche Entrée passe à l'élève suivant.</p></div>
       ${el.map((e, i) => `<div class="ligne-appel"><span class="num">${i + 1}</span>${avatarEleve(e, 'petit')}<div class="nom-appel"><b>${esc(e.nom)}</b> ${esc(e.prenoms)}</div>
         <input class="saisie-note" data-e="${e.id}" value="${esc(x.notes[e.id] === undefined ? '' : String(x.notes[e.id]).replace('.', ','))}" inputmode="decimal" autocomplete="off" ${v ? 'disabled' : ''}></div>`).join('')}
       <div id="ev-msg"></div>
@@ -187,9 +207,9 @@ async function pageNotes(c) {
     st.vue = 'app'; window.scrollTo(0, 0);
     const m = st.mat, ev = evalsMat(m), el = elevesClasse(m.classe);
     const app = (ref.appreciations || {})[m.id + '|' + st.sem] || {};
-    const prop = mo => mo === null ? '' : mo >= 16 ? 'Excellent travail' : mo >= 14 ? 'Très bon travail' : mo >= 12 ? 'Bon travail' : mo >= 10 ? 'Assez bien, peut mieux faire' : mo >= 8 ? 'Insuffisant, doit fournir plus d\'efforts' : 'Très insuffisant';
+    const prop = mo => apprAuto(mo);
     c.innerHTML = `<p><a href="#" id="n-retour">← ${esc(m.matiere)} — ${esc(m.classe)}</a></p><h1>Appréciations — semestre ${st.sem}</h1>
-      <p class="aide">Elles figureront sur le bulletin. <button class="btn petit secondaire" id="ap-auto">Proposer selon la moyenne</button> (pour les cases vides)</p>
+      <p class="aide">Elles figureront sur le bulletin. Une case vide prend automatiquement l'appréciation correspondant à la moyenne (Passable, Assez bien, Bien…). <button class="btn petit secondaire" id="ap-auto">Proposer selon la moyenne</button></p>
       <form id="f-ap">${el.map(e => { const mo = moyenneMatiere(ev, e.id); return `<div class="ligne-appel"><div class="nom-appel"><b>${esc(e.nom)}</b> ${esc(e.prenoms)}<div class="aide">Moyenne : ${n2(mo) || '—'}</div></div>
         <input class="saisie-app" data-e="${e.id}" data-moy="${mo === null ? '' : mo}" value="${esc(app[e.id] || '')}" maxlength="120" style="flex:2"></div>`; }).join('')}
       <div id="ap-msg"></div><button class="btn vert large" style="position:sticky;bottom:10px">✔ Enregistrer les appréciations</button></form>`;
@@ -215,11 +235,37 @@ function imprimerFicheNotes(m, ev, el, sem, app) {
   imprimer(`<div class="page">${entete('FICHE DE NOTES — SEMESTRE ' + sem)}
     <p style="font-size:10pt;margin:4px 0">Classe : <b>${esc(m.classe)}</b> · Matière : <b>${esc(m.matiere)}</b> (coefficient ${nb(m.coef)}) · Enseignant : <b>${esc(m.profs || S.session.profil.nom)}</b></p>
     <table class="petit-print"><thead><tr><th>N°</th><th>Nom et prénoms</th><th>Matricule</th>${ev.map(x => `<th>${esc(x.libelle || x.type)}<br><small>${frCourt(x.date)} · /${nb(x.bareme)} · coef ${nb(x.coef)}</small></th>`).join('')}<th>Moyenne /20</th><th>Appréciation</th></tr></thead>
-    <tbody>${el.map((e, i) => `<tr><td>${i + 1}</td><td><b>${esc(e.nom)}</b> ${esc(e.prenoms)}</td><td>${esc(e.matricule)}</td>${ev.map(x => `<td style="text-align:center">${esc(x.notes[e.id] === undefined ? '' : String(x.notes[e.id]).replace('.', ','))}</td>`).join('')}<td style="text-align:center"><b>${n2(moys[i])}</b></td><td>${esc((app || {})[e.id] || '')}</td></tr>`).join('')}</tbody></table>
+    <tbody>${el.map((e, i) => `<tr><td>${i + 1}</td><td><b>${esc(e.nom)}</b> ${esc(e.prenoms)}</td><td>${esc(e.matricule)}</td>${ev.map(x => `<td style="text-align:center">${esc(noteAffichee(x, e.id))}</td>`).join('')}<td style="text-align:center"><b>${n2(moys[i])}</b></td><td>${esc((app || {})[e.id] || '')}</td></tr>`).join('')}</tbody></table>
     <p style="font-size:9.5pt">Moyenne de la classe : <b>${v.length ? n2(v.reduce((a, b) => a + b, 0) / v.length) : '—'}</b> · Plus forte : <b>${v.length ? n2(Math.max(...v)) : '—'}</b> · Plus faible : <b>${v.length ? n2(Math.min(...v)) : '—'}</b> · Moyenne ≥ 10 : <b>${v.filter(x => x >= 10).length}/${v.length}</b></p>
     <p style="font-size:9pt;text-align:right">Daoukro, le ${fr(dateLocale())}</p>
     <div class="signatures" style="grid-template-columns:1fr 1fr"><div>L'enseignant</div><div>Visa du Censeur</div></div></div>`);
 }
+
+/* ===================== OUTILS v1.6 ===================== */
+const apprAuto = m => m === null || m === undefined || m === '' ? '' : m < 5 ? 'Très faible' : m < 8 ? 'Faible' : m < 10 ? 'Insuffisant' : m < 12 ? 'Passable' : m < 14 ? 'Assez bien' : m < 16 ? 'Bien' : m < 18 ? 'Très bien' : 'Excellent';
+const apprConseilAuto = m => m === null || m === undefined ? '' : m >= 16 ? 'Excellent travail, félicitations !' : m >= 14 ? 'Très bon travail, continuez !' : m >= 12 ? 'Bon travail, continuez.'
+  : m >= 10 ? 'Assez bon travail, persistez dans l\'effort !' : m >= 8.5 ? 'Travail passable, peut mieux faire.' : 'Travail insuffisant, concentrez-vous davantage !';
+const rangTxt = (r, ex, f) => !r ? '' : ex ? r + 'ex' : r === 1 ? (f === 'F' ? '1ère' : '1er') : r + 'ème';
+const rangObj = o => o ? rangTxt(o.r, o.ex) : '';
+const nomCourtUnite = g => /UF\d/.test(g) ? g.match(/UF\d/)[0] : g.replace('UNITÉ D\'ENSEIGNEMENT', 'UNITÉ ENSEIGNEMENT');
+const SEM_LIB = { 1: 'Premier Semestre', 2: 'Deuxième Semestre' };
+function qrSvg(texte, taille) {
+  if (!window.qrcode) return '';
+  try { qrcode.stringToBytes = qrcode.stringToBytesFuncs['UTF-8'] || qrcode.stringToBytes; const q = qrcode(0, 'M'); q.addData(texte); q.make(); return q.createSvgTag({ cellSize: 2, margin: 0, scalable: true }).replace('<svg ', `<svg style="width:${taille}mm;height:${taille}mm" `); }
+  catch (e) { return ''; }
+}
+const preparerQR = () => chargerScript('lib/qrcode.js').catch(() => null);
+function enteteOfficiel(titreDroite) {
+  const P = S.session.params, E = P.etab || {};
+  return `<div class="off-entete"><div class="off-cadre"><img src="medias/armoiries.png" alt=""><div><b>RÉPUBLIQUE DE CÔTE D'IVOIRE</b><span>${esc(E.ministere || '')}</span><span>${esc(E.dretfpa || '')}</span></div></div>
+    <div class="off-cadre"><div><b>${esc(String(P.etablissement).toUpperCase())}</b><span>Code : ${esc(E.code || '')}</span><span>Statut : ${esc(E.statut || '')}</span></div><img src="medias/embleme-noir-petit.png" alt=""></div></div>${titreDroite || ''}`;
+}
+function piedOfficiel() {
+  const P = S.session.params, E = P.etab || {};
+  return `<div class="off-pied"><div>${esc(String(P.etablissement).toUpperCase())}<br>Adresse : ${esc(E.adresse || '')} — Téléphone : ${esc(E.tel || '')}<br>E-mail : ${esc(E.email || '')}</div>
+    <div>Imprimé le ${esc(new Date().toLocaleDateString('fr-FR', { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' }))}</div></div>`;
+}
+const caseCoch = (b, t) => `<div class="off-case">${b ? '☒' : '☐'} ${esc(t)}</div>`;
 
 /* ===================== CONSEIL DE CLASSE ===================== */
 async function pageConseil(c, classe) {
@@ -233,25 +279,38 @@ async function pageConseil(c, classe) {
     $('#cs-res').innerHTML = '<div class="chargement">Calcul…</div>';
     let K; try { K = await api('conseilClasse', { classe, semestre: sem }); } catch (e) { $('#cs-res').innerHTML = `<div class="erreur">${esc(e.message)}</div>`; return; }
     const dr = K.droits, P = K.params, bloque = !!K.validation;
+    const aCond = K.matieres.some(m => m.conduite);
     const tri = K.eleves.slice().sort((a, b) => (a.rang || 999) - (b.rang || 999) || cmp(a.nom, b.nom));
-    $('#cs-res').innerHTML = `<p class="aide">${esc(K.libelle)} · PP : ${esc(K.pp || 'non indiqué')} · Semestre ${sem} (${fr(K.du)} – ${fr(K.au)})</p>
+    $('#cs-res').innerHTML = `<p class="aide">${esc(K.libelle)} · PP : ${esc(K.pp || 'non indiqué')} · Éducateur : ${esc(K.educateur || 'non indiqué')} · Semestre ${sem} (${fr(K.du)} – ${fr(K.au)})</p>
       ${bloque ? `<div class="info">🔒 Bulletins validés par le directeur le ${esc(K.validation.le)} : plus de modification possible.</div>` : ''}
       <div class="kpis"><div class="kpi"><div class="lib">Moyenne de la classe</div><div class="val">${n2(K.stats.moy) || '—'}</div></div><div class="kpi vert"><div class="lib">Moyenne ≥ 10</div><div class="val">${K.stats.admis}/${K.stats.classes}</div></div>
         <div class="kpi"><div class="lib">Plus forte</div><div class="val">${n2(K.stats.max) || '—'}</div></div><div class="kpi rouge"><div class="lib">Plus faible</div><div class="val">${n2(K.stats.min) || '—'}</div></div></div>
       ${K.manques.length ? `<div class="alerte"><b>Notes manquantes :</b><ul style="margin:4px 0 0">${K.manques.slice(0, 8).map(x => `<li>${esc(x.texte)}</li>`).join('')}</ul></div>` : ''}
-      <div class="actions" style="margin-bottom:8px"><button class="btn secondaire" id="cs-pv">🖨 Procès-verbal du conseil</button>${direction() ? `<a class="btn secondaire" href="#/bulletins/${encodeURIComponent(classe)}">📄 Bulletins</a>` : ''}</div>
-      <form id="f-cs"><div class="table-defil"><table><thead><tr><th>Rang</th><th>Élève</th><th class="n">Moy.</th><th class="n">Abs. NJ</th>${P.conduite ? '<th>Conduite /20</th>' : ''}<th>Appréciation générale (PP)</th><th>Décision du conseil</th></tr></thead><tbody>
-      ${tri.map(e => `<tr><td>${e.rang ? e.rang + (e.rangEx ? ' ex' : '') : '—'}</td><td><b>${esc(e.nom)}</b> ${esc(e.prenoms)}</td><td class="n"><b>${n2(e.moy)}</b></td><td class="n">${e.abs.hNJ || ''}</td>
-        ${P.conduite ? `<td><input data-e="${e.id}" data-k="cond" value="${esc(e.conduite)}" inputmode="decimal" style="width:70px" ${dr.cond && !bloque ? '' : 'disabled'}></td>` : ''}
-        <td><input data-e="${e.id}" data-k="app" value="${esc(e.appG)}" maxlength="200" ${dr.app && !bloque ? '' : 'disabled'} style="min-width:200px"></td>
-        <td><select data-e="${e.id}" data-k="dec" ${dr.dec && !bloque ? '' : 'disabled'}><option value=""></option>${P.decisions.map(d => `<option ${d === e.decision ? 'selected' : ''}>${esc(d)}</option>`).join('')}</select></td></tr>`).join('')}</tbody></table></div>
+      <p class="aide">Les distinctions et sanctions marquées <span class="badge attente">proposé</span> ont été calculées automatiquement (moyenne et absences) : le conseil les confirme ou les change. Une distinction et une sanction ne peuvent pas être données ensemble.</p>
+      <div class="actions" style="margin-bottom:8px">${dr.app && !bloque ? '<button type="button" class="btn secondaire" id="cs-auto">✍ Proposer les appréciations manquantes</button>' : ''}
+        <button class="btn secondaire" id="cs-pv">🖨 Procès-verbal</button><button class="btn secondaire" id="cs-mat">🖨 Matrice des moyennes</button>${direction() ? `<a class="btn secondaire" href="#/bulletins/${encodeURIComponent(classe)}">📄 Bulletins</a>` : ''}</div>
+      <form id="f-cs"><div class="table-defil"><table class="tab-conseil"><thead><tr><th>Rang</th><th>Élève</th><th class="n">Moy.</th>${sem === 2 ? '<th class="n">MGA</th>' : ''}<th class="n">Abs. NJ</th>${aCond ? '<th>Conduite /20</th>' : ''}<th>Appréciation du conseil</th><th>Distinction</th><th>Sanctions</th>${sem === 2 ? '<th>Décision de fin d\'année</th>' : ''}</tr></thead><tbody>
+      ${tri.map(e => { const d = !(dr.dec && !bloque); const sc = e.sanc || []; return `<tr><td>${rangTxt(e.rang, e.rangEx, e.sexe) || '—'}</td><td><b>${esc(e.nom)}</b> ${esc(e.prenoms)}</td><td class="n"><b>${n2(e.moy)}</b></td>${sem === 2 ? `<td class="n">${n2(e.annuelle)}</td>` : ''}<td class="n">${e.abs.hNJ || ''}</td>
+        ${aCond ? `<td><input data-e="${e.id}" data-k="cond" value="${esc(e.conduite)}" inputmode="decimal" style="width:70px" ${dr.cond && !bloque ? '' : 'disabled'}></td>` : ''}
+        <td><input data-e="${e.id}" data-k="app" data-moy="${e.moy === null ? '' : e.moy}" value="${esc(e.appG)}" maxlength="200" ${dr.app && !bloque ? '' : 'disabled'} style="min-width:200px"></td>
+        <td><select data-e="${e.id}" data-k="dist" ${d ? 'disabled' : ''}><option value=""></option>${P.distinctions.map(x => `<option ${x === e.dist ? 'selected' : ''}>${esc(x)}</option>`).join('')}</select>${!e.decisionSaisie && (e.dist || sc.length) ? ' <span class="badge attente">proposé</span>' : ''}</td>
+        <td class="cases-sanc">${P.sanctions.map(x => `<label><input type="checkbox" data-e="${e.id}" data-k="sanc" value="${esc(x)}" ${sc.includes(x) ? 'checked' : ''} ${d ? 'disabled' : ''}> ${esc(x)}</label>`).join('')}</td>
+        ${sem === 2 ? `<td><select data-e="${e.id}" data-k="fin" ${d ? 'disabled' : ''}><option value=""></option>${P.decisionsFin.map(x => `<option ${x === (e.fin || e.finPropose) ? 'selected' : ''}>${esc(x)}</option>`).join('')}</select></td>` : ''}</tr>`; }).join('')}</tbody></table></div>
       ${dr.tenu && !bloque ? `<label style="font-weight:400;margin-top:10px"><input type="checkbox" id="cs-tenu" style="width:auto;min-height:0" ${K.conseilTenu ? 'checked' : ''}> Le conseil de classe est terminé (les bulletins pourront être validés par le directeur)</label>` : K.conseilTenu ? `<p class="aide">Conseil de classe tenu le ${fr(K.conseilTenu)}.</p>` : ''}
       <div id="cs-msg"></div>${!bloque && (dr.app || dr.dec || dr.cond) ? '<button class="btn vert large" style="position:sticky;bottom:10px">✔ Enregistrer</button>' : ''}</form>`;
     $('#cs-pv').onclick = () => imprimerPV(K);
+    $('#cs-mat').onclick = () => imprimerMatrice(K);
+    if ($('#cs-auto')) $('#cs-auto').onclick = () => $$('[data-k=app]', c).forEach(i => { if (!i.value && i.dataset.moy !== '') i.value = apprConseilAuto(+i.dataset.moy); });
+    // distinction et sanction : jamais les deux
+    $$('[data-k=sanc]', c).forEach(cb => cb.onchange = () => { if (cb.checked) { const s = $(`select[data-k=dist][data-e="${cb.dataset.e}"]`); if (s) s.value = ''; } });
+    $$('select[data-k=dist]', c).forEach(s => s.onchange = () => { if (s.value) $$(`[data-k=sanc][data-e="${s.dataset.e}"]`, c).forEach(cb => { cb.checked = false; }); });
     $('#f-cs').onsubmit = async ev => {
       ev.preventDefault(); const b = $('button.vert', ev.target); if (b) b.disabled = true;
       const donnees = {};
-      $$('[data-e]', ev.target).forEach(i => { if (i.disabled) return; (donnees[i.dataset.e] = donnees[i.dataset.e] || {})[i.dataset.k] = i.value; });
+      $$('[data-e]', ev.target).forEach(i => {
+        if (i.disabled) return; const o = donnees[i.dataset.e] = donnees[i.dataset.e] || {};
+        if (i.dataset.k === 'sanc') { o.sanc = o.sanc || []; if (i.checked) o.sanc.push(i.value); } else o[i.dataset.k] = i.value;
+      });
       try { const r = await api('enregistrerConseil', { classe, semestre: sem, donnees, tenu: $('#cs-tenu') ? $('#cs-tenu').checked : undefined }); toast(r.message); dessiner(); }
       catch (err) { $('#cs-msg').innerHTML = `<div class="erreur">${esc(err.message)}</div>`; if (b) b.disabled = false; }
     };
@@ -264,18 +323,79 @@ async function pageConseil(c, classe) {
   $('#cs-sem').onchange = e => { sem = +e.target.value; stock.ecrire('notes_sem', sem); dessiner(); };
   await dessiner();
 }
+
+/* ===================== PROCÈS-VERBAL DU CONSEIL (3 pages) ===================== */
 function imprimerPV(K) {
-  const tri = K.eleves.slice().sort((a, b) => (a.rang || 999) - (b.rang || 999));
-  const dec = {}; K.eleves.forEach(e => { if (e.decision) dec[e.decision] = (dec[e.decision] || 0) + 1; });
-  imprimer(`<div class="page">${entete('PROCÈS-VERBAL DU CONSEIL DE CLASSE — SEMESTRE ' + K.semestre)}
-    <p style="font-size:10pt">Classe : <b>${esc(K.classe)}</b> — ${esc(K.libelle)} · Professeur principal : ${esc(K.pp || '……………')} · Effectif : ${K.stats.effectif}<br>
-    Moyenne de la classe : <b>${n2(K.stats.moy) || '—'}</b> · Plus forte : ${n2(K.stats.max) || '—'} · Plus faible : ${n2(K.stats.min) || '—'} · Moyenne ≥ 10 : <b>${K.stats.admis}/${K.stats.classes}</b> (${K.stats.taux === null ? '—' : String(K.stats.taux).replace('.', ',') + ' %'})</p>
-    <table class="petit-print"><thead><tr><th>Rang</th><th>Nom et prénoms</th><th>Matricule</th><th>Moyenne</th><th>Abs. (h)</th><th>Dont NJ</th><th>Décision</th><th>Appréciation</th></tr></thead>
-    <tbody>${tri.map(e => `<tr><td>${e.rang || '—'}${e.rangEx ? ' ex' : ''}</td><td><b>${esc(e.nom)}</b> ${esc(e.prenoms)}</td><td>${esc(e.matricule)}</td><td style="text-align:center"><b>${n2(e.moy)}</b></td><td style="text-align:center">${e.abs.heures || ''}</td><td style="text-align:center">${e.abs.hNJ || ''}</td><td>${esc(e.decision)}</td><td>${esc(e.appG)}</td></tr>`).join('')}</tbody></table>
-    <h3>Résultats par matière</h3><table class="petit-print"><thead><tr><th>Matière</th><th>Coef</th><th>Enseignant</th><th>Moyenne</th><th>Plus forte</th><th>Plus faible</th></tr></thead>
-    <tbody>${K.matieres.map(m => { const s = K.statsMat[m.id]; return `<tr><td>${esc(m.matiere)}</td><td>${nb(m.coef)}</td><td>${esc(m.profs)}</td><td>${s ? n2(s.moy) : '—'}</td><td>${s ? n2(s.max) : ''}</td><td>${s ? n2(s.min) : ''}</td></tr>`; }).join('')}</tbody></table>
-    <p style="font-size:9.5pt">Décisions : ${Object.entries(dec).map(([k, v]) => `${esc(k)} : <b>${v}</b>`).join(' · ') || 'aucune'}</p>
-    <div class="signatures"><div>Le Professeur principal</div><div>Le Censeur</div><div>Le Directeur${S.session.params.directeur ? '<br><small>' + esc(S.session.params.directeur) + '</small>' : ''}</div></div></div>`);
+  const P = S.session.params, an = P.annee, ins = K.eleves.filter(e => e.situation === 'INSCRIT');
+  const titre = `<div class="off-titre"><span>P.V ${K.validation ? '' : 'PROVISOIRE '}DE CONSEIL DE CLASSE : ${esc(K.classe)} — ${SEM_LIB[K.semestre]}</span><span>${esc(an)}</span></div>
+    <div class="off-ligne"><span>Professeur principal : <b>${esc(K.pp || '……………')}</b></span><span>Éducateur : <b>${esc(K.educateur || '……………')}</b></span></div>`;
+  const cpt = (l, f) => l.filter(f).length, pc = (n, t) => t ? String(Math.round(n / t * 10000) / 100).replace('.', ',') : '0';
+  const G = ins.filter(e => e.sexe === 'M'), F = ins.filter(e => e.sexe === 'F'), cl = l => l.filter(e => e.moy !== null);
+  const tr = (l, a, b) => cpt(cl(l), e => e.moy >= a && e.moy < b);
+  const ligneTr = (lib, l) => { const n = cl(l).length; return `<tr><td>${lib}</td>${[[0, 8.5], [8.5, 10], [10, 99]].map(([a, b]) => `<td>${tr(l, a, b)}</td><td>${pc(tr(l, a, b), n)}</td>`).join('')}</tr>`; };
+  const nbD = d => cpt(ins, e => e.dist === d), nbS = s => cpt(ins, e => (e.sanc || []).includes(s));
+  const p1 = `<div class="page off">${enteteOfficiel(titre)}
+    <div class="pv-grille"><div><h4>TABLEAU DE PRÉSENCE</h4><table class="petit-print"><thead><tr><th></th><th>Garçons</th><th>Filles</th><th>Total</th></tr></thead><tbody>
+      <tr><td>Effectif total</td><td>${G.length}</td><td>${F.length}</td><td>${ins.length}</td></tr><tr><td>Élèves classés</td><td>${cl(G).length}</td><td>${cl(F).length}</td><td>${cl(ins).length}</td></tr>
+      <tr><td>Élèves non classés</td><td>${G.length - cl(G).length}</td><td>${F.length - cl(F).length}</td><td>${ins.length - cl(ins).length}</td></tr></tbody></table></div>
+    <div><h4>EFFECTIFS GÉNÉRAUX</h4><table class="petit-print"><thead><tr><th rowspan="2">Genre</th><th colspan="2">M &lt; 8,5</th><th colspan="2">8,5 ≤ M &lt; 10</th><th colspan="2">M ≥ 10</th></tr><tr><th>Nb</th><th>%</th><th>Nb</th><th>%</th><th>Nb</th><th>%</th></tr></thead>
+      <tbody>${ligneTr('Garçons', G)}${ligneTr('Filles', F)}${ligneTr('Total', ins)}</tbody></table></div></div>
+    <p class="off-ligne"><span>Moyenne de la classe : <b>${n2(K.stats.moy)}</b></span><span>Plus faible moyenne : <b>${n2(K.stats.min)}</b></span><span>Plus forte moyenne : <b>${n2(K.stats.max)}</b></span></p>
+    <div class="pv-grille3"><div><h4>DISTINCTIONS</h4><table class="petit-print"><thead><tr><th>Libellé</th><th>Nombre</th></tr></thead><tbody>${K.params.distinctions.map(d => `<tr><td>${esc(d)}</td><td>${nbD(d)}</td></tr>`).join('')}</tbody></table></div>
+      <div><h4>SANCTIONS (TRAVAIL)</h4><table class="petit-print"><thead><tr><th>Libellé</th><th>Nombre</th></tr></thead><tbody><tr><td>Avertissement</td><td>${nbS(K.params.sanctions[0])}</td></tr><tr><td>Blâme</td><td>${nbS(K.params.sanctions[1])}</td></tr></tbody></table></div>
+      <div><h4>CONDUITE (ABSENCES)</h4><table class="petit-print"><thead><tr><th>Libellé</th><th>Nombre</th></tr></thead><tbody><tr><td>Avertissement</td><td>${nbS(K.params.sanctions[2])}</td></tr><tr><td>Blâme</td><td>${nbS(K.params.sanctions[3])}</td></tr></tbody></table></div></div>
+    ${piedOfficiel()}</div>`;
+  const disc = K.matieres.map(m => ({ m, s: K.statsMat[m.id] }));
+  const p2 = `<div class="page off">${enteteOfficiel(titre)}<h4>STATISTIQUES PAR DISCIPLINE</h4>
+    <table class="petit-print"><thead><tr><th rowspan="2">Discipline</th><th rowspan="2">Ef. classés</th><th rowspan="2">M. classe</th><th rowspan="2">Professeur</th><th colspan="2">M &lt; 8,5</th><th colspan="2">8,5 ≤ M &lt; 10</th><th colspan="2">M ≥ 10</th><th rowspan="2">Émargement</th></tr>
+      <tr><th>Nb</th><th>%</th><th>Nb</th><th>%</th><th>Nb</th><th>%</th></tr></thead>
+    <tbody>${disc.map(({ m, s }) => `<tr><td>${esc(m.matiere)}</td><td>${s ? s.nb : 0}</td><td>${s ? n2(s.moy) : ''}</td><td>${esc(m.profs)}</td>${s ? [s.t1, s.t2, s.t3].map(x => `<td>${x}</td><td>${pc(x, s.nb)}</td>`).join('') : '<td>0</td><td>0</td><td>0</td><td>0</td><td>0</td><td>0</td>'}<td></td></tr>`).join('')}</tbody></table>
+    <h4>PERSONNEL D'ENCADREMENT</h4><table class="petit-print pv-emarg"><thead><tr><th style="width:50%">Nom et prénoms</th><th>Fonction</th><th>Émargement</th></tr></thead><tbody>${'<tr><td></td><td></td><td></td></tr>'.repeat(5)}</tbody></table>
+    <div class="off-sign"><div>Le Professeur principal</div><div>DAOUKRO, le ${fr(dateLocale())}<br>Le Directeur${P.directeur ? '<br><b>' + esc(P.directeur) + '</b>' : ''}</div></div>${piedOfficiel()}</div>`;
+  const p3 = `<div class="page off">${enteteOfficiel(titre)}<h4>STATISTIQUES GÉNÉRALES PAR DISCIPLINE</h4>
+    <table class="petit-print"><thead><tr><th>Matricule</th><th>Enseignant(s)</th><th>Discipline</th><th>Moyenne de la classe</th><th>Plus faible</th><th>Plus forte</th><th>Appréciation</th><th>Émargement</th></tr></thead>
+    <tbody>${disc.map(({ m, s }) => `<tr><td>${esc(m.profsMat)}</td><td>${esc(m.profs)}</td><td>${esc(m.matiere)}</td><td>${s ? n2(s.moy) : ''}</td><td>${s ? n2(s.min) : ''}</td><td>${s ? n2(s.max) : ''}</td><td>${s ? apprAuto(s.moy) : ''}</td><td></td></tr>`).join('')}</tbody></table>
+    <p style="text-align:center;font-size:11pt;margin:10px 0">MOYENNE GÉNÉRALE DE LA CLASSE : <b>${n2(K.stats.moy)}</b></p>
+    <div class="pv-zone"><b><u>CONDUITE DE LA CLASSE :</u></b></div><div class="pv-zone"><b><u>OBSERVATIONS :</u></b></div>
+    <div class="off-sign"><div>Le Professeur principal</div><div>DAOUKRO, le ${fr(dateLocale())}<br>Le Directeur${P.directeur ? '<br><b>' + esc(P.directeur) + '</b>' : ''}</div></div>${piedOfficiel()}</div>`;
+  imprimer(p1 + p2 + p3);
+}
+
+/* ===================== MATRICE DES MOYENNES (paysage) ===================== */
+function imprimerMatrice(K) {
+  const P = S.session.params, ins = K.eleves.slice().sort((a, b) => cmp(a.nom + a.prenoms, b.nom + b.prenoms));
+  const abrev = e => { const map = { "Tableau d'honneur": 'TH', "Tableau d'honneur + Encouragement": 'THE', "Tableau d'honneur + Félicitations": 'THF', 'Avertissement pour travail insuffisant': 'ATI', 'Blâme pour travail insuffisant': 'BTI', 'Avertissement absences': 'AA', 'Blâme absences': 'BA' };
+    return [e.dist].concat(e.sanc || []).filter(Boolean).map(x => map[x] || x).join(' ') };
+  const cols = []; K.groupes.forEach(g => { K.matieres.filter(m => m.groupe === g).forEach(m => cols.push({ m })); cols.push({ g }); });
+  const G = ins.filter(e => e.sexe === 'M').length, F = ins.filter(e => e.sexe === 'F').length;
+  imprimer(`<div class="page paysage off">${enteteOfficiel(`<div class="off-titre"><span>MATRICE DES MOYENNES</span><span>${SEM_LIB[K.semestre]} — Année scolaire : ${esc(P.annee)} — ${esc(K.classe)}</span></div>
+    <div class="off-ligne"><span>Effectif : ${ins.length} — Garçons : ${G} — Filles : ${F}</span><span>Professeur principal : ${esc(K.pp || '')}</span><span>Éducateur : ${esc(K.educateur || '')}</span></div>`)}
+    <table class="matrice"><thead><tr><th>Matricule</th><th>Nom et prénoms</th><th>Red</th>${cols.map(c => c.m ? `<th>${esc(c.m.matiere)}<br><small>coef ${nb(c.m.coef)}</small></th>` : `<th class="mat-u">${esc(nomCourtUnite(c.g))}<br><small>coef ${nb(K.matieres.filter(m => m.groupe === c.g).reduce((a, m) => a + m.coef, 0))}</small></th>`).join('')}<th class="mat-u">Moyenne ${K.semestre === 1 ? '1er' : '2e'} sem.</th><th>Rang</th><th>Dist / Sanct.</th></tr></thead>
+    <tbody>${ins.map(e => `<tr><td>${esc(e.matricule)}</td><td>${esc(e.nom)} ${esc(e.prenoms)}</td><td>${e.redoublant === 'OUI' ? 'R' : ''}</td>${cols.map(c => c.m ? `<td>${n2(e.moyennes[c.m.id]) || 'NC'}</td>` : `<td class="mat-u">${n2(e.unites[c.g].moy)}</td>`).join('')}<td class="mat-u"><b>${n2(e.moy)}</b></td><td>${rangTxt(e.rang, e.rangEx, e.sexe)}</td><td>${abrev(e)}</td></tr>`).join('')}</tbody></table>
+    <p class="aide-print">TH : Tableau d'honneur · THE : + Encouragement · THF : + Félicitations · ATI / BTI : Avertissement / Blâme pour travail insuffisant · AA / BA : Avertissement / Blâme absences · NC : non classé</p>${piedOfficiel()}</div>`);
+}
+
+/* ===================== LISTE DES PREMIERS PAR DISCIPLINE ===================== */
+function imprimerPremiers(K) {
+  const P = S.session.params, lignes = [];
+  K.matieres.forEach(m => {
+    const v = K.eleves.filter(e => e.moyennes[m.id] !== null && e.moyennes[m.id] !== undefined);
+    const max = v.length ? Math.max(...v.map(e => e.moyennes[m.id])) : null;
+    const prem = v.filter(e => e.moyennes[m.id] === max);
+    if (!prem.length) lignes.push(`<tr><td>${esc(m.matiere)}</td><td></td><td></td><td></td><td></td><td></td></tr>`);
+    prem.forEach((e, i) => lignes.push(`<tr><td>${i ? '' : esc(m.matiere)}</td><td>${esc(e.matricule)}</td><td>${esc(e.nom)} ${esc(e.prenoms)}</td><td>${esc(e.sexe)}</td><td>${n2(max)}</td><td>${apprAuto(max)}</td></tr>`));
+  });
+  imprimer(`<div class="page off">${enteteOfficiel(`<div class="off-titre"><span>LISTE DES PREMIERS PAR DISCIPLINE — ${esc(K.classe)}</span><span>${SEM_LIB[K.semestre]} — ${esc(P.annee)}</span></div>`)}
+    <p class="aide-print" style="text-align:left">${esc(K.libelle)}</p><table class="petit-print"><thead><tr><th>Discipline</th><th>Matricule</th><th>Nom et prénoms</th><th>Sexe</th><th>Moyenne</th><th>Observation</th></tr></thead><tbody>${lignes.join('')}</tbody></table>${piedOfficiel()}</div>`);
+}
+
+/* ===================== LISTE DES MAJORS PAR CLASSE ===================== */
+async function imprimerMajors(sem) {
+  toast('Calcul des majors de toutes les classes…', 4000);
+  const r = await api('majors', { semestre: sem }), P = S.session.params;
+  imprimer(`<div class="page off">${enteteOfficiel(`<div class="off-titre"><span>LISTE DES MAJORS PAR CLASSE</span><span>${SEM_LIB[sem]} — Année scolaire : ${esc(P.annee)}</span></div>`)}
+    <table class="petit-print"><thead><tr><th>N°</th><th>Matricule</th><th>Nom et prénoms</th><th>Sexe</th><th>Date naiss.</th><th>Nat.</th><th>Red.</th><th>Moy.</th><th>Classe</th><th>Niveau</th></tr></thead>
+    <tbody>${r.majors.map((m, i) => `<tr><td>${i + 1}</td><td>${esc(m.matricule)}</td><td>${esc(m.nom)}</td><td>${esc(m.sexe)}</td><td>${/^\d{4}/.test(m.date_naissance || '') ? fr(m.date_naissance) : esc(m.date_naissance || '')}</td><td>${esc(m.nationalite || '')}</td><td>${m.redoublant === 'OUI' ? 'R' : ''}</td><td><b>${n2(m.moy)}</b></td><td>${esc(m.classe)}</td><td>${esc(m.niveau)}</td></tr>`).join('') || '<tr><td colspan="10">Aucune moyenne calculée.</td></tr>'}</tbody></table>${piedOfficiel()}</div>`);
 }
 
 /* ===================== BULLETINS (direction) ===================== */
@@ -289,13 +409,15 @@ async function pageBulletins(c, classe) {
     const nb_ = s => r.classes.filter(x => x.statut === s).length;
     $('#bl-res').innerHTML = `<div class="kpis"><div class="kpi vert"><div class="lib">Validées</div><div class="val">${nb_('VALIDE')}</div></div><div class="kpi"><div class="lib">Prêtes à valider</div><div class="val">${nb_('PRET')}</div></div>
         <div class="kpi orange"><div class="lib">Conseil à tenir</div><div class="val">${nb_('CONSEIL')}</div></div><div class="kpi rouge"><div class="lib">Notes incomplètes</div><div class="val">${nb_('INCOMPLET')}</div></div></div>
-      ${valideur() && nb_('PRET') ? `<button class="btn vert" id="bl-tout" style="margin-bottom:10px">✔ Valider toutes les classes prêtes (${nb_('PRET')})</button>` : ''}
+      <div class="actions" style="margin-bottom:10px">${valideur() && nb_('PRET') ? `<button class="btn vert" id="bl-tout">✔ Valider toutes les classes prêtes (${nb_('PRET')})</button>` : ''}
+        <button class="btn secondaire" id="bl-majors">🏆 Liste des majors par classe</button></div>
       ${!r.params.directeur ? '<div class="alerte">Aucun directeur n\'est indiqué : ajoutez son matricule dans la feuille PARAMETRES, ligne DIRECTEURS.</div>' : ''}
       <div class="table-defil"><table><thead><tr><th>Classe</th><th class="n">Effectif</th><th class="n">Moyenne</th><th class="n">≥ 10</th><th>État</th><th>À voir</th></tr></thead><tbody>
       ${r.classes.map(k => `<tr class="cliquable" data-cls="${esc(k.classe)}"><td><b>${esc(k.classe)}</b><div class="aide">${esc(k.libelle)}</div></td><td class="n">${k.effectif}</td><td class="n">${n2(k.moy) || '—'}</td><td class="n">${k.taux === null ? '—' : String(k.taux).replace('.', ',') + ' %'}</td>
         <td><span class="badge ${STATUTS_BUL[k.statut][0]}">${STATUTS_BUL[k.statut][1]}</span>${k.validation ? `<div class="aide">le ${esc(String(k.validation.le).slice(0, 10).split('-').reverse().join('/'))}</div>` : ''}</td>
         <td class="aide">${k.statut === 'INCOMPLET' ? esc(k.premierManque) + (k.manques > 1 ? ` (+${k.manques - 1})` : '') : ''}</td></tr>`).join('')}</tbody></table></div>`;
     $$('tr[data-cls]', c).forEach(tr => tr.onclick = () => { location.hash = '#/bulletins/' + encodeURIComponent(tr.dataset.cls); });
+    $('#bl-majors').onclick = () => imprimerMajors(sem).catch(e => toast(e.message, 5000));
     if ($('#bl-tout')) $('#bl-tout').onclick = async () => {
       const pretes = r.classes.filter(k => k.statut === 'PRET').map(k => k.classe);
       if (!confirm(`Valider les bulletins du semestre ${sem} pour ${pretes.length} classe(s) : ${pretes.join(', ')} ?\n\nLes notes de ces classes seront bloquées.`)) return;
@@ -309,8 +431,7 @@ async function pageBulletins(c, classe) {
 }
 async function vueBulletinsClasse(c, classe, sem) {
   c.innerHTML = '<div class="chargement">Calcul des bulletins…</div>';
-  const K = await api('bulletinsClasse', { classe, semestre: sem });
-  await chargerEleves(!EL.donnees);
+  const [K] = await Promise.all([api('bulletinsClasse', { classe, semestre: sem }), chargerEleves(!EL.donnees), preparerQR()]);
   const tri = K.eleves.slice().sort((a, b) => (a.rang || 999) - (b.rang || 999) || cmp(a.nom, b.nom));
   const st = STATUTS_BUL[K.statut];
   c.innerHTML = `<p><a href="#/bulletins">← Toutes les classes</a></p><h1 style="margin-bottom:2px">Bulletins ${esc(K.classe)} — semestre ${K.semestre}</h1>
@@ -323,10 +444,12 @@ async function vueBulletinsClasse(c, classe, sem) {
       ${valideur() && !K.validation ? '<button class="btn vert" id="bc-val">✔ Valider les bulletins de la classe</button>' : ''}
       ${valideur() && K.validation ? '<button class="btn orange" id="bc-ann">↺ Annuler la validation</button>' : ''}
       <button class="btn secondaire" id="bc-imp">🖨 ${K.validation ? 'Imprimer les bulletins' : 'Imprimer (PROVISOIRE)'}</button>
-      <button class="btn secondaire" id="bc-pv">🖨 Procès-verbal</button><button class="btn secondaire" id="bc-xls">📥 Excel</button>
-      <a class="btn secondaire" href="#/conseil/${encodeURIComponent(K.classe)}">✍ Conseil de classe</a></div>
-    <div class="table-defil"><table><thead><tr><th>Rang</th><th>Élève</th><th class="n">Moyenne</th>${sem === 2 ? '<th class="n">Annuelle</th>' : ''}<th class="n">Abs. NJ</th><th>Décision</th><th></th></tr></thead><tbody>
-    ${tri.map(e => `<tr><td>${e.rang || '—'}${e.rangEx ? ' ex' : ''}</td><td><b>${esc(e.nom)}</b> ${esc(e.prenoms)}</td><td class="n"><b>${n2(e.moy) || '—'}</b></td>${sem === 2 ? `<td class="n">${n2(e.annuelle) || '—'}</td>` : ''}<td class="n">${e.abs.hNJ || ''}</td><td>${esc(e.decision)}</td>
+      <label class="aide" style="align-self:center"><input type="checkbox" id="bc-2ex" style="width:auto;min-height:0"> 2 exemplaires</label>
+      <button class="btn secondaire" id="bc-pv">🖨 PV du conseil</button><button class="btn secondaire" id="bc-mat">🖨 Matrice des moyennes</button><button class="btn secondaire" id="bc-prem">🖨 Premiers par discipline</button>
+      <button class="btn secondaire" id="bc-xls">📥 Excel</button><a class="btn secondaire" href="#/conseil/${encodeURIComponent(K.classe)}">✍ Conseil de classe</a></div>
+    <div class="table-defil"><table><thead><tr><th>Rang</th><th>Élève</th><th class="n">Moyenne</th>${sem === 2 ? '<th class="n">MGA</th><th>Décision de fin d\'année</th>' : ''}<th class="n">Abs. NJ</th><th>Distinction / sanction</th><th></th></tr></thead><tbody>
+    ${tri.map(e => `<tr><td>${rangTxt(e.rang, e.rangEx, e.sexe) || '—'}</td><td><b>${esc(e.nom)}</b> ${esc(e.prenoms)}</td><td class="n"><b>${n2(e.moy) || '—'}</b></td>${sem === 2 ? `<td class="n">${n2(e.annuelle) || '—'}</td><td>${esc(e.fin || e.finPropose || '')}${!e.fin && e.finPropose ? ' <span class="badge attente">proposé</span>' : ''}</td>` : ''}<td class="n">${e.abs.hNJ || ''}</td>
+      <td>${esc(e.decision)}${!e.decisionSaisie && e.decision ? ' <span class="badge attente">proposé</span>' : ''}</td>
       <td style="white-space:nowrap"><button class="btn petit secondaire" data-voir="${e.id}">👁 Voir</button> <button class="btn petit secondaire" data-imp="${e.id}">🖨</button></td></tr>`).join('')}</tbody></table></div>
     <div id="bc-apercu"></div>`;
   $('#bc-sem').onchange = e => { stock.ecrire('notes_sem', +e.target.value); vueBulletinsClasse(c, classe, +e.target.value); };
@@ -336,14 +459,17 @@ async function vueBulletinsClasse(c, classe, sem) {
     $('#bc-apercu').innerHTML = `<h2>Aperçu du bulletin</h2><div class="apercu-bulletin">${bulletinHtml(K, K.eleves.find(e => e.id === b.dataset.voir))}</div>`;
     $('#bc-apercu').scrollIntoView({ behavior: 'smooth' });
   });
-  $$('[data-imp]', c).forEach(b => b.onclick = async () => { await prep([b.dataset.imp]); imprimer(bulletinHtml(K, K.eleves.find(e => e.id === b.dataset.imp))); });
-  $('#bc-imp').onclick = async () => { await prep(K.eleves.map(e => e.id)); imprimer(K.eleves.filter(e => e.situation === 'INSCRIT' || e.moy !== null).map(e => bulletinHtml(K, e)).join('')); };
+  const ex = () => $('#bc-2ex').checked ? 2 : 1;
+  $$('[data-imp]', c).forEach(b => b.onclick = async () => { await prep([b.dataset.imp]); const h = bulletinHtml(K, K.eleves.find(e => e.id === b.dataset.imp)); imprimer(h.repeat(ex())); });
+  $('#bc-imp').onclick = async () => { await prep(K.eleves.map(e => e.id)); imprimer(K.eleves.filter(e => e.situation === 'INSCRIT' || e.moy !== null).map(e => bulletinHtml(K, e).repeat(ex())).join('')); };
   $('#bc-pv').onclick = () => imprimerPV(K);
+  $('#bc-mat').onclick = () => imprimerMatrice(K);
+  $('#bc-prem').onclick = () => imprimerPremiers(K);
   $('#bc-xls').onclick = () => exporterExcel(`Resultats_${K.classe.replace(/\//g, '-')}_S${sem}.xlsx`, [{ nom: 'Résultats', lignes: [
     [`${S.session.params.etablissement} — ${K.classe} — semestre ${sem}`], [],
-    ['Rang', 'Nom', 'Prénoms', 'Matricule', ...K.matieres.map(m => `${m.matiere} (c${m.coef})`), 'Moyenne', ...(sem === 2 ? ['Moy. S1', 'Annuelle', 'Rang annuel'] : []), 'Abs. h', 'Abs. NJ', 'Décision'],
-    ...tri.map(e => [e.rang || '', e.nom, e.prenoms, e.matricule, ...K.matieres.map(m => e.moyennes[m.id] === null ? '' : e.moyennes[m.id]), e.moy === null ? '' : e.moy,
-      ...(sem === 2 ? [e.moyS1 === null ? '' : e.moyS1, e.annuelle === null ? '' : e.annuelle, e.rangAn || ''] : []), e.abs.heures, e.abs.hNJ, e.decision])] }]);
+    ['Rang', 'Nom', 'Prénoms', 'Matricule', ...K.matieres.map(m => `${m.matiere} (c${m.coef})`), ...K.groupes.map(g => nomCourtUnite(g)), 'Moyenne', ...(sem === 2 ? ['Moy. S1', 'MGA', 'Rang annuel', 'Décision de fin d\'année'] : []), 'Abs. h', 'Abs. NJ', 'Distinction / sanction'],
+    ...tri.map(e => [e.rang || '', e.nom, e.prenoms, e.matricule, ...K.matieres.map(m => e.moyennes[m.id] === null ? '' : e.moyennes[m.id]), ...K.groupes.map(g => e.unites[g].moy === null ? '' : e.unites[g].moy), e.moy === null ? '' : e.moy,
+      ...(sem === 2 ? [e.s1 && e.s1.moy !== null ? e.s1.moy : '', e.annuelle === null ? '' : e.annuelle, e.rangAn || '', e.fin || e.finPropose || ''] : []), e.abs.heures, e.abs.hNJ, e.decision])] }]);
   if ($('#bc-val')) $('#bc-val').onclick = async () => {
     const pret = K.statut === 'PRET';
     if (!confirm(pret ? `Valider les bulletins de ${K.classe} (semestre ${sem}) ? Les notes seront bloquées.` : `Attention : ${K.statut === 'CONSEIL' ? 'le conseil de classe n\'est pas marqué comme terminé' : 'des notes manquent'}.\n\nValider quand même les bulletins de ${K.classe} ?`)) return;
@@ -354,38 +480,57 @@ async function vueBulletinsClasse(c, classe, sem) {
     try { toast((await api('annulerValidation', { classe: K.classe, semestre: sem, motif })).message, 5000); vueBulletinsClasse(c, classe, sem); } catch (e) { toast(e.message, 5000); }
   };
 }
+
+/* ===================== BULLETIN AU MODÈLE DU LYCÉE ===================== */
 function bulletinHtml(K, e) {
-  const P = S.session.params, ph = EL.photos[e.id], provisoire = !K.validation;
-  const groupes = []; K.matieres.forEach(m => { const g = m.groupe || 'Autres'; let x = groupes.find(y => y.g === g); if (!x) groupes.push(x = { g, l: [] }); x.l.push(m); });
-  const rangMat = m => { const v = K.eleves.map(x => x.moyennes[m.id]).filter(x => x !== null).sort((a, b) => b - a); const me = e.moyennes[m.id]; return me === null ? '' : v.indexOf(me) + 1; };
-  let tc = 0, tp = 0;
-  const lignes = groupes.map(g => {
-    let gc = 0, gp = 0;
-    const l = g.l.map(m => {
-      const mo = e.moyennes[m.id], s = K.statsMat[m.id];
-      if (mo !== null) { gc += m.coef; gp += mo * m.coef; }
-      return `<tr><td>${esc(m.matiere)}</td><td class="c">${n2(mo)}</td><td class="c">${nb(m.coef)}</td><td class="c">${mo === null ? '' : n2(mo * m.coef)}</td><td class="c">${rangMat(m)}</td><td class="c">${s ? n2(s.moy) : ''}</td><td>${esc((e.app || {})[m.id] || '')}</td><td class="petit">${esc(m.profs)}</td></tr>`;
-    }).join('');
-    tc += gc; tp += gp;
-    return `<tr class="groupe"><td colspan="8">${esc(g.g)}</td></tr>${l}${groupes.length > 1 ? `<tr class="sous-total"><td>Sous-total ${esc(g.g.toLowerCase())}</td><td class="c">${gc ? n2(gp / gc) : ''}</td><td class="c">${nb(gc)}</td><td class="c">${n2(gp)}</td><td colspan="4"></td></tr>` : ''}`;
-  }).join('');
+  const P = S.session.params, ph = EL.photos[e.id], provisoire = !K.validation, s2 = K.semestre === 2;
+  const cl = (D => D ? D.classes.find(k => k.code === K.classe) : null)(EL.donnees);
   const naiss = e.date_naissance && /^\d{4}/.test(e.date_naissance) ? fr(e.date_naissance) : (e.date_naissance || '');
-  return `<div class="page bulletin">${provisoire ? '<div class="filigrane">PROVISOIRE</div>' : ''}${entete('BULLETIN DE NOTES — SEMESTRE ' + K.semestre)}
-    <div class="bul-ident">${ph ? `<img src="${ph}" class="bul-photo">` : '<div class="bul-photo"></div>'}<div>
-      <div><b style="font-size:11.5pt">${esc(e.nom)} ${esc(e.prenoms)}</b></div>
-      <div>Matricule : <b>${esc(e.matricule || '—')}</b> · Sexe : ${esc(e.sexe)} · Né(e) le ${esc(naiss)}${e.lieu_naissance ? ' à ' + esc(e.lieu_naissance) : ''}</div>
-      <div>Classe : <b>${esc(K.classe)}</b> — ${esc(K.libelle)} · Effectif : ${K.stats.effectif}</div>
-      <div>Statut : ${esc(e.statut || '—')} · Redoublant : ${e.redoublant === 'OUI' ? 'Oui' : 'Non'} · Professeur principal : ${esc(K.pp || '—')}</div></div></div>
-    <table class="bul-table"><thead><tr><th>Matières</th><th>Moy./20</th><th>Coef</th><th>Moy. × coef</th><th>Rang</th><th>Moy. classe</th><th>Appréciations</th><th>Professeurs</th></tr></thead>
-    <tbody>${lignes}<tr class="total"><td>TOTAL</td><td></td><td class="c">${nb(tc)}</td><td class="c">${n2(tp)}</td><td colspan="4"></td></tr></tbody></table>
-    <div class="bul-bas"><div class="bul-cadre"><div class="bul-moy">Moyenne du semestre : <b>${n2(e.moy) || '—'}</b> / 20</div>
-        <div>Rang : <b>${e.rang ? e.rang + (e.rang === 1 ? 'er' : 'e') + (e.rangEx ? ' ex æquo' : '') : '—'}</b> sur ${K.stats.classes}</div>
-        ${K.semestre === 2 ? `<div>Moyenne du semestre 1 : <b>${n2(e.moyS1) || '—'}</b></div><div>Moyenne annuelle : <b>${n2(e.annuelle) || '—'}</b> · Rang annuel : <b>${e.rangAn || '—'}</b></div>` : ''}
-        <div class="petit">Classe : moyenne ${n2(K.stats.moy) || '—'} · plus forte ${n2(K.stats.max) || '—'} · plus faible ${n2(K.stats.min) || '—'}</div></div>
-      <div class="bul-cadre"><b>Assiduité</b><div>Absences : ${nb(e.abs.heures)} h dont <b>${nb(e.abs.hNJ)} h non justifiées</b></div><div>Retards : ${e.abs.retards}</div>${e.conduite !== '' && e.conduite !== undefined ? `<div>Conduite : <b>${n2(+e.conduite)}</b> / 20</div>` : ''}</div>
-      <div class="bul-cadre"><b>Décision du conseil de classe</b><div class="bul-dec">${esc(e.decision || '')}</div><b>Appréciation du professeur principal</b><div>${esc(e.appG || '')}</div></div></div>
-    <div class="signatures" style="grid-template-columns:1fr 1fr"><div>Le Professeur principal</div><div>Le Directeur${P.directeur ? '<br><small>' + esc(P.directeur) + '</small>' : ''}</div></div>
-    <p class="aide-print">Daoukro, le ${fr(dateLocale())}${provisoire ? ' — document provisoire, non validé par le directeur' : ''}</p></div>`;
+  const affecte = /affect/i.test(e.statut || '') ? 'Oui' : 'Non', interne = /intern/i.test(e.regime || '') ? 'Oui' : 'Non';
+  const effectif = K.stats.effectif;
+  let lignes = '';
+  K.groupes.forEach(g => {
+    K.matieres.filter(m => m.groupe === g).forEach(m => {
+      const mo = e.moyennes[m.id], ne = mo === null || mo === undefined;
+      const profs = `<td class="prof ${m.profs.length > 34 ? 'serre' : ''}">${esc(m.profs)}</td>`;
+      if (!s2) lignes += `<tr><td>${esc(m.matiere)}</td><td class="c">${n2(mo)}</td><td class="c">${nb(m.coef)}</td><td class="c">${ne ? '<i>Non évalué</i>' : n2(mo * m.coef)}</td><td class="c">${rangObj(e.rangs[m.id])}</td>${profs}<td>${ne ? '' : esc(e.app[m.id] || '')}</td></tr>`;
+      else { const m1 = e.s1 ? e.s1.moyennes[m.id] : null, an = e.annuelles[m.id];
+        lignes += `<tr><td>${esc(m.matiere)}</td><td class="c">${n2(m1)}</td><td class="c">${n2(mo)}</td><td class="c">${nb(m.coef)}</td><td class="c">${ne ? '<i>NE</i>' : n2(mo * m.coef)}</td><td class="c">${rangObj(e.rangs[m.id])}</td><td class="c">${n2(an)}</td><td class="c">${rangObj(e.rangs['AN-' + m.id])}</td>${profs}<td>${ne ? '' : esc(e.app[m.id] || '')}</td></tr>`; }
+    });
+    const u = e.unites[g];
+    if (!s2) lignes += `<tr class="unite"><td>${esc(g)}</td><td class="c">${n2(u.moy)}</td><td class="c">${nb(u.coef)}</td><td class="c">${n2(u.pts)}</td><td class="c">${rangTxt(u.rang, u.ex)}</td><td colspan="2"></td></tr>`;
+    else { const ua = e.unitesAn[g] || {};
+      lignes += `<tr class="unite"><td>${esc(nomCourtUnite(g))}</td><td class="c">${n2(e.s1 ? e.s1.unites[g] : null)}</td><td class="c">${n2(u.moy)}</td><td class="c">${nb(u.coef)}</td><td class="c">${n2(u.pts)}</td><td class="c">${rangTxt(u.rang, u.ex)}</td><td class="c">${n2(ua.moy)}</td><td class="c">${rangTxt(ua.rang, ua.ex)}</td><td colspan="2"></td></tr>`; }
+  });
+  const totaux = !s2 ? `<tr class="totaux"><td>TOTAUX</td><td></td><td class="c">${nb(e.coefTotal)}</td><td class="c">${n2(e.pts)}</td><td colspan="3"><span>MOY. SEM. : <b>${n2(e.moy) || '—'}/20</b></span><span>RANG : <b>${rangTxt(e.rang, e.rangEx, e.sexe) || '—'}/${K.stats.classes}</b></span></td></tr>`
+    : `<tr class="totaux"><td>TOTAL</td><td></td><td></td><td class="c">${nb(e.coefTotal)}</td><td class="c">${n2(e.pts)}</td><td colspan="5"><span>Moy. Sem. : <b>${n2(e.moy) || '—'}/20</b></span><span>Rang : <b>${rangTxt(e.rang, e.rangEx, e.sexe) || '—'}/${K.stats.classes}</b></span></td></tr>`;
+  const qr = qrSvg(`${P.etablissement} | Bulletin ${SEM_LIB[K.semestre]} ${P.annee} | ${e.nom} ${e.prenoms} | Matricule ${e.matricule || '-'} | Classe ${K.classe} | Moyenne ${n2(e.moy) || '-'} | Rang ${e.rang || '-'}/${K.stats.classes}${s2 ? ' | MGA ' + (n2(e.annuelle) || '-') : ''}`, 19);
+  const dateVisa = K.validation ? fr(String(K.validation.le).slice(0, 10)) : fr(dateLocale());
+  const sanc = e.sanc || [];
+  return `<div class="page bulletin off">${provisoire ? '<div class="filigrane">PROVISOIRE</div>' : ''}
+    ${enteteOfficiel(`<div class="off-titre"><span>BULLETIN DE NOTES : ${SEM_LIB[K.semestre]}</span><span>Année Scolaire : ${esc(P.annee)}</span></div>`)}
+    <div class="bul-nom"><span>${esc(e.nom)} ${esc(e.prenoms)}</span><span>Matricule : ${esc(e.matricule || '—')}</span></div>
+    <div class="bul-id ${s2 ? 's2' : ''}">${!s2 ? `<div class="bul-qr">${qr}</div>` : ''}
+      <div><b>Filière :</b> ${esc(cl ? cl.libelle.replace(/\s[A-D]$/, '') : K.libelle)}<br><b>Classe :</b> ${esc(K.classe)}<br><b>Effectif :</b> ${effectif}${s2 ? `<br><b>Né(e) le :</b> ${esc(naiss)}${e.lieu_naissance ? ' à ' + esc(e.lieu_naissance) : ''}` : ''}</div>
+      <div><b>Régime :</b> ${esc(e.regime || '')}<br><b>Interne :</b> ${interne}<br><b>Affecté(e) :</b> ${affecte}<br><b>Redoublant(e) :</b> ${e.redoublant === 'OUI' ? 'Oui' : 'Non'}</div>
+      <div><b>Sexe :</b> ${e.sexe === 'F' ? 'Féminin' : e.sexe === 'M' ? 'Masculin' : ''}<br><b>Nationalité :</b> ${esc(e.nationalite || '')}${!s2 ? `<br><b>Né(e) le :</b> ${esc(naiss)}${e.lieu_naissance ? ' à ' + esc(e.lieu_naissance) : ''}` : ''}</div>
+      <div class="bul-photo2">${ph ? `<img src="${ph}">` : ''}</div></div>
+    <table class="bul-grille"><thead><tr>${!s2 ? '<th>Matière</th><th>Moy</th><th>Coef.</th><th>M*Coeff.</th><th>Rang</th><th>Professeurs</th><th>Appréciation/Émargement</th>'
+      : '<th>Matière</th><th>SEM 1</th><th>SEM 2</th><th>Coef.</th><th>M*Coeff.</th><th>Rang SEM 2</th><th>Moy. An</th><th>Rg An</th><th>Professeurs</th><th>Appr./Émarg.</th>'}</tr></thead>
+      <tbody>${lignes}${totaux}</tbody></table>
+    <div class="bul-abs"><span>Absences justifiées : <b>${nb(e.abs.hJ + e.abs.hS)} Heure(s)</b></span><span>Absences non justifiées : <b>${nb(e.abs.hNJ)} Heure(s)</b></span><span>Retards : <b>${e.abs.retards}</b></span></div>
+    <div class="bul-3"><div><div class="bul-t">Statistiques Classe</div><div class="bul-st"><span>Plus forte moyenne :</span><b>${n2(K.stats.max)}/20</b><span>Plus faible moyenne :</span><b>${n2(K.stats.min)}/20</b><span>Moyenne classe :</span><b>${n2(K.stats.moy)}/20</b></div></div>
+      <div><div class="bul-t">Distinctions</div>${K.params.distinctions.map(d => caseCoch(e.dist === d, d)).join('')}</div>
+      <div><div class="bul-t">Sanctions</div>${K.params.sanctions.map(d => caseCoch(sanc.includes(d), d)).join('')}</div></div>
+    ${s2 ? `<div class="bul-t" style="margin-top:2mm">BILAN DE FIN D'ANNÉE</div><div class="bul-3 bul-bilan"><div><div class="bul-t2">Rappel des moyennes</div><table class="bul-rappel"><tr><th></th><th>Moy.</th><th>Rang</th></tr>
+        <tr><td>1er Sem.</td><td>${n2(e.s1 ? e.s1.moy : null)}</td><td>${e.s1 ? rangTxt(e.s1.rang, e.s1.ex, e.sexe) : ''}</td></tr><tr><td>2e Sem.</td><td>${n2(e.moy)}</td><td>${rangTxt(e.rang, e.rangEx, e.sexe)}</td></tr>
+        <tr><td><b>MGA</b></td><td><b>${n2(e.annuelle)}</b></td><td><b>${rangTxt(e.rangAn, e.rangAnEx, e.sexe)}</b></td></tr></table></div>
+      <div><div class="bul-t2">Résultat annuel</div><div class="bul-mga">MGA : <b>${n2(e.annuelle) || '—'}</b><br>Rang : <b>${rangTxt(e.rangAn, e.rangAnEx, e.sexe) || '—'}</b></div></div>
+      <div><div class="bul-t2">Décision de fin d'année</div><div class="bul-fin">${esc(e.fin || e.finPropose || '')}</div></div></div>` : ''}
+    <div class="bul-bas2"><div><div class="bul-t">Appréciations du Conseil de Classe</div><div class="bul-appc">${esc(e.appG || '')}</div><div class="bul-pp">Le Professeur Principal${K.pp ? ' : ' + esc(K.pp) : ''}</div></div>
+      <div><div class="bul-t bul-t-clair">VISA DU CHEF D'ÉTABLISSEMENT</div><div class="bul-visa"><div>DAOUKRO, le ${dateVisa}<div class="bul-dir">${esc(P.directeur || '')}</div></div>${s2 ? `<div class="bul-qr">${qr}</div>` : ''}</div></div></div>
+    <p class="bul-note">Bulletin à conserver soigneusement. Il n'en sera pas délivré de duplicata.${provisoire ? ' — Document provisoire, non validé par le directeur.' : ''}</p>
+    ${piedOfficiel()}</div>`;
 }
 
 /* ===================== MATIÈRES ET COEFFICIENTS (administrateur) ===================== */
@@ -399,20 +544,22 @@ async function pageMatieres(c) {
     const cl = D.classes.find(k => k.code === classe) || {};
     const mats = M.matieres.filter(m => m.classe === classe).sort((a, b) => a.ordre - b.ordre || cmp(a.matiere, b.matiere));
     const totC = mats.filter(m => m.actif).reduce((a, m) => a + (+m.coef || 0), 0);
+    const grp = M.groupes[cl.niveau] || M.groupes.BT;
     const soeurs = D.classes.filter(k => k.code !== classe && k.niveau === cl.niveau && k.annee === cl.annee && k.filiere === cl.filiere);
-    $('#mt-res').innerHTML = `<p class="aide">${esc(cl.libelle || '')} · ${mats.filter(m => m.actif).length} matière(s) active(s) · total des coefficients : <b>${nb(totC)}</b></p>
+    $('#mt-res').innerHTML = `<p class="aide">${esc(cl.libelle || '')} · ${mats.filter(m => m.actif).length} matière(s) active(s) · total des coefficients : <b>${nb(totC)}</b>
+      ${grp.map(g => ` · ${esc(nomCourtUnite(g))} : <b>${nb(mats.filter(m => m.actif && m.groupe === g).reduce((a, m) => a + (+m.coef || 0), 0))}</b>`).join('')}</p>
+      <div class="actions" style="margin-bottom:8px"><button class="btn petit secondaire" id="mt-grille">📋 Réappliquer la grille officielle à ${esc(classe)}</button></div>
       ${mats.map(m => `<form class="carte f-mat" data-id="${m.id}" style="${m.actif ? '' : 'opacity:.6'}"><div class="ligne">
         <div style="flex:0 1 70px"><label>Ordre</label><input type="number" name="ordre" value="${m.ordre}" min="0"></div>
         <div style="flex:2 1 180px"><label>Matière</label><input name="matiere" value="${esc(m.matiere)}" required></div>
-        <div><label>Groupe</label><input name="groupe" value="${esc(m.groupe)}" list="dl-groupes"></div>
+        <div><label>Unité</label><select name="groupe">${grp.map(g => `<option ${g === m.groupe ? 'selected' : ''}>${esc(g)}</option>`).join('')}${grp.includes(m.groupe) ? '' : `<option selected>${esc(m.groupe)}</option>`}</select></div>
         <div style="flex:0 1 90px"><label>Coefficient</label><input type="number" name="coef" value="${esc(m.coef)}" min="0" max="20" step="0.5"></div></div>
         <label>Enseignant(s)</label><div class="profs-chips">${m.profs.map(id => `<span class="badge bleu" data-p="${id}">${esc(nomP(id))} <a href="#" data-x="${id}">✕</a></span>`).join(' ')}
-          <select class="aj-prof" style="max-width:240px;display:inline-block"><option value="">+ ajouter un enseignant</option>${M.personnes.map(p => `<option value="${p.id}">${esc(p.nom)}</option>`).join('')}</select></div>
+          <select class="aj-prof" style="max-width:240px;display:inline-block"><option value="">+ ajouter ${m.matiere === 'Conduite' ? 'un éducateur' : 'un enseignant'}</option>${M.personnes.map(p => `<option value="${p.id}">${esc(p.nom)}${p.fonction ? ' — ' + esc(p.fonction) : ''}</option>`).join('')}</select></div>
         <div class="ligne" style="margin-top:6px"><label style="font-weight:400;flex:1 1 auto"><input type="checkbox" name="actif" style="width:auto;min-height:0" ${m.actif ? 'checked' : ''}> Matière active (comptée dans les bulletins)</label>
           <span class="aide" style="flex:0 0 auto">${m.evals} évaluation(s)</span><div style="flex:0 0 auto"><button class="btn petit">Enregistrer</button></div></div></form>`).join('') || '<div class="info">Aucune matière pour cette classe.</div>'}
-      <datalist id="dl-groupes">${M.groupes.map(g => `<option value="${esc(g)}">`).join('')}</datalist>
       <form class="carte f-mat" data-id=""><h3 style="margin-top:0">➕ Ajouter une matière</h3><div class="ligne"><div style="flex:2 1 180px"><label>Matière</label><input name="matiere" required></div>
-        <div><label>Groupe</label><input name="groupe" list="dl-groupes" value="Enseignement général"></div><div style="flex:0 1 90px"><label>Coefficient</label><input type="number" name="coef" value="1" min="0" max="20" step="0.5"></div>
+        <div><label>Unité</label><select name="groupe">${grp.map(g => `<option>${esc(g)}</option>`).join('')}</select></div><div style="flex:0 1 90px"><label>Coefficient</label><input type="number" name="coef" value="1" min="0" max="20" step="0.5"></div>
         <input type="hidden" name="ordre" value="${mats.length + 1}"><input type="hidden" name="actif" value="on"></div>
         <div class="profs-chips"><select class="aj-prof" style="max-width:240px"><option value="">+ enseignant</option>${M.personnes.map(p => `<option value="${p.id}">${esc(p.nom)}</option>`).join('')}</select></div>
         <button class="btn vert petit" style="margin-top:6px">Ajouter</button></form>
@@ -430,6 +577,10 @@ async function pageMatieres(c) {
         try { toast((await api('enregistrerMatiere', { matiere: m })).message); M = await api('matieresListe'); dessiner(); } catch (e) { toast(e.message, 5000); }
       };
     });
+    $('#mt-grille').onclick = async () => {
+      if (!confirm(`Réappliquer la grille officielle à ${classe} ? Les noms, unités, coefficients et l'ordre des matières seront remis comme sur les bulletins du lycée. Les enseignants et les notes sont conservés.`)) return;
+      try { toast((await api('appliquerGrilles', { classe })).message, 5000); M = await api('matieresListe'); dessiner(); } catch (e) { toast(e.message, 5000); }
+    };
     if ($('#mt-copier')) $('#mt-copier').onclick = async () => {
       const vers = $$('.cp:checked', c).map(x => x.value); if (!vers.length) return;
       if (!confirm(`Copier la grille de ${classe} vers ${vers.join(', ')} ?`)) return;
@@ -443,17 +594,27 @@ async function pageMatieres(c) {
       <div><label>Date limite de saisie — semestre 2</label><input type="date" name="limite2" value="${P.limites[2] || ''}"></div></div>
       <div class="ligne"><label style="font-weight:400;flex:1 1 auto"><input type="checkbox" name="conduite" style="width:auto;min-height:0" ${P.conduite ? 'checked' : ''}> Note de conduite (saisie par l'éducateur, comptée comme une matière)</label>
       <div style="flex:0 1 160px"><label>Coefficient de la conduite</label><input type="number" name="coefConduite" value="${P.coefConduite}" min="0" max="20" step="0.5"></div></div>
-      <p class="aide">Semestres : du ${fr(P.semestres[0].du)} au ${fr(P.semestres[0].au)} et du ${fr(P.semestres[1].du)} au ${fr(P.semestres[1].au)} (modifiables dans Absences élèves > Paramètres).</p>
+      <h3>Distinctions et sanctions proposées automatiquement</h3><div class="grille-champs">
+        <div><label>Tableau d'honneur à partir de</label><input type="number" step="0.5" name="s_th" value="${P.seuils.th}"></div>
+        <div><label>+ Encouragement à partir de</label><input type="number" step="0.5" name="s_enc" value="${P.seuils.enc}"></div>
+        <div><label>+ Félicitations à partir de</label><input type="number" step="0.5" name="s_fel" value="${P.seuils.fel}"></div>
+        <div><label>Avertissement travail sous</label><input type="number" step="0.5" name="s_avertTravail" value="${P.seuils.avertTravail}"></div>
+        <div><label>Blâme travail sous</label><input type="number" step="0.5" name="s_blameTravail" value="${P.seuils.blameTravail}"></div>
+        <div><label>Avertissement absences dès (h NJ)</label><input type="number" name="s_avertAbs" value="${P.seuils.avertAbs}"></div>
+        <div><label>Blâme absences dès (h NJ)</label><input type="number" name="s_blameAbs" value="${P.seuils.blameAbs}"></div>
+        <div><label>Passage en classe supérieure dès (MGA)</label><input type="number" step="0.5" name="s_passage" value="${P.seuils.passage}"></div></div>
+      <p class="aide">Moyenne annuelle (MGA) = (semestre 1 + 2 × semestre 2) ÷ 3. Semestres : du ${fr(P.semestres[0].du)} au ${fr(P.semestres[0].au)} et du ${fr(P.semestres[1].du)} au ${fr(P.semestres[1].au)} (modifiables dans Absences élèves > Paramètres).</p>
       <button class="btn petit">Enregistrer les paramètres</button></form></div>
     <div class="ligne"><div><label>Classe</label><select id="mt-cls">${optionsClasses(D.classes, classe, '— choisir —')}</select></div>
       <div style="flex:0 0 auto;align-self:flex-end"><button class="btn secondaire" id="mt-gen">🔄 Compléter depuis les emplois du temps</button></div></div>
-    <p class="aide">Les matières ont été créées automatiquement à partir des emplois du temps, avec un coefficient 1. Corrigez les noms, regroupez-les, indiquez les coefficients. Une matière en double (ex. « TP » et « TRAVAUX PRATIQUES ») : décochez « active » sur l'une et ajoutez son enseignant à l'autre.</p>
+    <p class="aide">Les matières suivent les grilles officielles du lycée (bulletins et maquettes pédagogiques) : unités UF1, UF2, UF3 pour les CAP, unités d'enseignement général et professionnel pour les BT et BTS. Les enseignants viennent des emplois du temps. Pour la <b>Conduite</b>, indiquez l'éducateur de la classe. Les classes sans grille connue ont un coefficient 1 à corriger ici.</p>
     <div id="mt-res"></div>`;
   $('#mt-cls').onchange = e => { classe = e.target.value; dessiner(); };
   $('#mt-gen').onclick = async () => { try { toast((await api('genererMatieres')).message, 5000); M = await api('matieresListe'); dessiner(); } catch (e) { toast(e.message, 5000); } };
   $('#f-pn').onsubmit = async ev => {
     ev.preventDefault(); const fd = new FormData(ev.target);
-    try { toast((await api('paramsNotes', { limite1: fd.get('limite1'), limite2: fd.get('limite2'), conduite: fd.get('conduite') === 'on', coefConduite: fd.get('coefConduite') })).message); } catch (e) { toast(e.message, 5000); }
+    const seuils = {}; ['th', 'enc', 'fel', 'avertTravail', 'blameTravail', 'avertAbs', 'blameAbs', 'passage'].forEach(k => { seuils[k] = fd.get('s_' + k); });
+    try { toast((await api('paramsNotes', { limite1: fd.get('limite1'), limite2: fd.get('limite2'), conduite: fd.get('conduite') === 'on', coefConduite: fd.get('coefConduite'), seuils })).message); } catch (e) { toast(e.message, 5000); }
   };
   dessiner();
 }

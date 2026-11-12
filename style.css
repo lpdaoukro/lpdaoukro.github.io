@@ -303,3 +303,55 @@ nav#menu { display: block; padding: 0; overflow: visible; }
 .apercu-bulletin .ent-tri { display: flex; width: 120px; height: 4px; margin: 4px auto 0; } .apercu-bulletin .ent-tri i { flex: 1; }
 .apercu-bulletin .ent-tri i:nth-child(1) { background: #F77F00; } .apercu-bulletin .ent-tri i:nth-child(2) { background: #ddd; } .apercu-bulletin .ent-tri i:nth-child(3) { background: #009E60; }
 .apercu-bulletin .bandeau { background: #1F4E78; color: #fff; text-align: center; padding: 6px; font-weight: 700; margin: 4px 0 8px; }
+
+/* ---- v1.6 : documents officiels (bulletins, PV, matrice) ---- */
+@media print { @page paysage { size: A4 landscape; margin: 8mm; } #impression .page.paysage { page: paysage; } }
+.off { position: relative; font-size: 8.5pt; color: #000; }
+.off .off-entete { display: grid; grid-template-columns: 1fr 1fr; gap: 6mm; margin-bottom: 2mm; }
+.off .off-cadre { border: 1px solid #999; border-radius: 3mm; padding: 2mm 3mm; display: flex; align-items: center; gap: 3mm; justify-content: space-between; min-height: 18mm; }
+.off .off-cadre img { height: 15mm; width: auto; }
+.off .off-cadre div { flex: 1; text-align: center; line-height: 1.25; }
+.off .off-cadre b { display: block; font-size: 8.5pt; } .off .off-cadre span { display: block; font-size: 7pt; }
+.off .off-titre { display: flex; justify-content: space-between; border: 1.5px solid #000; padding: 1mm 2mm; font-size: 12pt; font-weight: 600; margin: 1mm 0; }
+.off .off-ligne { display: flex; justify-content: space-between; gap: 4mm; flex-wrap: wrap; margin: 1mm 0; font-size: 9pt; }
+.off .off-pied { display: flex; justify-content: space-between; gap: 6mm; border-top: 1px solid #999; margin-top: 4mm; padding-top: 1mm; font-size: 6.5pt; color: #333; }
+.off .off-case { font-size: 8pt; margin: 0.6mm 0; }
+.off .off-sign { display: grid; grid-template-columns: 1fr 1fr; margin-top: 6mm; text-align: center; font-size: 9pt; min-height: 22mm; }
+.off h4 { margin: 3mm 0 1mm; font-size: 9pt; text-decoration: underline; }
+.off table { width: 100%; border-collapse: collapse; }
+.off table th, .off table td { border: 1px solid #777; padding: 0.6mm 1.2mm; font-size: 8pt; }
+#impression .off th, .apercu-bulletin .off th { background: #d9d9d9 !important; color: #000 !important; -webkit-print-color-adjust: exact; print-color-adjust: exact; font-weight: 600; }
+.off .pv-grille { display: grid; grid-template-columns: 0.8fr 1.2fr; gap: 5mm; } .off .pv-grille3 { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 4mm; }
+.off .pv-zone { min-height: 30mm; margin-top: 3mm; } .off .pv-emarg td { height: 7mm; }
+.off table.matrice th { font-size: 6.5pt; padding: 0.4mm; vertical-align: bottom; } .off table.matrice td { font-size: 7pt; padding: 0.4mm 0.8mm; text-align: center; }
+.off table.matrice td:nth-child(2) { text-align: left; white-space: nowrap; } .off .mat-u { background: #FFE699 !important; -webkit-print-color-adjust: exact; print-color-adjust: exact; font-weight: 600; }
+.off .aide-print { font-size: 7pt; color: #333; text-align: right; }
+/* bulletin */
+.bulletin.off .filigrane { position: absolute; top: 38%; left: 0; right: 0; text-align: center; font-size: 72pt; font-weight: 800; color: rgba(192, 0, 0, .10); transform: rotate(-28deg); pointer-events: none; }
+.off .bul-nom { display: flex; justify-content: space-between; background: #d9d9d9; border: 1px solid #777; padding: 0.8mm 2mm; font-size: 12pt; font-weight: 600; margin-top: 1mm; -webkit-print-color-adjust: exact; print-color-adjust: exact; }
+.off .bul-id { display: grid; grid-template-columns: 20mm 1.3fr 1fr 1.2fr 22mm; border: 1px solid #777; border-top: 0; font-size: 8.5pt; line-height: 1.55; }
+.off .bul-id > div { padding: 1mm 2mm; } .off .bul-id > div:first-child { border-right: 1px solid #777; display: flex; align-items: center; justify-content: center; }
+.off .bul-photo2 { padding: 0 !important; border-left: 1px solid #777; } .off .bul-photo2 img { width: 22mm; height: 27mm; object-fit: cover; display: block; }
+.off .bul-qr svg { display: block; }
+.off .bul-grille { margin-top: 2mm; } .off .bul-grille td { font-size: 8pt; } .off .bul-grille td.c { text-align: center; }
+.off .bul-grille td.prof { font-size: 7pt; text-align: center; line-height: 1.1; } .off .bul-grille td.prof.serre { font-size: 6pt; }
+.off .bul-grille tr.unite td { background: #d9d9d9; font-weight: 700; -webkit-print-color-adjust: exact; print-color-adjust: exact; }
+.off .bul-grille tr.totaux td { font-weight: 700; font-size: 10pt; } .off .bul-grille tr.totaux span { display: inline-block; margin-right: 8mm; }
+.off .bul-abs { display: flex; gap: 8mm; border: 1px solid #777; padding: 1mm 2mm; margin-top: 2mm; font-size: 8pt; }
+.off .bul-3 { display: grid; grid-template-columns: 1fr 1.1fr 1.1fr; border: 1px solid #777; border-top: 0; }
+.off .bul-3 > div { padding: 0 2mm 1mm; border-right: 1px solid #777; } .off .bul-3 > div:last-child { border-right: 0; }
+.off .bul-t { background: #d9d9d9; text-align: center; font-weight: 600; font-size: 10pt; margin: 0 -2mm 1mm; padding: 0.5mm; -webkit-print-color-adjust: exact; print-color-adjust: exact; }
+.off .bul-t2 { text-align: center; font-weight: 600; font-size: 9pt; }
+.off .bul-st { display: grid; grid-template-columns: 1fr auto; gap: 1mm 3mm; font-size: 8pt; }
+.off .bul-bilan { border-top: 1px solid #777; } .off .bul-rappel td, .off .bul-rappel th { border: 0 !important; background: none !important; font-size: 8pt; text-align: center; padding: 0.3mm; }
+.off .bul-mga { font-size: 10pt; text-align: center; line-height: 1.6; } .off .bul-fin { text-align: center; font-weight: 700; font-size: 10pt; padding-top: 2mm; }
+.off .bul-bas2 { display: grid; grid-template-columns: 1fr 1fr; border: 1px solid #777; margin-top: 2mm; }
+.off .bul-bas2 > div { padding: 0 2mm 1mm; } .off .bul-bas2 > div:first-child { border-right: 1px solid #777; }
+.off .bul-t-clair { font-weight: 400; }
+.off .bul-appc { text-align: center; font-weight: 600; min-height: 14mm; font-size: 9pt; } .off .bul-pp { text-align: center; font-size: 8.5pt; margin-top: 8mm; }
+.off .bul-visa { display: flex; justify-content: space-between; align-items: flex-start; min-height: 30mm; text-align: center; font-size: 8.5pt; }
+.off .bul-visa > div:first-child { flex: 1; } .off .bul-dir { font-weight: 700; margin-top: 20mm; }
+.off .bul-note { font-size: 7pt; font-style: italic; text-align: center; margin: 1mm 0 0; }
+.tab-conseil select { min-width: 150px; } .cases-sanc label { display: block; font-weight: 400; font-size: .78rem; white-space: nowrap; margin: 0; }
+.cases-sanc input { width: auto; min-height: 0; }
+.off .bul-id.s2 { grid-template-columns: 1.3fr 1fr 1.2fr 22mm; } .off .bul-id.s2 > div:first-child { border-right: 0; display: block; }
