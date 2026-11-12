@@ -145,6 +145,7 @@ async function pageEleve(c, id) {
     <h1>${nouveau ? 'Nouvelle inscription' : esc(nomComplet(e))}</h1>
     ${e.a_verifier ? `<div class="alerte">À vérifier : ${esc(e.a_verifier)}</div>` : ''}
     ${!nouveau ? `<div class="actions" style="margin:0 0 12px"><button class="btn secondaire" id="p-fiche">🖨 Fiche de renseignements</button>
+      ${['admin', 'censeur', 'educateur'].includes(role()) ? `<a class="btn secondaire" href="#/absences-eleve/${e.id}">📅 Absences</a>` : ''}
       ${e.situation === 'INSCRIT' ? '<button class="btn secondaire" id="p-certif">🖨 Certificat de scolarité</button><button class="btn secondaire" id="p-carte">🪪 Carte scolaire</button>' : ''}</div>` : ''}
     <form id="fe"><div class="carte"><div class="ident">${nouveau ? '' : avatarEleve(e, 'grand')}<div style="flex:1 1 260px">
       ${!nouveau ? `<div><span class="badge ${SIT_BADGE[e.situation] || ''}">${esc(e.situation)}</span> ${e.date_situation ? 'depuis le ' + frD(e.date_situation) : ''} ${e.motif_situation ? '· ' + esc(e.motif_situation) : ''}</div>

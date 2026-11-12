@@ -91,11 +91,11 @@ const bandeauAncien = t => t ? `<div class="alerte">Hors connexion : affichage d
 function majReseau(etat) {
   if (etat !== undefined) S.enLigne = etat;
   const b = $('#etat-reseau'); if (!b) return;
-  const n = S.file.length;
+  const n = S.file.length + (typeof nbAppelsEnAttente === 'function' ? nbAppelsEnAttente() : 0);
   b.className = 'reseau ' + (!S.enLigne ? 'hors-ligne' : n ? 'attente' : 'en-ligne');
   b.textContent = !S.enLigne ? (n ? `Hors ligne · ${n} en attente` : 'Hors ligne') : n ? `${n} en attente…` : 'En ligne ✓';
 }
-window.addEventListener('online', () => { majReseau(true); synchroniser(); });
+window.addEventListener('online', () => { majReseau(true); synchroniser(); if (typeof synchroniserAppels === 'function') synchroniserAppels(); });
 window.addEventListener('offline', () => majReseau(false));
 let syncEnCours = false;
 async function synchroniser(silencieux = true) {
@@ -128,7 +128,7 @@ async function synchroniser(silencieux = true) {
     if (!(e instanceof HorsLigne) && !silencieux) toast(e.message, 5000);
   } finally { syncEnCours = false; majReseau(); }
 }
-setInterval(() => { if (navigator.onLine) synchroniser(); }, 60000);
+setInterval(() => { if (navigator.onLine) { synchroniser(); if (typeof synchroniserAppels === 'function') synchroniserAppels(); } }, 60000);
 let delaiSync;
 const syncBientot = () => { clearTimeout(delaiSync); delaiSync = setTimeout(() => synchroniser(), 1500); };
 
@@ -343,6 +343,8 @@ function formInscription() {
 /* ================= NAVIGATION ================= */
 const PAGES = {
   'ma-fiche':      { titre: 'Ma fiche', roles: ['intervenant', 'censeur', 'admin'], si: () => S.session.profil.intervenant || role() === 'intervenant', fn: pageMaFiche },
+  'appel':         { titre: 'Appel', roles: ['intervenant', 'educateur', 'admin'], fn: (c, a) => pageAppel(c, a) },
+  'absences':      { titre: 'Absences élèves', roles: ['educateur', 'censeur', 'admin'], fn: (c, a) => pageAbsences(c, a) },
   'eleves':        { titre: 'Élèves', roles: ['educateur', 'comptable', 'censeur', 'admin', 'intervenant'], fn: (c, a) => pageEleves(c, a) },
   'effectifs':     { titre: 'Effectifs', roles: ['educateur', 'comptable', 'censeur', 'admin'], fn: c => pageEffectifs(c) },
   'pointage':      { titre: 'Pointage du jour', roles: ['censeur', 'admin'], fn: pagePointage },
@@ -359,6 +361,7 @@ const PAGES = {
   'eleve':         { titre: 'Fiche élève', roles: ['educateur', 'comptable', 'censeur', 'admin', 'intervenant'], cache: true, fn: (c, a) => pageEleve(c, a) },
   'import-eleves': { titre: 'Importer des élèves', roles: ['educateur', 'admin'], cache: true, fn: c => pageImportEleves(c) },
   'param-eleves':  { titre: 'Classes et montants', roles: ['admin'], cache: true, fn: c => pageParamEleves(c) },
+  'absences-eleve': { titre: "Absences d'un élève", roles: ['educateur', 'censeur', 'admin'], cache: true, fn: (c, a) => pageAbsencesEleve(c, a) },
   'fiche':         { titre: 'Fiche', roles: ['censeur', 'admin'], cache: true, fn: pageFicheIntervenant }
 };
 let pastilles = stock.lire('pastilles', {});
@@ -369,7 +372,8 @@ function menu() {
 }
 function afficher() {
   if (!S.session) return ecranConnexion();
-  const c = $('#contenu'); c.style.maxWidth = ''; c.style.padding = '';
+  // nouveau conteneur à chaque page : une page encore en chargement ne peut plus écrire dans la suivante
+  const c0 = $('#contenu'), c = c0.cloneNode(false); c0.replaceWith(c); c.style.maxWidth = ''; c.style.padding = '';
   $('#entete').hidden = false; $('#menu').hidden = false;
   const p = S.session.profil;
   $('#moi-nom').textContent = p.nom;
@@ -380,17 +384,20 @@ function afficher() {
   menu(); majReseau();
   c.innerHTML = '<div class="chargement">Chargement…</div>';
   window.scrollTo(0, 0);
+  const tour = afficher.tour = (afficher.tour || 0) + 1;
   Promise.resolve(PAGES[page].fn(c, decodeURIComponent(arg || ''))).then(lancerCarrousels).catch(e => {
-    c.innerHTML = `<div class="erreur">${esc(e.message)}</div>${e instanceof HorsLigne ? '<p class="aide">Cette page a besoin de la connexion la première fois. Le pointage du jour, lui, fonctionne hors connexion.</p>' : ''}`;
+    if (tour !== afficher.tour) return;   // une autre page a été ouverte entre-temps
+    c.innerHTML = `<div class="erreur">${esc(e.message)}</div>${e instanceof HorsLigne ? '<p class="aide">Cette page a besoin de la connexion la première fois. Le pointage du jour et l\'appel, eux, fonctionnent hors connexion.</p>' : ''}`;
   }).then(appliquerPhotos);
 }
 window.addEventListener('hashchange', afficher);
 document.addEventListener('DOMContentLoaded', () => {
-  $('#etat-reseau').onclick = () => { if (!navigator.onLine) return toast('Pas de connexion : les pointages partiront automatiquement au retour du réseau.'); synchroniser(false); };
+  $('#etat-reseau').onclick = () => { if (!navigator.onLine) return toast('Pas de connexion : les pointages et les appels partiront automatiquement au retour du réseau.'); synchroniser(false); if (typeof synchroniserAppels === 'function') synchroniserAppels(false); };
   $('#btn-moi').onclick = () => { location.hash = '#/mon-compte'; };
   if ('serviceWorker' in navigator) navigator.serviceWorker.register('sw.js').catch(() => {});
   afficher();
   if (S.session && encadrement()) synchroniser();
+  if (S.session && typeof synchroniserAppels === 'function') synchroniserAppels();
 });
 
 /* ================= POINTAGE DU JOUR (hors connexion) ================= */
