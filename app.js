@@ -232,8 +232,8 @@ function redimensionnerPhoto(fichier) {
 }
 
 /* ================= DIAPORAMA ================= */
-const PHOTOS_ACCUEIL = [1, 2, 3, 4].map(i => `medias/accueil-${i}.jpg`);      // sans visages : page publique de connexion
-const PHOTOS_ATELIERS = [1, 2, 3, 4, 5, 6, 7].map(i => `medias/atelier-${i}.jpg`); // après connexion
+const PHOTOS_ACCUEIL = [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11].map(i => `medias/accueil-${i}.jpg`);      // sans visages : page publique de connexion
+const PHOTOS_ATELIERS = [1, 2, 3, 4, 5, 6].map(i => `medias/atelier-${i}.jpg`); // après connexion
 function carrousel(images, mode) {
   return `<div class="carrousel ${mode}">${images.map((src, i) => `<div class="diapo ${i === 0 ? 'visible' : ''}" style="background-image:url('${src}')"></div>`).join('')}
     ${mode === 'bandeau' ? `<div class="legende"><b>Lycée Professionnel de Daoukro</b><span>« Je dois créer mon entreprise ! »</span></div>` : ''}</div>`;
@@ -263,8 +263,9 @@ function ecranConnexion(onglet = 'connexion') {
   const c = $('#contenu'); c.style.maxWidth = 'none'; c.style.padding = '0';
   c.innerHTML = `
   <div class="ecran-connexion">${carrousel(PHOTOS_ACCUEIL, 'fond')}<div class="boite-connexion">
-    <div class="titre"><img src="medias/logo-complet.png" alt="Logo du Lycée Professionnel de Daoukro" class="logo-complet">
-      <h1>Lycée Professionnel de Daoukro</h1><div class="aide">Présences et heures supplémentaires</div>
+    <div class="titre"><img src="medias/ministere.png" alt="République de Côte d'Ivoire — Ministère délégué chargé de l'Enseignement technique" class="logo-ministere">
+      <img src="medias/logo-complet.png" alt="Logo du Lycée Professionnel de Daoukro" class="logo-complet">
+      <h1>Lycée Professionnel de Daoukro</h1><div class="aide">Gestion de l'établissement</div>
       <div class="drapeau"><i></i><i></i><i></i></div></div>
     <div class="onglets"><button data-o="connexion">Se connecter</button><button data-o="inscription">Première connexion / nouveau code</button></div>
     <div id="zone"></div>
@@ -370,10 +371,34 @@ const PAGES = {
   'fiche':         { titre: 'Fiche', roles: ['censeur', 'admin', 'directeur'], cache: true, fn: pageFicheIntervenant }
 };
 let pastilles = stock.lire('pastilles', {});
+const GROUPES_MENU = [
+  { id: 'accueil', titre: '🏠 Accueil', pages: ['direction', 'ma-fiche'] },
+  { id: 'personnel', titre: '👨‍🏫 Personnel', pages: ['pointage', 'tableau', 'intervenants', 'rattrapages', 'reclamations', 'paiement', 'personnel'] },
+  { id: 'eleves', titre: '🎓 Élèves', pages: ['eleves', 'effectifs', 'appel', 'absences'] },
+  { id: 'notes', titre: '📝 Notes', pages: ['notes', 'bulletins'] },
+  { id: 'admin', titre: '⚙ Administration', pages: ['emplois', 'comptes', 'journal'] }
+];
+let groupeOuvert = null;
 function menu() {
   const r = role(), act = (location.hash.slice(2) || '').split('/')[0];
-  $('#menu').innerHTML = Object.entries(PAGES).filter(([k, p]) => !p.cache && p.roles.includes(r) && (!p.si || p.si()))
-    .map(([k, p]) => `<a href="#/${k}" class="${k === act ? 'actif' : ''}">${p.titre}${p.pastille && pastilles[p.pastille] && r !== 'intervenant' ? `<span class="pastille">${pastilles[p.pastille]}</span>` : ''}</a>`).join('');
+  const visible = k => PAGES[k] && !PAGES[k].cache && PAGES[k].roles.includes(r) && (!PAGES[k].si || PAGES[k].si());
+  const past = k => { const p = PAGES[k]; return p.pastille && pastilles[p.pastille] && r !== 'intervenant' ? +pastilles[p.pastille] : 0; };
+  const groupes = GROUPES_MENU.map(g => Object.assign({}, g, { pages: g.pages.filter(visible) })).filter(g => g.pages.length);
+  const gAct = (groupes.find(g => g.pages.includes(act)) || {}).id;
+  const ouvert = groupes.find(g => g.id === (groupeOuvert || gAct));
+  $('#menu').innerHTML = `<div class="menu-groupes">${groupes.map(g => {
+      const n = g.pages.reduce((a, k) => a + past(k), 0), seul = g.pages.length === 1;
+      return `<a href="${seul ? '#/' + g.pages[0] : '#'}" data-g="${g.id}" class="${g.id === gAct ? 'actif' : ''} ${ouvert && g.id === ouvert.id && !seul ? 'ouvert' : ''}">${g.titre}${!seul ? ' <span class="fleche">▾</span>' : ''}${n ? `<span class="pastille">${n}</span>` : ''}</a>`;
+    }).join('')}</div>
+    ${ouvert && ouvert.pages.length > 1 ? `<div class="menu-pages">${ouvert.pages.map(k => `<a href="#/${k}" class="${k === act ? 'actif' : ''}">${PAGES[k].titre}${past(k) ? `<span class="pastille">${past(k)}</span>` : ''}</a>`).join('')}</div>` : ''}`;
+  $$('#menu [data-g]').forEach(a => a.onclick = e => {
+    const g = groupes.find(x => x.id === a.dataset.g);
+    if (g.pages.length === 1) { groupeOuvert = null; return; }
+    e.preventDefault();
+    groupeOuvert = (ouvert && ouvert.id === g.id && groupeOuvert) ? gAct : g.id;
+    menu();
+  });
+  $$('#menu .menu-pages a').forEach(a => a.addEventListener('click', () => { groupeOuvert = null; }));
 }
 function afficher() {
   if (!S.session) return ecranConnexion();
@@ -612,7 +637,7 @@ function imprimer(html) {
   window.addEventListener('afterprint', fin);
   setTimeout(() => { window.print(); setTimeout(() => { if (document.body.classList.contains('imprime') && !matchMedia('print').matches) fin(); }, 1500); }, 200);
 }
-const entete = titre => `<img src="medias/embleme-noir-petit.png" class="embleme-print" alt=""><div class="ent">RÉPUBLIQUE DE CÔTE D'IVOIRE — ${esc(S.session.params.etablissement)} — ANNÉE SCOLAIRE ${esc(S.session.params.annee)}</div><div class="bandeau">${esc(titre)}</div>`;
+const entete = titre => `<div class="entete-doc"><img src="medias/ministere.png" class="ent-ministere" alt=""><div class="ent-centre"><b>${esc(String(S.session.params.etablissement).toUpperCase())}</b><span>Année scolaire ${esc(S.session.params.annee)}</span><span class="ent-tri"><i></i><i></i><i></i></span></div><img src="medias/embleme-noir-petit.png" class="ent-lycee" alt=""></div><div class="bandeau">${esc(titre)}</div>`;
 function identPrint(F) {
   const P = F.personne, K = F.calcul, ph = S.photos[P.matricule];
   return `${ph ? `<img class="photo-print" src="${ph}">` : ''}<div class="ident-print">
