@@ -364,7 +364,7 @@ const PAGES = {
   'reclamations':  { titre: 'Réclamations', roles: ['intervenant', 'censeur', 'admin'], fn: pageReclamations, pastille: 'reclamations' },
   'paiement':      { titre: 'État de paiement', roles: ['censeur', 'admin', 'directeur'], fn: pagePaiement },
   'personnel':     { titre: 'Personnel', roles: ['censeur', 'admin', 'directeur'], fn: pagePersonnel },
-  'emplois':       { titre: 'Emplois du temps', roles: ['admin'], fn: pageEmplois },
+  'emplois':       { titre: 'Emplois du temps', roles: ['admin', 'censeur'], fn: (c, a) => pageEmploisV2(c, a) },
   'actions':       { titre: 'Mes actions', roles: ['intervenant', 'censeur', 'admin', 'educateur', 'comptable', 'directeur'], cache: true, fn: c => pageActions(c) },
   'annonces':      { titre: 'Annonces et échéances', roles: ['admin', 'directeur', 'censeur'], fn: c => pageAnnonces(c) },
   'droits':        { titre: 'Qui peut faire quoi', roles: ['admin'], fn: c => pageDroits(c) },
@@ -602,8 +602,15 @@ function rendreFiche(c, F, opt) {
         <dt>Filière</dt><dd>${esc(P.filiere)}</dd><dt>Spécialité</dt><dd>${esc(P.specialite)}</dd>
         <dt>Postes</dt><dd>${esc(K.postes || '—')}</dd><dt>Quota / service dû</dt><dd>${nb(K.quota)} h → ${nb(K.service)} h par semaine</dd></dl></div></div>
       ${K.alertes.length ? `<div class="alerte">${K.alertes.map(esc).join(' · ')}</div>` : ''}</div>
+    <h2 style="margin:6px 0">⏱ Mes heures de la semaine</h2>
     <div class="kpis">
-      <div class="kpi"><div class="lib">Heures supp. réalisées</div><div class="val">${nb(K.hs)} h</div></div>
+      <div class="kpi"><div class="lib">Heures dues / semaine${K.grade ? ' (grade ' + esc(K.grade) + ')' : ''}</div><div class="val">${K.service === null || K.service === undefined ? '—' : nb(K.service) + ' h'}</div></div>
+      <div class="kpi"><div class="lib">Heures à l'emploi du temps</div><div class="val">${nb(K.placees)} h</div></div>
+      <div class="kpi ${K.hsPrevues ? 'orange' : 'vert'}"><div class="lib">Heures sup prévues / semaine</div><div class="val">${nb(K.hsPrevues)} h</div></div>
+    </div>
+    <h2 style="margin:6px 0">📊 Depuis la rentrée</h2>
+    <div class="kpis">
+      <div class="kpi"><div class="lib">Heures supp. effectuées</div><div class="val">${nb(K.hs)} h</div></div>
       <div class="kpi vert"><div class="lib">Heures supp. payées</div><div class="val">${nb(K.payees)} h</div></div>
       ${voitMontant ? `<div class="kpi orange"><div class="lib">Montant</div><div class="val">${fcfa(K.montant)}</div></div>` : ''}
       <div class="kpi"><div class="lib">Semaine de la 120e heure</div><div class="val">${K.sem120 ? 'Sem. ' + numSem(K.sem120) : '—'}</div></div>
