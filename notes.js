@@ -254,7 +254,8 @@ function qrSvg(texte, taille) {
   try { qrcode.stringToBytes = qrcode.stringToBytesFuncs['UTF-8'] || qrcode.stringToBytes; const q = qrcode(0, 'M'); q.addData(texte); q.make(); return q.createSvgTag({ cellSize: 2, margin: 0, scalable: true }).replace('<svg ', `<svg style="width:${taille}mm;height:${taille}mm" `); }
   catch (e) { return ''; }
 }
-const preparerQR = () => chargerScript('lib/qrcode.js').catch(() => null);
+// QR code : copie du site d'abord, sinon la même bibliothèque depuis cdnjs
+const preparerQR = () => chargerScript('lib/qrcode.js').catch(() => chargerScript('https://cdnjs.cloudflare.com/ajax/libs/qrcode-generator/1.4.4/qrcode.min.js')).catch(() => null);
 function enteteOfficiel(titreDroite) {
   const P = S.session.params, E = P.etab || {};
   return `<div class="off-entete"><div class="off-cadre"><img src="medias/armoiries.png" alt=""><div><b>RÉPUBLIQUE DE CÔTE D'IVOIRE</b><span>${esc(E.ministere || '')}</span><span>${esc(E.dretfpa || '')}</span></div></div>
