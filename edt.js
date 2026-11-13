@@ -114,23 +114,48 @@ async function ongletIntervenant(z, R) {
 /** Page de résolution d'un chevauchement : les séances en conflit et les créneaux libres proposés. */
 function pageConflit(r, d, envoyer) {
   const v = document.createElement('div'); v.className = 'bv-voile';
-  v.innerHTML = `<div class="bv-carte imp-carte"><div class="bv-tete" style="background:${r.bloquant ? '#C0392B' : '#E67E22'}"><div><b>${r.bloquant ? '⛔ Chevauchement : la séance ne peut pas être placée ici' : '⚠ Même classe à la même heure'}</b><span>${esc(d.jour)} ${esc(d.debut)}-${esc(d.fin)} · ${esc(d.classe)}${d.salle ? ' · ' + esc(d.salle) : ''}</span></div></div>
-    <div class="imp-corps"><h3 style="margin-top:0">En conflit avec :</h3><ul class="cf-liste">${r.conflits.map(c => `<li><div><b>${esc(c.jour)} ${esc(c.horaire)}</b> — ${esc(c.matiere)} · ${esc(c.classe)} · ${esc(c.nom)}${c.salle ? ' · ' + esc(c.salle) : ''} <span class="badge ${c.types.some(t => t !== 'CLASSE') ? 'A' : 'attente'}">${c.types.map(t => TYPES_CONFLIT[t]).join(', ')}</span>
-      <div class="aide">${c.du ? 'en vigueur depuis le ' + fr(c.du) : 'en vigueur depuis la rentrée'}${c.au ? ' jusqu\'au ' + fr(c.au) + ' (séance déjà arrêtée)' : ''}</div></div>
-      <button class="btn petit orange" data-rmp="${c.id}">↻ Remplacer par la nouvelle à partir du ${fr(d.du)}</button></li>`).join('')}</ul>
-    ${r.conflits.length > 1 ? `<button class="btn orange" id="cf-tout" style="margin-bottom:10px">↻ Remplacer les ${r.conflits.length} séances à partir du ${fr(d.du)}</button>` : ''}
-    <p class="aide">« Remplacer » : la séance en conflit ne compte plus à partir du ${fr(d.du)} (même si cette date est passée). Ses pointages faits depuis cette date passent sur la nouvelle séance quand c'est le même intervenant.</p>
-    ${!r.bloquant ? `<div class="info">La classe a déjà cours à ce moment. Si la classe est <b>partagée en groupes</b> (TP, ateliers), vous pouvez confirmer.</div><button class="btn orange" id="cf-gr" style="margin-bottom:12px">✔ Ce sont des groupes séparés : enregistrer</button>` : ''}
-    <h3>Créneaux libres proposés <span class="aide">(intervenant, classe et salle disponibles, même durée)</span></h3>
-    ${r.propositions.length ? `<div class="creneaux">${r.propositions.map((p, i) => `<button class="btn secondaire ${p.memeJour ? 'meme-jour' : ''}" data-i="${i}">${esc(p.jour)}<br><b>${esc(p.debut)} – ${esc(p.fin)}</b></button>`).join('')}</div>` : '<p class="aide">Aucun créneau libre de cette durée dans la semaine.</p>'}
-    <div id="cf-msg"></div><div class="actions" style="justify-content:flex-end;margin-top:12px"><button class="btn secondaire" id="cf-ann">Annuler (revenir au formulaire)</button></div></div></div>`;
+  const nouv = `${esc(d.jour)} ${esc(d.debut)}-${esc(d.fin)}`;
+  v.innerHTML = `<div class="bv-carte imp-carte cf-carte"><div class="bv-tete" style="background:${r.bloquant ? '#C0392B' : '#E67E22'}"><div><b>${r.bloquant ? '⛔ Chevauchement : réglez le conflit' : '⚠ Même classe à la même heure'}</b><span>Deux séances veulent le même créneau. Agissez sur l'une ou sur l'autre.</span></div></div>
+    <div class="imp-corps"><div class="cf-deux">
+      <div class="cf-bloc cf-moi"><div class="cf-titre">① Votre séance <span class="aide">(à placer)</span></div>
+        <div class="cf-seance"><b>${nouv}</b><br>${esc(d.matiere || '')} · ${esc(d.classe)}${d.salle ? ' · ' + esc(d.salle) : ''}<div class="aide">à partir du ${fr(d.du)}</div></div>
+        ${!r.bloquant ? `<div class="info" style="margin:6px 0">La classe a déjà cours à ce moment. Si elle est <b>partagée en groupes</b> (TP, ateliers), confirmez.</div><button class="btn orange petit" id="cf-gr">✔ Groupes séparés : enregistrer ici</button>` : ''}
+        <div class="cf-sous">Ou placer <b>votre séance</b> ailleurs :</div>
+        ${r.propositions.length ? `<div class="creneaux">${r.propositions.map((p, i) => `<button class="btn secondaire ${p.memeJour ? 'meme-jour' : ''}" data-i="${i}">${esc(p.jour)}<br><b>${esc(p.debut)} – ${esc(p.fin)}</b></button>`).join('')}</div>` : '<p class="aide">Aucun créneau libre de cette durée.</p>'}</div>
+      <div class="cf-bloc cf-autre"><div class="cf-titre">② ${r.conflits.length > 1 ? r.conflits.length + ' séances' : 'La séance'} qui bloque${r.conflits.length > 1 ? 'nt' : ''}</div>
+        ${r.conflits.map(c => `<div class="cf-seance" data-c="${c.id}"><b>${esc(c.jour)} ${esc(c.horaire)}</b> <span class="badge ${c.types.some(t => t !== 'CLASSE') ? 'A' : 'attente'}">${c.types.map(t => TYPES_CONFLIT[t]).join(', ')}</span><br>${esc(c.matiere)} · ${esc(c.classe)} · <b>${esc(c.nom)}</b>${c.salle ? ' · ' + esc(c.salle) : ''}
+          <div class="aide">${c.du ? 'en vigueur depuis le ' + fr(c.du) : 'en vigueur depuis la rentrée'}${c.au ? ' jusqu\'au ' + fr(c.au) + ' (déjà arrêtée)' : ''}</div>
+          <div class="actions" style="margin-top:6px"><button class="btn petit" data-dep="${c.id}">⇄ Déplacer cette séance</button><button class="btn petit orange" data-rmp="${c.id}">↻ Remplacer par la mienne</button></div>
+          <div class="cf-dep" id="dep-${c.id}"></div></div>`).join('')}
+        <p class="aide">« Déplacer » : la séance qui bloque change de créneau à partir du ${fr(d.du)}, puis la vôtre est placée ici automatiquement. « Remplacer » : la séance qui bloque ne compte plus à partir du ${fr(d.du)}.</p></div>
+    </div><div id="cf-msg"></div><div class="actions" style="justify-content:flex-end;margin-top:12px"><button class="btn secondaire" id="cf-ann">Annuler (revenir au formulaire)</button></div></div></div>`;
   document.body.appendChild(v);
-  const essayer = async extra => { try { v.remove(); await envoyer(extra); } catch (e) { toast(e.message, 6000); } };
+  const essayer = async extra => { try { v.remove(); await envoyer(extra); } catch (e) { toast(e.message, 7000); } };
   $('#cf-ann', v).onclick = () => v.remove();
   if ($('#cf-gr', v)) $('#cf-gr', v).onclick = () => essayer({ groupes: true });
-  $$('[data-rmp]', v).forEach(b => b.onclick = () => { if (confirm('Remplacer cette séance par la nouvelle à partir du ' + fr(d.du) + ' ?')) essayer({ remplacer: [b.dataset.rmp], groupes: true }); });
-  if ($('#cf-tout', v)) $('#cf-tout', v).onclick = () => { if (confirm('Remplacer toutes ces séances à partir du ' + fr(d.du) + ' ?')) essayer({ remplacer: r.conflits.map(c => c.id), groupes: true }); };
+  $$('[data-rmp]', v).forEach(b => b.onclick = () => { if (confirm('Remplacer cette séance par la vôtre à partir du ' + fr(d.du) + ' ?')) essayer({ remplacer: [b.dataset.rmp], groupes: true }); });
   $$('[data-i]', v).forEach(b => b.onclick = () => { const p = r.propositions[+b.dataset.i]; const fs = $('#fs'); if (fs) { fs.jour.value = p.jour; fs.debut.value = p.debut; fs.fin.value = p.fin; } essayer({ jour: p.jour, debut: p.debut, fin: p.fin }); });
+  // déplacer la séance qui bloque, puis placer la mienne
+  $$('[data-dep]', v).forEach(b => b.onclick = async () => {
+    const c = r.conflits.find(x => x.id === b.dataset.dep), zone = $('#dep-' + c.id, v);
+    if (zone.innerHTML) { zone.innerHTML = ''; return; }
+    zone.innerHTML = '<div class="aide">Recherche des créneaux libres…</div>';
+    try {
+      const L = await api('creneauxSeance', { id: c.id, du: d.du, eviter_jour: d.jour, eviter_horaire: d.debut + '-' + d.fin });
+      zone.innerHTML = L.creneaux.length ? `<div class="cf-sous">Nouveau créneau pour la séance de ${esc(c.nom)} :</div><div class="creneaux">${L.creneaux.map((p, i) => `<button class="btn secondaire ${p.memeJour ? 'meme-jour' : ''}" data-k="${i}">${esc(p.jour)}<br><b>${esc(p.debut)} – ${esc(p.fin)}</b></button>`).join('')}</div>`
+        : '<p class="aide">Aucun créneau libre pour cette séance : utilisez « Remplacer », ou placez votre séance ailleurs.</p>';
+      $$('[data-k]', zone).forEach(k => k.onclick = async () => {
+        const p = L.creneaux[+k.dataset.k];
+        if (!confirm(`Déplacer la séance de ${c.nom} (${c.matiere}, ${c.classe}) au ${p.jour} ${p.debut}-${p.fin} à partir du ${fr(d.du)}, puis placer la vôtre au ${d.jour} ${d.debut}-${d.fin} ?`)) return;
+        try {
+          const rd = await api('enregistrerSeance', { id: c.id, p: c.p, jour: p.jour, debut: p.debut, fin: p.fin, matiere: c.matiere, classe: c.classe, niveau: c.niveau, salle: c.salle || '', du: d.du, groupes: true });
+          if (rd.conflit) { $('#cf-msg', v).innerHTML = `<div class="erreur">Ce créneau est maintenant pris (${esc(rd.conflits.map(x => x.jour + ' ' + x.horaire).join(', '))}). Choisissez-en un autre.</div>`; return; }
+          toast(`Séance de ${c.nom} déplacée au ${p.jour} ${p.debut}-${p.fin}.`, 5000);
+          essayer({});   // on replace la mienne : s'il reste un conflit, la page se rouvre
+        } catch (e) { $('#cf-msg', v).innerHTML = `<div class="erreur">${esc(e.message)}</div>`; }
+      });
+    } catch (e) { zone.innerHTML = `<div class="erreur">${esc(e.message)}</div>`; }
+  });
 }
 
 /* ===================== CONFLITS EXISTANTS ===================== */

@@ -521,3 +521,8 @@ tr.imp-vert td { background: #EEF8F1; } tr.imp-orange td { background: #FFF6E5; 
 #impression .edt-grille td.edt-s hr { border: 0; border-top: 1px dashed #888; margin: 1mm 0; }
 #impression .edt-grille tr td { height: 10mm; } #impression .edt-grille tr.edt-pause td { height: 4mm; background: #ddd !important; font-size: 7.5pt; font-weight: 700; letter-spacing: 2px; -webkit-print-color-adjust: exact; print-color-adjust: exact; }
 .cf-liste { padding-left: 0; list-style: none; } .cf-liste li { display: flex; gap: 10px; justify-content: space-between; align-items: center; border-bottom: 1px solid #eee; padding: 6px 0; flex-wrap: wrap; }
+.cf-carte { width: min(1000px, 100%); }
+.cf-deux { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; } @media (max-width: 760px) { .cf-deux { grid-template-columns: 1fr; } }
+.cf-bloc { border: 1px solid #ddd; border-radius: 10px; padding: 10px; } .cf-moi { border-color: #2E75B6; background: #F5F9FD; } .cf-autre { border-color: #E67E22; background: #FFFAF2; }
+.cf-titre { font-weight: 800; margin-bottom: 6px; } .cf-seance { background: #fff; border: 1px solid #e3e3e3; border-radius: 8px; padding: 8px; margin-bottom: 8px; line-height: 1.5; }
+.cf-sous { font-size: .85rem; font-weight: 600; margin: 8px 0 4px; } .cf-dep .creneaux { grid-template-columns: repeat(auto-fill, minmax(105px, 1fr)); }
