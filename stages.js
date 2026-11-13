@@ -9,16 +9,17 @@ async function chargerRefStages(forcer) {
   if (STG.ref && !forcer) return STG.ref;
   STG.ref = await api('stagesRef'); return STG.ref;
 }
-const accesStages = () => { const p = S.session.profil; return p.serfe || p.encadreur || ['educateur', 'admin', 'directeur', 'censeur'].includes(role()); };
+const accesStages = () => { const p = S.session.profil; if (modeProf()) return !!p.encadreur; return p.serfe || p.encadreur || ['educateur', 'admin', 'directeur', 'censeur'].includes(role()); };
 
 /* ===================== PAGE PRINCIPALE ===================== */
 async function pageStages(c, arg) {
   const R = await chargerRefStages(true);
   const ong = [['eleves', 'Élèves en stage'], ['entreprises', 'Entreprises']];
-  if (R.gestion) ong.push(['periodes', 'Périodes'], ['stats', 'Statistiques']);
-  if (R.admin) ong.push(['reglages', 'Réglages']);
+  if (R.gestion) ong.push(['periodes', 'Périodes']);
+  if (R.gestion || R.lecture) ong.push(['stats', 'Statistiques']);
+  if (R.admin || R.serfe) ong.push(['reglages', 'Réglages']);
   const o = ong.find(x => x[0] === arg) ? arg : 'eleves';
-  c.innerHTML = `<h1>Stages</h1><div class="onglets">${ong.map(([k, t]) => `<a href="#/stages/${k}" class="${k === o ? 'actif' : ''}">${t}</a>`).join('')}</div><div id="stg-res"><p class="aide">Chargement…</p></div>`;
+  c.innerHTML = `<h1>Stages</h1>${!R.gestion && R.lecture ? '<div class="info">👁 Consultation seulement : les mises en stage sont gérées par le SERFE.</div>' : ''}<div class="onglets">${ong.map(([k, t]) => `<a href="#/stages/${k}" class="${k === o ? 'actif' : ''}">${t}</a>`).join('')}</div><div id="stg-res"><p class="aide">Chargement…</p></div>`;
   const z = $('#stg-res', c);
   if (o === 'entreprises') return ongletEntreprises(z, R);
   if (o === 'periodes') return ongletPeriodes(z, R);
@@ -101,12 +102,12 @@ async function pageStagiaire(c, arg) {
       ${peutNoter ? `<form id="sf-vi" class="ligne"><div style="flex:0 1 170px"><label>Date</label><input type="date" name="date" value="${dateLocale()}" max="${dateLocale()}"></div>
         <div style="flex:0 0 auto;align-self:flex-end"><label style="font-weight:600"><input type="checkbox" name="present" checked style="width:auto;min-height:0"> Élève présent</label></div>
         <div><label>Observation</label><input name="observation" placeholder="travail fait, comportement, difficultés…"></div><div style="flex:0 0 auto;align-self:flex-end"><button class="btn secondaire">Ajouter la visite</button></div></form>` : ''}</div>` : ''}
-    <div class="carte"><h2 style="margin-top:0">🖨 Documents</h2><div class="actions">
+    ${D.droits === 'LECTURE' ? '' : `<div class="carte"><h2 style="margin-top:0">🖨 Documents</h2><div class="actions">
       <button class="btn secondaire" data-doc="demande">Demande de stage</button>
       ${s.id_entreprise ? `<button class="btn secondaire" data-doc="convention">Convention (3 exemplaires)</button><button class="btn secondaire" data-doc="introduction">Lettre d'introduction</button><button class="btn secondaire" data-doc="tuteur">Fiche d'appréciation du tuteur</button>` : ''}
       ${s.id_entreprise && complet ? '<button class="btn secondaire" data-doc="rapport">Fiche du rapport</button><button class="btn secondaire" data-doc="soutenance">Fiche de soutenance</button>' : ''}
       ${s.id_entreprise ? '<button class="btn secondaire" data-doc="attestation">Attestation de stage</button>' : ''}</div>
-      ${!s.id_entreprise ? '<p class="aide">Les autres documents seront disponibles quand l\'élève sera placé dans une entreprise.</p>' : ''}</div>`;
+      ${!s.id_entreprise ? '<p class="aide">Les autres documents seront disponibles quand l\'élève sera placé dans une entreprise.</p>' : ''}</div>`}`;
   appliquerPhotosEleves(); chargerPhotosEleves([s.id_eleve]);
   if ($('#sf-pl')) $('#sf-pl').onsubmit = async ev => {
     ev.preventDefault(); const bt = $('button.vert', ev.target); bt.disabled = true;
@@ -179,16 +180,23 @@ async function ongletStatsStages(z) {
 
 /* ===================== RÉGLAGES (admin) ===================== */
 function ongletReglagesStages(z, R) {
-  const P = R.poids;
-  z.innerHTML = `<form id="sr-f" class="carte"><h2 style="margin-top:0">Responsables des stages (SERFE)</h2>
+  const P = R.poids, aut = R.autorisationDirecteur;
+  z.innerHTML = `<form id="sr-dir" class="carte"><h2 style="margin-top:0">Accès du directeur</h2>
+      <p>Par défaut, le directeur <b>consulte seulement</b> les stages. Le SERFE peut l'autoriser à modifier, pour une durée limitée ou non.</p>
+      <p>État actuel : ${aut ? `<span class="badge P">autorisé${aut !== 'OUI' ? ' jusqu\'au ' + fr(aut) : ''}</span>` : '<span class="badge">consultation seulement</span>'}</p>
+      <div class="ligne"><div style="flex:0 0 auto;align-self:flex-end"><label style="font-weight:600"><input type="checkbox" name="actif" ${aut ? 'checked' : ''} style="width:auto;min-height:0"> Autoriser le directeur à modifier</label></div>
+        <div style="flex:0 1 200px"><label>Jusqu'au (facultatif)</label><input type="date" name="jusquau" value="${aut && aut !== 'OUI' ? aut : ''}" min="${dateLocale()}"></div></div>
+      <button class="btn secondaire" style="margin-top:8px">Enregistrer</button></form>
+    ${R.admin ? `<form id="sr-f" class="carte"><h2 style="margin-top:0">Responsables des stages (SERFE)</h2>
       <label>Matricule(s) du SERFE (séparés par ;)</label><input name="serfe" value="${esc(P.serfe)}" placeholder="ex. 334919Z">
-      <p class="aide">Le SERFE gère les entreprises, place les élèves, désigne les encadreurs et imprime les documents. Le directeur et le censeur ont les mêmes droits.</p>
+      <p class="aide">Le SERFE gère les entreprises, place les élèves, désigne les encadreurs et imprime les documents. L'administrateur a les mêmes droits. Le censeur et le directeur consultent.</p>
       <h2>Note de stage des classes « tuteur + rapport + soutenance »</h2><div class="ligne">
         <div><label>Fiche du tuteur (%)</label><input name="tuteur" type="number" min="0" value="${P.tuteur}"></div><div><label>Rapport (%)</label><input name="rapport" type="number" min="0" value="${P.rapport}"></div>
         <div><label>Soutenance (%)</label><input name="soutenance" type="number" min="0" value="${P.soutenance}"></div><div><label>Durée proposée (jours)</label><input name="duree" type="number" min="1" value="${P.duree}"></div></div>
       <p class="aide">Le coefficient de la ligne « Stage en entreprise » du bulletin se règle dans Matières et coefficients (mettre 0 pour la retirer du bulletin).</p>
-      <button class="btn vert">Enregistrer</button></form>`;
-  $('#sr-f').onsubmit = async ev => { ev.preventDefault(); try { toast((await api('paramsStages', Object.fromEntries(new FormData(ev.target)))).message); STG.ref = null; } catch (e) { toast(e.message, 5000); } };
+      <button class="btn vert">Enregistrer</button></form>` : ''}`;
+  $('#sr-dir').onsubmit = async ev => { ev.preventDefault(); const f = ev.target; try { toast((await api('autoriserDirecteurStages', { actif: f.actif.checked, jusquau: f.jusquau.value })).message, 5000); STG.ref = null; afficher(); } catch (e) { toast(e.message, 5000); } };
+  if ($('#sr-f')) $('#sr-f').onsubmit = async ev => { ev.preventDefault(); try { toast((await api('paramsStages', Object.fromEntries(new FormData(ev.target)))).message); STG.ref = null; } catch (e) { toast(e.message, 5000); } };
 }
 
 /* ===================== DOCUMENTS ===================== */

@@ -54,7 +54,8 @@ const S = {
   photos: stock.lire('photos', {}),
   enLigne: navigator.onLine
 };
-const role = () => S.session && S.session.profil.role;
+const modeProf = () => !!(S.session && S.session.profil.double && stock.lire('mode', 'admin') === 'professeur');
+const role = () => S.session && (S.session.profil.double ? (modeProf() ? 'intervenant' : 'admin') : S.session.profil.role);
 const encadrement = () => ['admin', 'censeur'].includes(role());
 
 /* ================= SERVEUR ================= */
@@ -62,7 +63,7 @@ class HorsLigne extends Error {}
 async function api(action, donnees = {}) {
   const url = window.CONFIG && window.CONFIG.API_URL;
   if (!url || url.indexOf('http') !== 0) throw new Error("L'adresse du serveur n'est pas encore réglée (fichier config.js).");
-  const corps = Object.assign({ action, jeton: S.session && S.session.jeton }, donnees);
+  const corps = Object.assign({ action, jeton: S.session && S.session.jeton }, modeProf() ? { mode: 'professeur' } : {}, donnees);
   let rep;
   try {
     rep = await fetch(url, { method: 'POST', body: JSON.stringify(corps), redirect: 'follow' });
@@ -253,7 +254,7 @@ function lancerCarrousels() {
 
 /* ================= CONNEXION / INSCRIPTION ================= */
 function deconnecterLocal() {
-  S.session = null; stock.effacer('session'); stock.effacer('ref'); S.ref = null;
+  S.session = null; stock.effacer('session'); stock.effacer('ref'); S.ref = null; stock.effacer('mode'); ACT.donnees = null;
   Object.keys(localStorage).filter(k => k.startsWith('lpd_vue_')).forEach(k => localStorage.removeItem(k));
   afficher();
 }
@@ -290,8 +291,9 @@ function formConnexion() {
       const r = await api('connexion', { matricule: f.m.value, code: f.c.value });
       S.session = { jeton: r.jeton, profil: r.profil, params: r.params }; stock.ecrire('session', S.session);
       api('photos', { matricules: [r.profil.matricule] }).then(p => { Object.assign(S.photos, p.photos); stock.ecrire('photos', S.photos); appliquerPhotos(); }).catch(() => {});
-      location.hash = '#/'; stock.ecrire('bienvenue', 1);
-      afficher(); setTimeout(carteBienvenue, 600);
+      location.hash = '#/'; stock.ecrire('bienvenue', 1); stock.ecrire('mode', 'admin');
+      const entrer = () => { afficher(); setTimeout(carteBienvenue, 600); majActions(true); };
+      if (r.profil.double) choisirMode(entrer); else entrer();
     } catch (err) { $('#msg').innerHTML = `<div class="erreur">${esc(err.message)}</div>`; b.disabled = false; }
   };
 }
@@ -363,6 +365,9 @@ const PAGES = {
   'paiement':      { titre: 'État de paiement', roles: ['censeur', 'admin', 'directeur'], fn: pagePaiement },
   'personnel':     { titre: 'Personnel', roles: ['censeur', 'admin', 'directeur'], fn: pagePersonnel },
   'emplois':       { titre: 'Emplois du temps', roles: ['admin'], fn: pageEmplois },
+  'actions':       { titre: 'Mes actions', roles: ['intervenant', 'censeur', 'admin', 'educateur', 'comptable', 'directeur'], cache: true, fn: c => pageActions(c) },
+  'annonces':      { titre: 'Annonces et échéances', roles: ['admin', 'directeur', 'censeur'], fn: c => pageAnnonces(c) },
+  'droits':        { titre: 'Qui peut faire quoi', roles: ['admin'], fn: c => pageDroits(c) },
   'comptes':       { titre: 'Comptes', roles: ['admin'], fn: pageComptes, pastille: 'comptesEnAttente' },
   'journal':       { titre: 'Journal', roles: ['admin'], fn: pageJournal },
   'conseil':       { titre: 'Conseil de classe', roles: ['intervenant', 'censeur', 'admin', 'directeur', 'educateur'], cache: true, fn: (c, a) => pageConseil(c, a) },
@@ -385,7 +390,7 @@ const GROUPES_MENU = [
   { id: 'eleves', titre: '🎓 Élèves', pages: ['eleves', 'effectifs', 'appel', 'absences', 'discipline', 'stages'] },
   { id: 'notes', titre: '📝 Notes', pages: ['notes', 'bulletins'] },
   { id: 'finances', titre: '💰 Finances', pages: ['caisse', 'finances'] },
-  { id: 'admin', titre: '⚙ Administration', pages: ['emplois', 'comptes', 'journal'] }
+  { id: 'admin', titre: '⚙ Administration', pages: ['annonces', 'emplois', 'comptes', 'droits', 'journal'] }
 ];
 let groupeOuvert = null;
 function menu() {
@@ -421,7 +426,7 @@ function afficher() {
   const def = role() === 'intervenant' ? 'ma-fiche' : role() === 'directeur' ? 'direction' : role() === 'comptable' ? 'caisse' : role() === 'educateur' ? 'eleves' : 'pointage';
   if (!PAGES[page] || !PAGES[page].roles.includes(role())) { page = def; history.replaceState(null, '', '#/' + def); }
   afficher.accueil = page === def;
-  menu(); majReseau();
+  menu(); majReseau(); majEnteteMode(); majActions();
   c.innerHTML = '<div class="chargement">Chargement…</div>';
   window.scrollTo(0, 0);
   const tour = afficher.tour = (afficher.tour || 0) + 1;
@@ -435,6 +440,9 @@ window.addEventListener('hashchange', afficher);
 document.addEventListener('DOMContentLoaded', () => {
   $('#etat-reseau').onclick = () => { if (!navigator.onLine) return toast('Pas de connexion : les pointages et les appels partiront automatiquement au retour du réseau.'); synchroniser(false); if (typeof synchroniserAppels === 'function') synchroniserAppels(false); if (typeof synchroniserNotes === 'function') synchroniserNotes(false); };
   $('#btn-moi').onclick = () => { location.hash = '#/mon-compte'; };
+  $('#btn-actions').onclick = () => { location.hash = '#/actions'; };
+  $('#btn-mode').onclick = () => { stock.ecrire('mode', modeProf() ? 'admin' : 'professeur'); NT.ref = null; history.replaceState(null, '', '#/'); toast(modeProf() ? 'Mode Professeur : interface enseignant.' : 'Mode Administrateur.'); afficher(); majActions(true); };
+  setInterval(() => majActions(true), 5 * 60 * 1000);
   if ('serviceWorker' in navigator) navigator.serviceWorker.register('sw.js').catch(() => {});
   afficher();
   if (S.session && encadrement()) synchroniser();
@@ -960,7 +968,7 @@ async function pagePaiement(c) {
 
 /* ================= EXPORT EXCEL ================= */
 function chargerScript(src) {
-  const pret = () => src.includes('xlsx') ? window.XLSX : src.includes('qrcode') ? window.qrcode : window.mammoth;
+  const pret = () => src.includes('xlsx') ? window.XLSX : src.includes('qrcode') ? window.qrcode : src.includes('pdf.js') || src.includes('pdf.min') ? window.pdfjsLib : src.includes('tesseract') ? window.Tesseract : window.mammoth;
   return new Promise((ok, ko) => {
     if (pret()) return ok();
     const s = document.createElement('script'); s.src = src; s.onload = ok;
@@ -1229,4 +1237,98 @@ async function carteBienvenue() {
   if (!voile.isConnected) return;
   dessiner(B);
   if (p.civilite) minuteur = setTimeout(fermer, 8000); else arreter();   // la question Monsieur / Madame attend la réponse
+}
+
+/* ================= MODE ADMINISTRATEUR / PROFESSEUR (v2.1) ================= */
+function choisirMode(suite) {
+  const v = document.createElement('div'); v.className = 'bv-voile';
+  v.innerHTML = `<div class="bv-carte"><div class="bv-tete"><img src="medias/embleme-blanc.png" alt=""><div><b>LP DAOUKRO</b><span>Choix de l'espace</span></div></div>
+    <div class="bv-corps"><p class="bv-sal">Vous êtes administrateur et enseignant.</p><div class="bv-nom" style="font-size:1.1rem">Entrer comme :</div>
+    <div class="mode-choix"><button class="btn large" data-m="admin">⚙ Administrateur</button><button class="btn large vert" data-m="professeur">👨‍🏫 Professeur</button></div>
+    <p class="aide">Vous pourrez changer à tout moment avec le bouton en haut de l'écran.</p></div></div>`;
+  document.body.appendChild(v);
+  $$('[data-m]', v).forEach(b => b.onclick = () => { stock.ecrire('mode', b.dataset.m); v.remove(); suite(); });
+}
+function majEnteteMode() {
+  const b = $('#btn-mode'); if (!b) return;
+  const d = S.session && S.session.profil.double; b.hidden = !d;
+  if (d) { b.textContent = modeProf() ? '👨‍🏫 Prof' : '⚙ Admin'; b.title = modeProf() ? 'Vous êtes en mode Professeur — passer en mode Administrateur' : 'Vous êtes en mode Administrateur — passer en mode Professeur'; b.classList.toggle('prof', modeProf()); }
+  $('#btn-actions').hidden = !S.session;
+}
+
+/* ================= BANDE D'ANNONCES ET BOÎTE « MES ACTIONS » (v2.1) ================= */
+const ACT = { donnees: null, le: 0 };
+async function majActions(forcer) {
+  if (!S.session || !navigator.onLine) return dessinerBande();
+  if (!forcer && Date.now() - ACT.le < 60000) return dessinerBande();
+  ACT.le = Date.now();
+  try { ACT.donnees = await api('mesActions'); } catch (e) { /* rien */ }
+  dessinerBande();
+}
+function dessinerBande() {
+  const b = $('#bande'), D = ACT.donnees, n = $('#nb-actions'); if (!b) return;
+  if (!S.session || !D) { b.hidden = true; if (n) n.hidden = true; return; }
+  const nb = D.actions.length; n.hidden = !nb; n.textContent = nb;
+  const msgs = [...D.actions.filter(a => a.niveau === 'URGENT'), ...D.annonces];
+  if (!msgs.length || stock.lire('bande_masquee', '') === dateLocale()) { b.hidden = true; return; }
+  const item = m => `<a class="bande-msg" href="${m.lien || '#/actions'}"><span class="bande-tag ${m.niveau === 'URGENT' ? 'urg' : 'ann'}">${m.niveau === 'URGENT' ? 'URGENT' : 'ANNONCE'}</span>${esc(m.texte)}</a>`;
+  const contenu = msgs.map(item).join('<span class="bande-sep">•</span>');
+  b.innerHTML = `<div class="bande-defil" style="animation-duration:${Math.max(18, msgs.length * 12)}s"><div>${contenu}</div><div aria-hidden="true">${contenu}</div></div><button class="bande-x" title="Masquer pour aujourd'hui">✕</button>`;
+  b.classList.toggle('urgente', D.actions.some(a => a.niveau === 'URGENT'));
+  b.hidden = false;
+  $('.bande-x', b).onclick = () => { stock.ecrire('bande_masquee', dateLocale()); b.hidden = true; };
+}
+async function pageActions(c) {
+  await majActions(true);
+  const D = ACT.donnees || { actions: [], annonces: [] };
+  const fmtE = e => e ? `<span class="aide">échéance : ${fr(e)}</span>` : '';
+  c.innerHTML = `<h1>📥 Mes actions</h1>
+    ${D.actions.length ? D.actions.map(a => `<div class="carte action-l ${a.niveau === 'URGENT' ? 'urg' : ''}"><div><span class="bande-tag ${a.niveau === 'URGENT' ? 'urg' : 'faire'}">${esc(a.niveau)}</span> <b>${esc(a.texte)}</b>${a.detail ? `<div class="aide">${esc(a.detail)}</div>` : ''} ${fmtE(a.echeance)}</div>
+      ${a.lien ? `<a class="btn petit" href="${a.lien}">Y aller →</a>` : ''}</div>`).join('') : '<div class="info">✅ Aucune action en attente. Tout est à jour.</div>'}
+    ${D.annonces.length ? `<h2>Annonces</h2>${D.annonces.map(a => `<div class="carte action-l"><div><span class="bande-tag ann">ANNONCE</span> ${esc(a.texte)}</div>${a.lien ? `<a class="btn petit secondaire" href="${a.lien}">Voir →</a>` : ''}</div>`).join('')}` : ''}
+    <p class="aide">Une action disparaît d'elle-même quand elle est faite. Une échéance passe en URGENT 3 jours avant la date limite.</p>`;
+}
+async function pageAnnonces(c) {
+  const L = await api('annonces'), D = L.destinataires, auj = dateLocale();
+  c.innerHTML = `<h1>Annonces et échéances</h1>
+    <form id="f-an" class="carte"><div class="ligne"><div style="flex:0 1 200px"><label>Type</label><select name="type"><option value="ANNONCE">🔵 Annonce (information)</option><option value="ECHEANCE">🔴 Échéance (action avec date limite)</option></select></div>
+      <div style="flex:2 1 300px"><label>Titre</label><input name="titre" maxlength="120" required placeholder="ex. Saisie des notes du S1 / Réunion générale vendredi 15 h"></div></div>
+      <label>Détail (facultatif)</label><input name="texte" maxlength="400">
+      <label>Destinataires</label><div class="cases-classes">${Object.entries(D).map(([k, v]) => `<label><input type="checkbox" name="d" value="${k}" ${k === 'TOUS' ? 'checked' : ''}> ${esc(v)}</label>`).join('')}</div>
+      <div class="ligne"><div><label>Affichée à partir du</label><input type="date" name="du" value="${auj}"></div><div><label id="an-lau">Jusqu'au (fin d'affichage)</label><input type="date" name="au"></div>
+        <div><label>Page à ouvrir (facultatif)</label><select name="lien"><option value="">—</option>${[['#/notes', 'Notes'], ['#/appel', 'Appel'], ['#/ma-fiche', 'Ma fiche'], ['#/discipline', 'Discipline'], ['#/stages', 'Stages'], ['#/bulletins', 'Bulletins'], ['#/caisse', 'Caisse'], ['#/rattrapages', 'Rattrapages'], ['#/mon-compte', 'Mon compte']].map(([v, t]) => `<option value="${v}">${t}</option>`).join('')}</select></div></div>
+      <p class="aide">Une <b>échéance</b> apparaît dans la boîte « Mes actions » des destinataires et passe en <b>URGENT</b> dans la bande 3 jours avant la date limite. Une <b>annonce</b> défile dans la bande jusqu'à sa date de fin.</p>
+      <div id="an-msg"></div><button class="btn vert">Publier</button></form>
+    <h2>Publiées</h2><div class="table-defil"><table><thead><tr><th>Type</th><th>Titre</th><th>Destinataires</th><th>Période</th><th>Par</th><th></th></tr></thead><tbody>
+    ${L.annonces.map(a => `<tr class="${a.actif ? '' : 'barre-ligne'}"><td>${a.type === 'ECHEANCE' ? '<span class="bande-tag urg">ÉCHÉANCE</span>' : '<span class="bande-tag ann">ANNONCE</span>'}</td><td><b>${esc(a.titre)}</b><div class="aide">${esc(a.texte || '')}</div></td>
+      <td class="aide">${a.destinataires.map(d => esc(D[d] || d)).join(', ')}</td><td class="aide">${a.du ? fr(a.du) : ''} → ${a.au ? fr(a.au) : '…'}</td><td class="aide">${esc(a.par)}</td><td>${a.actif ? `<button class="btn petit rouge" data-ret="${a.id}">Retirer</button>` : 'retirée'}</td></tr>`).join('') || '<tr><td colspan="6" class="vide">Aucune.</td></tr>'}</tbody></table></div>`;
+  const f = $('#f-an');
+  f.type.onchange = () => { $('#an-lau').textContent = f.type.value === 'ECHEANCE' ? 'Date limite' : "Jusqu'au (fin d'affichage)"; };
+  f.onsubmit = async ev => {
+    ev.preventDefault();
+    const a = { type: f.type.value, titre: f.titre.value, texte: f.texte.value, du: f.du.value, au: f.au.value, lien: f.lien.value, destinataires: $$('[name=d]', f).filter(i => i.checked).map(i => i.value) };
+    try { toast((await api('publierAnnonce', { annonce: a })).message); majActions(true); afficher(); } catch (e) { $('#an-msg').innerHTML = `<div class="erreur">${esc(e.message)}</div>`; }
+  };
+  $$('[data-ret]', c).forEach(b => b.onclick = async () => { if (!confirm('Retirer cette annonce ?')) return; try { toast((await api('retirerAnnonce', { id: b.dataset.ret })).message); majActions(true); afficher(); } catch (e) { toast(e.message, 5000); } });
+}
+function pageDroits(c) {
+  const R = ['Admin', 'Directeur', 'Censeur', 'Éducateur', 'Comptable', 'Enseignant', 'SERFE*'];
+  const M = [
+    ['Comptes du personnel, journal, emplois du temps', '✏️', '—', '—', '—', '—', '—', '—'],
+    ['Pointage et heures supplémentaires', '✏️', '👁', '✏️', '—', '—', 'sa fiche', '—'],
+    ['Élèves : fiches, inscriptions', '✏️', '👁', '👁', '✏️', '👁', 'ses classes', '—'],
+    ['Absences des élèves (appel)', '✏️', '👁', '👁', '✏️', '—', 'ses cours', '—'],
+    ['Notes', '✏️', '✏️', '✏️', '—', '—', 'ses matières', '—'],
+    ['Validation des bulletins', '✏️', '✏️', '—', '—', '—', '—', '—'],
+    ['Discipline : signaler', '✏️', '✏️', '✏️', '✏️', '—', '✏️', '—'],
+    ['Discipline : sanctions', 'toutes', 'toutes', 'jusqu\'à 3 j', 'avert. écrit, retenue, TIG', '—', 'avert. oral, exclusion de séance', '—'],
+    ['Finances : encaisser, reçus, clôture', '✏️', '👁', '👁', '—', '✏️', '—', '—'],
+    ['Finances : réductions de frais', '✏️', 'accorde', '👁', '—', 'demande', '—', '—'],
+    ['Finances : tarifs', '✏️', '—', '—', '—', '—', '—', '—'],
+    ['Stages : placements, entreprises, documents', '✏️', '👁 (✏️ si autorisé par le SERFE)', '👁', '👁', '—', 'encadreur : ses stagiaires', '✏️'],
+    ['Annonces et échéances', '✏️', '✏️', '✏️', '—', '—', '—', '—']];
+  c.innerHTML = `<h1>Qui peut faire quoi</h1><p class="aide">✏️ agit et modifie · 👁 consulte seulement · — pas d'accès. Les droits sont aussi vérifiés par le serveur : ce tableau décrit les règles appliquées.</p>
+    <div class="table-defil"><table class="droits"><thead><tr><th>Module</th>${R.map(x => `<th>${x}</th>`).join('')}</tr></thead><tbody>
+    ${M.map(l => `<tr><td><b>${esc(l[0])}</b></td>${l.slice(1).map(v => `<td class="${v === '—' ? 'non' : v === '👁' ? 'vue' : 'oui'}">${esc(v)}</td>`).join('')}</tr>`).join('')}</tbody></table></div>
+    <p class="aide">* Le SERFE garde aussi les droits de sa fonction habituelle (enseignant, etc.). En mode Professeur, l'administrateur a exactement les droits d'un enseignant.</p>`;
 }

@@ -481,3 +481,30 @@ details.carte > summary { cursor: pointer; padding: 2px 0; } details.carte[open]
 #impression .info-stg { width: 100%; border-collapse: collapse; margin: 2mm 0 4mm; } #impression .info-stg td { border: 1px solid #999; padding: 1.5mm 2mm; font-size: 10pt; }
 #impression .zone-txt { border: 1px solid #999; height: 28mm; margin-bottom: 3mm; }
 #impression .lettre.stg { font-size: 11pt; line-height: 1.55; margin: 8px 4px; } #impression .lettre.stg p { margin: 2.2mm 0; }
+
+/* ===== v2.1 Mode, bande d'annonces, mes actions ===== */
+.btn-mode { background: rgba(255,255,255,.15); color: #fff; border: 1px solid rgba(255,255,255,.4); border-radius: 16px; padding: 5px 10px; font-size: .8rem; font-weight: 700; cursor: pointer; }
+.btn-mode.prof { background: #009E60; border-color: #009E60; }
+.btn-actions { position: relative; background: rgba(255,255,255,.15); border: 0; border-radius: 50%; width: 36px; height: 36px; font-size: 1.05rem; cursor: pointer; }
+.btn-actions .pastille { position: absolute; top: -4px; right: -4px; }
+.mode-choix { display: grid; gap: 10px; margin: 14px 0 8px; }
+.bande { position: relative; display: flex; align-items: center; overflow: hidden; background: #EAF2FB; border-bottom: 1px solid #c9d9ea; height: 36px; }
+.bande.urgente { background: #FDECEC; border-bottom-color: #f2c4c4; }
+.bande-defil { display: flex; white-space: nowrap; animation: bandeDefil 30s linear infinite; will-change: transform; }
+.bande-defil > div { display: flex; align-items: center; padding-right: 60px; }
+.bande:hover .bande-defil, .bande:active .bande-defil { animation-play-state: paused; }
+.bande-msg { color: #1b2a3a; text-decoration: none; font-size: .88rem; display: inline-flex; align-items: center; gap: 6px; }
+.bande-msg:hover { text-decoration: underline; }
+.bande-sep { color: #999; margin: 0 16px; }
+.bande-tag { display: inline-block; font-size: .7rem; font-weight: 800; letter-spacing: .5px; color: #fff; padding: 2px 7px; border-radius: 4px; }
+.bande-tag.urg { background: #C0392B; } .bande-tag.ann { background: #1F6FB2; } .bande-tag.faire { background: #E67E22; }
+.bande-x { position: absolute; right: 0; top: 0; bottom: 0; width: 34px; border: 0; background: inherit; box-shadow: -8px 0 8px -4px rgba(0,0,0,.08); cursor: pointer; color: #555; }
+@keyframes bandeDefil { from { transform: translateX(0); } to { transform: translateX(-50%); } }
+@media (prefers-reduced-motion: reduce) { .bande-defil { animation: none; } }
+@media print { .bande, .btn-actions, .btn-mode { display: none !important; } }
+.action-l { display: flex; justify-content: space-between; align-items: center; gap: 10px; } .action-l.urg { border-left: 4px solid #C0392B; }
+table.droits td.oui { background: #EAF6EF; } table.droits td.vue { background: #EAF2FB; } table.droits td.non { color: #aaa; text-align: center; }
+table.droits td, table.droits th { font-size: .82rem; }
+.imp-carte { width: min(760px, 100%); } .imp-corps { padding: 12px 16px 16px; }
+tr.imp-vert td { background: #EEF8F1; } tr.imp-orange td { background: #FFF6E5; } tr.imp-rouge td { background: #FDECEC; }
+.saisie-note.note-importee { background: #FFFBEA; }

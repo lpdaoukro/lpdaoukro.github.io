@@ -164,6 +164,7 @@ async function pageNotes(c) {
         <div><label>Date</label><input type="date" name="date" value="${x.date}" max="${dateLocale()}" required></div>
         <div><label>Noté sur</label><input type="number" name="bareme" min="1" max="100" value="${x.bareme}" required></div>
         <div><label>Coefficient</label><input type="number" name="coef" min="0.5" max="20" step="0.5" value="${x.coef}" required></div></div>
+        ${!v ? `<div class="actions" style="margin:6px 0"><input type="file" id="imp-f" accept=".xlsx,.xls,.csv,.ods,.docx,.pdf,image/*" hidden><button type="button" class="btn secondaire" id="imp-b">📥 Importer les notes (Excel, Word, PDF, photo)</button><button type="button" class="btn secondaire" id="imp-m">📄 Modèle Excel</button></div>` : ''}
         <p class="aide">Pour chaque élève : la note, ou <b>A</b> pour absent (absence justifiée : non comptée ; absence non justifiée : <b>0</b>), <b>N</b> pour non noté, par exemple élève arrivé en cours d'année ou dispensé (jamais compté). La touche Entrée passe à l'élève suivant.</p></div>
       ${el.map((e, i) => `<div class="ligne-appel"><span class="num">${i + 1}</span>${avatarEleve(e, 'petit')}<div class="nom-appel"><b>${esc(e.nom)}</b> ${esc(e.prenoms)}</div>
         <input class="saisie-note" data-e="${e.id}" value="${esc(x.notes[e.id] === undefined ? '' : String(x.notes[e.id]).replace('.', ','))}" inputmode="decimal" autocomplete="off" ${v ? 'disabled' : ''}></div>`).join('')}
@@ -177,6 +178,20 @@ async function pageNotes(c) {
       inp.onblur = () => { inp.value = normNote(inp.value).replace('.', ','); inp.classList.toggle('note-erreur', !valideNote(inp.value)); };
     });
     const valideNote = val => { const n = normNote(val); if (!n || n === 'ABS' || n === 'NN') return true; const b = +$('[name=bareme]').value; return !isNaN(+n) && +n >= 0 && +n <= b; };
+    if ($('#imp-b')) {
+      $('#imp-b').onclick = () => $('#imp-f').click();
+      $('#imp-m').onclick = () => { const b = +$('[name=bareme]').value || 20; exporterExcel(`Notes ${m.classe.replace(/\//g, '-')} - ${m.matiere}.xlsx`, [{ nom: 'Notes', lignes: [[`${m.matiere} — ${m.classe} — ${$('[name=libelle]').value || $('[name=type]').value}`], [], ['N°', 'Matricule', 'Nom', 'Prénoms', `Note (/${b})`], ...el.map((e, i) => [i + 1, e.matricule || '', e.nom, e.prenoms, ''])] }]); };
+      $('#imp-f').onchange = async ev => {
+        const fi = ev.target.files[0]; ev.target.value = ''; if (!fi) return;
+        const b = +$('[name=bareme]').value || 20;
+        try {
+          const res = await importerNotes(fi, el, b);
+          if (!res) return;
+          let n = 0; champs.forEach(inp => { const v = res[inp.dataset.e]; if (v !== undefined && v !== '') { inp.value = String(v).replace('.', ','); inp.classList.toggle('note-erreur', !valideNote(inp.value)); inp.classList.add('note-importee'); n++; } });
+          toast(`${n} note(s) placée(s) dans la saisie. Vérifiez puis touchez « Enregistrer les notes ».`, 6000);
+        } catch (err) { toast(err.message, 7000); }
+      };
+    }
     $('#f-ev').onsubmit = async ev => {
       ev.preventDefault(); if (v) return;
       const fd = Object.fromEntries(new FormData(ev.target));
@@ -663,4 +678,112 @@ async function pageDirection(c) {
       <div class="kpi rouge"><div class="lib">Élèves exclus aujourd'hui</div><div class="val">${T.discipline.exclus}</div></div></div>
       <div class="actions" style="margin-bottom:12px"><a class="btn ${T.discipline.attente ? '' : 'secondaire'}" href="#/discipline/sanctions">⚖ Sanctions à valider</a><a class="btn secondaire" href="#/discipline/stats">📊 Statistiques de discipline</a></div>` : ''}
     ${T.aVerifier ? `<p class="aide">${T.aVerifier} fiche(s) élève à vérifier.</p>` : ''}${T.comptesEnAttente && role() === 'admin' ? `<p class="aide">${T.comptesEnAttente} compte(s) en attente de validation.</p>` : ''}`;
+}
+
+/* ===================== IMPORT DES NOTES (v2.1) : Excel, Word, PDF, photo ===================== */
+const LIB_PDF = 'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js', LIB_PDF_W = 'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js';
+const LIB_OCR = 'https://cdn.jsdelivr.net/npm/tesseract.js@5.1.1/dist/tesseract.min.js';
+function attenteImport(txt) {
+  let v = $('#imp-attente'); if (!v) { v = document.createElement('div'); v.id = 'imp-attente'; v.className = 'bv-voile'; document.body.appendChild(v); }
+  v.innerHTML = `<div class="bv-carte"><div class="bv-corps"><div class="chargement">${esc(txt)}</div></div></div>`; return () => v.remove();
+}
+async function ocrImage(source, maj) {
+  await chargerScript(LIB_OCR);
+  const r = await Tesseract.recognize(source, 'fra', { logger: m => { if (m.status === 'recognizing text' && maj) maj(`Lecture de l'image… ${Math.round(m.progress * 100)} %`); } });
+  return r.data.text.split('\n').map(l => l.trim()).filter(Boolean).map(l => l.split(/\t| {2,}|\|/).map(x => x.trim()).filter(Boolean));
+}
+/** Lignes (tableau de cellules) extraites du fichier, et indique si la lecture est « approximative » (photo, scan). */
+async function lignesDuFichier(f, maj) {
+  const ext = (f.name.split('.').pop() || '').toLowerCase();
+  if (['xlsx', 'xls', 'csv', 'ods'].includes(ext)) {
+    await chargerScript('lib/xlsx.full.min.js');
+    const wb = XLSX.read(await f.arrayBuffer(), { type: 'array' }), ws = wb.Sheets[wb.SheetNames[0]];
+    return { lignes: XLSX.utils.sheet_to_json(ws, { header: 1, raw: false, defval: '' }).map(r => r.map(x => String(x).trim())), approx: false };
+  }
+  if (ext === 'docx') {
+    await chargerScript('lib/mammoth.browser.min.js');
+    const html = (await mammoth.convertToHtml({ arrayBuffer: await f.arrayBuffer() })).value, doc = new DOMParser().parseFromString(html, 'text/html');
+    const trs = [...doc.querySelectorAll('tr')];
+    if (trs.length) return { lignes: trs.map(tr => [...tr.querySelectorAll('td,th')].map(td => td.textContent.trim())), approx: false };
+    return { lignes: [...doc.querySelectorAll('p')].map(p => p.textContent.trim()).filter(Boolean).map(l => l.split(/\t| {2,}/)), approx: false };
+  }
+  if (ext === 'pdf') {
+    await chargerScript(LIB_PDF); pdfjsLib.GlobalWorkerOptions.workerSrc = LIB_PDF_W;
+    const pdf = await pdfjsLib.getDocument({ data: await f.arrayBuffer() }).promise, lignes = [];
+    let texte = 0;
+    for (let p = 1; p <= Math.min(pdf.numPages, 10); p++) {
+      const page = await pdf.getPage(p), tc = await page.getTextContent(), parY = {};
+      tc.items.forEach(it => { if (!it.str.trim()) return; texte += it.str.length; const y = Math.round(it.transform[5] / 3); (parY[y] = parY[y] || []).push({ x: it.transform[4], s: it.str.trim() }); });
+      Object.keys(parY).sort((a, b) => b - a).forEach(y => lignes.push(parY[y].sort((a, b) => a.x - b.x).map(o => o.s)));
+    }
+    if (texte > 30) return { lignes, approx: false };
+    // PDF scanné : on le lit comme une image
+    const tout = [];
+    for (let p = 1; p <= Math.min(pdf.numPages, 5); p++) {
+      const page = await pdf.getPage(p), vp = page.getViewport({ scale: 2 }), cv = document.createElement('canvas'); cv.width = vp.width; cv.height = vp.height;
+      await page.render({ canvasContext: cv.getContext('2d'), viewport: vp }).promise;
+      tout.push(...await ocrImage(cv, maj));
+    }
+    return { lignes: tout, approx: true };
+  }
+  if (/^image\//.test(f.type) || ['jpg', 'jpeg', 'png', 'webp', 'heic'].includes(ext)) return { lignes: await ocrImage(f, maj), approx: true };
+  throw new Error('Format non reconnu : utilisez Excel, CSV, Word (.docx), PDF ou une photo.');
+}
+/** Rapproche les lignes lues des élèves de la classe. */
+function rapprocherNotes(lignes, eleves, bareme, approx) {
+  const nrm = s => normal(String(s || '')).replace(/[^A-Z0-9 ]/g, ' ').replace(/\s+/g, ' ').trim();
+  const lireNote = t => { t = String(t || '').trim().toUpperCase().replace(',', '.'); if (/^(A|ABS|ABSENT|ABSENTE)$/.test(t)) return 'ABS'; if (/^(N|NN|NON NOTE)$/.test(t)) return 'NN'; return /^\d{1,3}(\.\d{1,2})?$/.test(t) ? +t : null; };
+  // colonne « note » repérée dans un en-tête
+  let colNote = -1;
+  for (const l of lignes.slice(0, 6)) { const i = l.findIndex(x => /\bnote|moy/i.test(x)); if (i >= 0) { colNote = i; break; } }
+  const fiches = eleves.map(e => ({ e, toks: nrm(e.nom + ' ' + e.prenoms).split(' ').filter(t => t.length >= 2), mat: nrm(e.matricule).replace(/ /g, '') }));
+  const res = {}, horsListe = [];
+  lignes.forEach(cells => {
+    const txt = nrm(cells.join(' ')), toks = new Set(txt.split(' '));
+    if (!txt) return;
+    let best = null, score = 0, second = 0, parMat = false;
+    fiches.forEach(f => {
+      if (f.mat && f.mat.length >= 5 && txt.replace(/ /g, '').includes(f.mat)) { if (!parMat) { best = f; score = 1; parMat = true; } return; }
+      if (parMat) return;
+      const s = f.toks.length ? f.toks.filter(t => toks.has(t)).length / f.toks.length : 0;
+      if (s > score) { second = score; score = s; best = f; } else if (s > second) second = s;
+    });
+    // la note : colonne repérée, sinon dernier nombre plausible de la ligne
+    let note = null;
+    if (colNote >= 0 && cells[colNote] !== undefined) note = lireNote(cells[colNote]);
+    if (note === null) {
+      const morceaux = cells.flatMap(c => String(c).split(/\s+/)).map(lireNote);
+      for (let i = morceaux.length - 1; i >= 1; i--) if (morceaux[i] !== null) { note = morceaux[i]; break; }
+    }
+    if (note === null) return;
+    if (!best || score < 0.5 || (!parMat && score - second < 0.2)) { if (score > 0 || cells.length > 1) horsListe.push({ texte: cells.join(' | '), note }); return; }
+    const deja = res[best.e.id];
+    const etat = typeof note === 'number' && note > bareme ? 'rouge' : (parMat || score === 1) && !approx && !deja ? 'vert' : 'orange';
+    res[best.e.id] = { note, etat: deja ? 'orange' : etat, source: cells.join(' | '), doublon: !!deja };
+  });
+  return { res, horsListe };
+}
+/** Ouvre l'écran de vérification ; résout avec { idEleve: note } ou null si annulé. */
+async function importerNotes(f, eleves, bareme) {
+  let fin = attenteImport('Lecture du fichier…');
+  let L;
+  try { L = await lignesDuFichier(f, t => { fin(); fin = attenteImport(t); }); } finally { fin(); }
+  const { res, horsListe } = rapprocherNotes(L.lignes, eleves, bareme, L.approx);
+  const nbOk = Object.values(res).filter(r => r.etat === 'vert').length, nbTot = Object.keys(res).length;
+  if (!nbTot) throw new Error("Aucune note n'a pu être rattachée à un élève de la classe. Vérifiez le fichier (noms ou matricules, et une note par ligne), ou utilisez le modèle Excel.");
+  return new Promise(ok => {
+    const v = document.createElement('div'); v.className = 'bv-voile';
+    const cl = { vert: ['P', 'OK'], orange: ['attente', 'À vérifier'], rouge: ['A', 'Erreur'] };
+    v.innerHTML = `<div class="bv-carte imp-carte"><div class="bv-tete"><div><b>Vérification des notes importées</b><span>${esc(f.name)}${L.approx ? ' — lecture automatique d\'une image : vérifiez chaque note' : ''}</span></div></div>
+      <div class="imp-corps"><p class="aide">${nbTot} élève(s) trouvé(s) sur ${eleves.length} — ${nbOk} sûr(s). Corrigez si besoin, puis « Placer dans la saisie ». Rien n'est enregistré à cette étape.</p>
+      <div class="table-defil"><table><thead><tr><th>Élève</th><th style="width:90px">Note /${bareme}</th><th>État</th><th>Ligne lue</th></tr></thead><tbody>
+      ${eleves.map(e => { const r = res[e.id]; const val = r ? String(r.note === 'ABS' ? 'A' : r.note === 'NN' ? 'N' : r.note).replace('.', ',') : '';
+        return `<tr class="${r ? 'imp-' + r.etat : ''}"><td><b>${esc(e.nom)}</b> ${esc(e.prenoms)}</td><td><input class="imp-n" data-e="${e.id}" value="${esc(val)}" inputmode="decimal" style="width:70px"></td>
+          <td>${r ? `<span class="badge ${cl[r.etat][0]}">${r.doublon ? 'En double' : cl[r.etat][1]}</span>` : '<span class="aide">non trouvé</span>'}</td><td class="aide">${r ? esc(r.source.slice(0, 80)) : ''}</td></tr>`; }).join('')}</tbody></table></div>
+      ${horsListe.length ? `<div class="alerte"><b>${horsListe.length} ligne(s) non rattachée(s)</b> à un élève de la classe :<ul>${horsListe.slice(0, 12).map(h => `<li>${esc(h.texte.slice(0, 90))}</li>`).join('')}</ul></div>` : ''}
+      <div class="actions" style="justify-content:flex-end;margin-top:10px"><button class="btn secondaire" id="imp-ann">Annuler</button><button class="btn vert" id="imp-ok">✔ Placer dans la saisie</button></div></div></div>`;
+    document.body.appendChild(v);
+    $('#imp-ann', v).onclick = () => { v.remove(); ok(null); };
+    $('#imp-ok', v).onclick = () => { const o = {}; $$('.imp-n', v).forEach(i => { if (i.value.trim()) o[i.dataset.e] = i.value.trim(); }); v.remove(); ok(o); };
+  });
 }
