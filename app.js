@@ -350,6 +350,7 @@ const PAGES = {
   'bulletins':     { titre: 'Bulletins', roles: ['directeur', 'censeur', 'admin'], fn: (c, a) => pageBulletins(c, a) },
   'caisse':        { titre: 'Caisse', roles: ['comptable', 'admin'], fn: c => pageCaisse(c) },
   'finances':      { titre: 'Finances', roles: ['comptable', 'admin', 'directeur', 'censeur'], fn: (c, a) => pageFinances(c, a) },
+  'stages':        { titre: 'Stages', roles: ['intervenant', 'educateur', 'censeur', 'admin', 'directeur', 'comptable'], si: () => accesStages(), fn: (c, a) => pageStages(c, a) },
   'discipline':    { titre: 'Discipline', roles: ['intervenant', 'educateur', 'censeur', 'admin', 'directeur'], fn: (c, a) => pageDiscipline(c, a) },
   'absences':      { titre: 'Absences élèves', roles: ['educateur', 'censeur', 'admin', 'directeur'], fn: (c, a) => pageAbsences(c, a) },
   'eleves':        { titre: 'Élèves', roles: ['educateur', 'comptable', 'censeur', 'admin', 'intervenant', 'directeur'], fn: (c, a) => pageEleves(c, a) },
@@ -373,6 +374,7 @@ const PAGES = {
   'absences-eleve': { titre: "Absences d'un élève", roles: ['educateur', 'censeur', 'admin', 'directeur'], cache: true, fn: (c, a) => pageAbsencesEleve(c, a) },
   'fiche':         { titre: 'Fiche', roles: ['censeur', 'admin', 'directeur'], cache: true, fn: pageFicheIntervenant },
   'frais-eleve':   { titre: "Frais d'un élève", roles: ['comptable', 'admin', 'directeur', 'censeur', 'educateur'], cache: true, fn: (c, a) => pageFraisEleve(c, a) },
+  'stagiaire':     { titre: 'Stagiaire', roles: ['intervenant', 'educateur', 'censeur', 'admin', 'directeur', 'comptable'], cache: true, fn: (c, a) => pageStagiaire(c, a) },
   'incident':      { titre: 'Incident', roles: ['intervenant', 'educateur', 'censeur', 'admin', 'directeur'], cache: true, fn: (c, a) => pageIncident(c, a) },
   'discipline-eleve': { titre: 'Fiche disciplinaire', roles: ['intervenant', 'educateur', 'censeur', 'admin', 'directeur'], cache: true, fn: (c, a) => pageDisciplineEleve(c, a) }
 };
@@ -380,7 +382,7 @@ let pastilles = stock.lire('pastilles', {});
 const GROUPES_MENU = [
   { id: 'accueil', titre: '🏠 Accueil', pages: ['direction', 'ma-fiche'] },
   { id: 'personnel', titre: '👨‍🏫 Personnel', pages: ['pointage', 'tableau', 'intervenants', 'rattrapages', 'reclamations', 'paiement', 'personnel'] },
-  { id: 'eleves', titre: '🎓 Élèves', pages: ['eleves', 'effectifs', 'appel', 'absences', 'discipline'] },
+  { id: 'eleves', titre: '🎓 Élèves', pages: ['eleves', 'effectifs', 'appel', 'absences', 'discipline', 'stages'] },
   { id: 'notes', titre: '📝 Notes', pages: ['notes', 'bulletins'] },
   { id: 'finances', titre: '💰 Finances', pages: ['caisse', 'finances'] },
   { id: 'admin', titre: '⚙ Administration', pages: ['emplois', 'comptes', 'journal'] }

@@ -467,3 +467,17 @@ tr.barre-ligne td { color: #999; }
 @keyframes bvFondu { from { opacity: 0; } } @keyframes bvMonte { from { transform: translateY(30px) scale(.96); opacity: 0; } } @keyframes bvBarre { from { width: 100%; } to { width: 0; } }
 @media (prefers-reduced-motion: reduce) { .bv-voile, .bv-carte { animation: none; } }
 @media print { .bv-voile { display: none !important; } }
+
+/* ===== v2.0 Stages ===== */
+.cases-classes { display: flex; flex-wrap: wrap; gap: 4px 14px; margin: 4px 0; } .cases-classes label { font-weight: 400; margin: 0; display: flex; align-items: center; gap: 4px; }
+.cases-classes input { width: auto; min-height: 0; }
+details.carte > summary { cursor: pointer; padding: 2px 0; } details.carte[open] > summary { margin-bottom: 8px; }
+#impression .coupon { border: 1.5px dashed #555; padding: 3mm; margin-top: 8mm; font-size: 9.5pt; line-height: 1.8; }
+#impression .conv { font-size: 9.5pt; line-height: 1.45; text-align: justify; } #impression .conv p { margin: 1.6mm 0; }
+#impression .ex-lab { text-align: right; font-weight: 700; font-size: 9pt; margin: 0 0 2mm; }
+#impression .grille-eval { width: 100%; border-collapse: collapse; margin: 3mm 0; }
+#impression .grille-eval th, #impression .grille-eval td { border: 1px solid #000; padding: 2mm; font-size: 10pt; }
+#impression .grille-eval th { background: #d9d9d9 !important; color: #000 !important; }
+#impression .info-stg { width: 100%; border-collapse: collapse; margin: 2mm 0 4mm; } #impression .info-stg td { border: 1px solid #999; padding: 1.5mm 2mm; font-size: 10pt; }
+#impression .zone-txt { border: 1px solid #999; height: 28mm; margin-bottom: 3mm; }
+#impression .lettre.stg { font-size: 11pt; line-height: 1.55; margin: 8px 4px; } #impression .lettre.stg p { margin: 2.2mm 0; }
