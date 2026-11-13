@@ -290,8 +290,8 @@ function formConnexion() {
       const r = await api('connexion', { matricule: f.m.value, code: f.c.value });
       S.session = { jeton: r.jeton, profil: r.profil, params: r.params }; stock.ecrire('session', S.session);
       api('photos', { matricules: [r.profil.matricule] }).then(p => { Object.assign(S.photos, p.photos); stock.ecrire('photos', S.photos); appliquerPhotos(); }).catch(() => {});
-      location.hash = r.profil.role === 'intervenant' ? '#/ma-fiche' : '#/pointage';
-      afficher();
+      location.hash = '#/'; stock.ecrire('bienvenue', 1);
+      afficher(); setTimeout(carteBienvenue, 600);
     } catch (err) { $('#msg').innerHTML = `<div class="erreur">${esc(err.message)}</div>`; b.disabled = false; }
   };
 }
@@ -418,11 +418,13 @@ function afficher() {
   let [page, arg] = (location.hash.slice(2) || '').split('/');
   const def = role() === 'intervenant' ? 'ma-fiche' : role() === 'directeur' ? 'direction' : role() === 'comptable' ? 'caisse' : role() === 'educateur' ? 'eleves' : 'pointage';
   if (!PAGES[page] || !PAGES[page].roles.includes(role())) { page = def; history.replaceState(null, '', '#/' + def); }
+  afficher.accueil = page === def;
   menu(); majReseau();
   c.innerHTML = '<div class="chargement">Chargement…</div>';
   window.scrollTo(0, 0);
   const tour = afficher.tour = (afficher.tour || 0) + 1;
-  Promise.resolve(PAGES[page].fn(c, decodeURIComponent(arg || ''))).then(lancerCarrousels).catch(e => {
+  const accueil = afficher.accueil;
+  Promise.resolve(PAGES[page].fn(c, decodeURIComponent(arg || ''))).then(() => { if (accueil && tour === afficher.tour && c.isConnected && !$('.salut', c)) c.insertAdjacentHTML('afterbegin', ligneSalut()); }).then(lancerCarrousels).catch(e => {
     if (tour !== afficher.tour) return;   // une autre page a été ouverte entre-temps
     c.innerHTML = `<div class="erreur">${esc(e.message)}</div>${e instanceof HorsLigne ? '<p class="aide">Cette page a besoin de la connexion la première fois. Le pointage du jour et l\'appel, eux, fonctionnent hors connexion.</p>' : ''}`;
   }).then(appliquerPhotos);
@@ -1009,7 +1011,7 @@ async function pagePersonnel(c) {
 
 /* ================= COMPTES (administrateur) ================= */
 async function pageComptes(c) {
-  const r = await api('comptes');
+  const [r, CV] = await Promise.all([api('comptes'), api('civilites').catch(() => ({ civilites: {} }))]);
   const attente = r.comptes.filter(x => x.statut === 'EN ATTENTE');
   const aCharger = attente.map(x => x.matricule).concat((r.photosAttente || []).map(x => x.matricule)).filter(m => !S.photos[m]);
   if (aCharger.length) await chargerPhotos(aCharger);
@@ -1030,12 +1032,13 @@ async function pageComptes(c) {
       <div class="actions"><button class="btn vert" data-ph="${esc(x.matricule)}" data-pd="OUI">✔ Valider</button><button class="btn rouge" data-ph="${esc(x.matricule)}" data-pd="NON">✖ Refuser</button></div></div></div>`).join('') || '<div class="vide">Aucune nouvelle photo en attente.</div>'}
     <h2>Tous les comptes (${r.comptes.length})</h2>
     <div class="table-defil"><table><thead><tr><th></th><th>Nom</th><th>Rôle</th><th>Statut</th><th>Dernière connexion</th><th></th></tr></thead><tbody>
-      ${r.comptes.sort((a, b) => cmp(a.nom, b.nom)).map(x => `<tr><td>${avatar(x.matricule, x.nom, 'petit')}</td><td><b>${esc(x.nom)}</b><div class="aide">${esc(x.matricule)}</div></td><td>${esc(x.role)}</td>
+      ${r.comptes.sort((a, b) => cmp(a.nom, b.nom)).map(x => `<tr><td>${avatar(x.matricule, x.nom, 'petit')}</td><td><b>${esc(x.nom)}</b><div class="aide">${esc(x.matricule)}</div><select class="civ" data-civ="${esc(x.matricule)}" style="width:auto;min-height:0;padding:2px 6px;font-size:.8rem;margin-top:3px"><option value="">civilité ?</option><option value="M" ${CV.civilites[x.matricule] === 'M' ? 'selected' : ''}>Monsieur</option><option value="F" ${CV.civilites[x.matricule] === 'F' ? 'selected' : ''}>Madame</option></select></td><td>${esc(x.role)}</td>
         <td><span class="badge ${x.statut === 'ACTIF' ? 'P' : x.statut === 'EN ATTENTE' ? 'attente' : 'A'}">${esc(x.statut)}</span></td><td>${esc(x.derniere_connexion || '—')}</td><td style="white-space:nowrap">${actions(x)}</td></tr>`).join('')}
     </tbody></table></div>
     <h2>Intervenants pas encore inscrits (${r.sansCompte.length})</h2>
     <p class="aide">${r.sansCompte.map(x => esc(x.nom) + ' (' + esc(x.matricule) + ')').join(' · ') || 'Tous les intervenants sont inscrits.'}</p>
     <div class="info">Pour donner le rôle de censeur ou d'administrateur à quelqu'un, ajoutez son matricule dans la feuille PARAMETRES du classeur (lignes CENSEURS et ADMINISTRATEURS).</div>`;
+  $$('[data-civ]', c).forEach(s => s.onchange = async () => { if (!s.value) return; try { await api('definirCivilite', { matricule: s.dataset.civ, civilite: s.value }); toast('Civilité enregistrée.'); } catch (e) { toast(e.message, 5000); } });
   $$('[data-d]', c).forEach(b => b.onclick = async () => {
     b.disabled = true;
     try { const x = await api('validerCompte', { matricule: b.dataset.m, decision: b.dataset.d }); toast(x.message); afficher(); } catch (e) { toast(e.message); b.disabled = false; }
@@ -1148,7 +1151,8 @@ function pageMonCompte(c) {
   const p = S.session.profil;
   c.innerHTML = `<h1>Mon compte</h1>
     <div class="carte"><div class="ident">${avatar(p.matricule, p.nom, 'grand')}<dl><dt>Nom</dt><dd>${esc(p.nom)}</dd><dt>Matricule</dt><dd>${esc(p.matricule)}</dd>
-      <dt>Fonction</dt><dd>${esc(p.fonction)}</dd><dt>Profil</dt><dd>${{ admin: 'Administrateur principal', censeur: 'Censeur', intervenant: 'Intervenant' }[p.role]}</dd></dl></div></div>
+      <dt>Fonction</dt><dd>${esc(p.fonction)}</dd><dt>Profil</dt><dd>${{ admin: 'Administrateur principal', censeur: 'Censeur', intervenant: 'Intervenant', educateur: 'Éducateur', comptable: 'Comptable', directeur: 'Directeur' }[p.role] || esc(p.role)}</dd>
+      <dt>Civilité</dt><dd><select id="mc-civ" style="width:auto;min-height:0;padding:3px 8px"><option value="">—</option><option value="M" ${p.civilite === 'M' ? 'selected' : ''}>Monsieur</option><option value="F" ${p.civilite === 'F' ? 'selected' : ''}>Madame</option></select></dd></dl></div></div>
     <div class="carte"><h2 style="margin-top:0">Changer ma photo</h2>
       <p class="aide">${p.role === 'admin' ? 'Votre nouvelle photo remplace immédiatement l\'ancienne.' : 'Votre nouvelle photo s\'affichera après validation par l\'administrateur.'}</p>
       ${zonePhotoHtml()}<div id="msg-ph"></div><button class="btn" id="env-ph" disabled style="margin-top:8px">Envoyer la nouvelle photo</button></div>
@@ -1179,4 +1183,48 @@ function pageMonCompte(c) {
     try { await api('deconnexion'); } catch (e) { /* hors ligne : déconnexion locale */ }
     S.file = []; stock.ecrire('file', []); deconnecterLocal();
   };
+  $('#mc-civ').onchange = async ev => { if (!ev.target.value) return; try { await api('definirCivilite', { civilite: ev.target.value }); S.session.profil.civilite = ev.target.value; stock.ecrire('session', S.session); toast('Enregistré.'); } catch (e) { toast(e.message, 5000); } };
+}
+
+/* ================= BIENVENUE (v1.9) ================= */
+const civ = c => c === 'F' ? 'Madame' : c === 'M' ? 'Monsieur' : '';
+const salutation = () => { const h = new Date().getHours(); return h < 13 ? 'Bonjour' : h < 18 ? 'Bon après-midi' : 'Bonsoir'; };
+const ENCOURAGEMENTS = ['Bonne journée de travail au LP Daoukro !', 'Ensemble, formons les professionnels de demain.', 'Chaque élève compte : merci pour votre engagement.',
+  'Une journée bien organisée est une journée réussie.', 'Votre travail fait la réussite du lycée. Merci !', 'Rigueur, discipline et travail : bonne journée !',
+  'Le savoir-faire se transmet un jour à la fois.', 'Merci de faire vivre le Lycée Professionnel de Daoukro.'];
+function encouragement() { const d = new Date(), n = d.getFullYear() * 400 + d.getMonth() * 31 + d.getDate(); return ENCOURAGEMENTS[n % ENCOURAGEMENTS.length]; }
+const nomAppel = p => `${civ(p.civilite) ? civ(p.civilite) + ' ' : ''}${p.nom}`;
+const LIB_ROLE = { admin: 'Administrateur', directeur: 'Directeur', censeur: 'Censeur', intervenant: 'Enseignant', educateur: 'Éducateur', comptable: 'Comptable' };
+function ligneSalut() { const p = S.session.profil; return `<div class="salut">${salutation()} <b>${esc(nomAppel(p))}</b>, ${encouragement().replace(/^./, x => x.toLowerCase())}</div>`; }
+async function carteBienvenue() {
+  if (!stock.lire('bienvenue', 0) || !S.session) return; stock.ecrire('bienvenue', 0);
+  const p = S.session.profil, voile = document.createElement('div'); voile.className = 'bv-voile';
+  const date = new Date().toLocaleDateString('fr-FR', { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' }).replace(/^./, x => x.toUpperCase());
+  const dessiner = B => {
+    const ph = S.photos[p.matricule];
+    voile.innerHTML = `<div class="bv-carte" role="dialog" aria-label="Bienvenue"><div class="bv-tete"><img src="medias/embleme-blanc.png" alt=""><div><b>${esc(String(S.session.params.etablissement || 'LP DAOUKRO').toUpperCase())}</b><span>${esc(date)}</span></div></div>
+      <div class="bv-corps">${ph ? `<img class="bv-photo" src="${ph}" alt="">` : `<div class="bv-photo bv-init">${esc((p.nom || '?').split(' ').map(x => x[0]).slice(0, 2).join(''))}</div>`}
+        <div class="bv-sal">${salutation()},</div><div class="bv-nom">${esc(nomAppel(p))}</div><div class="bv-fct">${esc(p.fonction || LIB_ROLE[p.role] || '')}</div>
+        ${!p.civilite ? `<div class="bv-civ"><span>Comment souhaitez-vous être appelé(e) ?</span><div class="actions" style="justify-content:center"><button class="btn petit" data-cv="M">Monsieur</button><button class="btn petit" data-cv="F">Madame</button></div></div>` : ''}
+        ${B ? `<div class="bv-jour">${B.conge ? `<p>🌴 Aujourd'hui : <b>${esc(B.conge)}</b></p>` : ''}
+          ${B.cours.length ? `<p class="bv-titre">📚 Vos cours aujourd'hui</p><ul>${B.cours.map(x => `<li><b>${esc(x.horaire)}</b> — ${esc(x.matiere)} <span class="aide">(${esc(x.classe)})</span></li>`).join('')}</ul>` : ''}
+          ${B.taches.length ? `<p class="bv-titre">📌 À faire</p><ul>${B.taches.map(x => `<li><a href="${x.lien}" data-lien><b>${x.nb}</b> ${esc(x.texte)}</a></li>`).join('')}</ul>` : ''}
+          ${!B.cours.length && !B.taches.length && !B.conge ? '<p>Rien d\'urgent ne vous attend aujourd\'hui.</p>' : ''}</div>` : '<div class="bv-jour aide">Préparation de votre journée…</div>'}
+        <p class="bv-enc">« ${esc(encouragement())} »</p>
+        <button class="btn large" id="bv-ok">Commencer</button><div class="bv-barre"><i></i></div></div></div>`;
+    $('#bv-ok', voile).onclick = fermer;
+    $$('[data-lien]', voile).forEach(a => a.onclick = () => fermer());
+    $$('[data-cv]', voile).forEach(b => b.onclick = async () => {
+      try { await api('definirCivilite', { civilite: b.dataset.cv }); p.civilite = b.dataset.cv; stock.ecrire('session', S.session); arreter(); dessiner(B); const s = $('.salut'); if (s) s.outerHTML = ligneSalut(); } catch (e) { toast(e.message, 5000); }
+    });
+    voile.onpointerdown = arreter;
+  };
+  let minuteur = null;
+  const arreter = () => { clearTimeout(minuteur); minuteur = null; const b = $('.bv-barre', voile); if (b) b.classList.add('arretee'); };
+  const fermer = () => { arreter(); voile.classList.add('sortie'); setTimeout(() => voile.remove(), 300); };
+  dessiner(null); document.body.appendChild(voile);
+  let B = null; try { B = await api('bienvenue'); if (B.civilite && !p.civilite) { p.civilite = B.civilite; stock.ecrire('session', S.session); } } catch (e) { B = { cours: [], taches: [], conge: '' }; }
+  if (!voile.isConnected) return;
+  dessiner(B);
+  if (p.civilite) minuteur = setTimeout(fermer, 8000); else arreter();   // la question Monsieur / Madame attend la réponse
 }

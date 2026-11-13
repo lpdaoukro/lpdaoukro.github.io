@@ -446,3 +446,24 @@ table.hbarres td { border: 0; padding: 4px 6px; }
 .rc-sign div { border: 1px solid #999; height: 17mm; padding-top: 1mm; border-radius: 1mm; } .rc-sign small { display: block; font-weight: 400; font-size: 7.5pt; }
 .recu-annule { position: absolute; top: 50mm; left: 45mm; font-size: 40pt; color: rgba(192,0,0,.35); border: 4px solid rgba(192,0,0,.35); padding: 0 8mm; transform: rotate(-15deg); font-weight: 800; z-index: 2; }
 tr.barre-ligne td { color: #999; }
+
+/* ===== v1.9 Bienvenue ===== */
+.salut { background: linear-gradient(90deg, #E8F1F8, #fff); border-left: 4px solid var(--bleu); border-radius: 8px; padding: 9px 14px; margin: 0 0 14px; font-size: .95rem; color: #1b2a3a; }
+.bv-voile { position: fixed; inset: 0; background: rgba(10, 30, 50, .55); display: flex; align-items: center; justify-content: center; z-index: 1000; padding: 16px; animation: bvFondu .3s ease; }
+.bv-voile.sortie { opacity: 0; transition: opacity .3s; }
+.bv-carte { background: #fff; border-radius: 16px; width: min(440px, 100%); max-height: 92vh; overflow-y: auto; box-shadow: 0 20px 60px rgba(0,0,0,.35); animation: bvMonte .4s cubic-bezier(.2,.9,.3,1.2); }
+.bv-tete { display: flex; align-items: center; gap: 12px; background: #1F4E78; color: #fff; padding: 12px 16px; border-bottom: 4px solid #F77F00; }
+.bv-tete img { height: 42px; } .bv-tete b { display: block; font-size: .95rem; } .bv-tete span { font-size: .8rem; opacity: .9; }
+.bv-corps { padding: 18px 20px 16px; text-align: center; }
+.bv-photo { width: 84px; height: 84px; border-radius: 50%; object-fit: cover; border: 3px solid #fff; box-shadow: 0 0 0 3px #009E60; margin: -2px auto 8px; display: block; }
+.bv-init { display: flex; align-items: center; justify-content: center; background: #E8F1F8; color: #1F4E78; font-weight: 800; font-size: 1.7rem; }
+.bv-sal { font-size: 1rem; color: #555; } .bv-nom { font-size: 1.35rem; font-weight: 800; color: #1F4E78; line-height: 1.25; } .bv-fct { font-size: .88rem; color: #666; margin-bottom: 10px; }
+.bv-civ { background: #FFF6E5; border-radius: 10px; padding: 10px; margin: 8px 0; font-size: .9rem; } .bv-civ span { display: block; margin-bottom: 6px; font-weight: 600; }
+.bv-jour { text-align: left; background: #F6F8FA; border-radius: 10px; padding: 8px 14px; margin: 8px 0; font-size: .9rem; }
+.bv-jour ul { margin: 2px 0 6px; padding-left: 18px; } .bv-jour li { margin: 3px 0; } .bv-jour a { color: #1F4E78; } .bv-titre { margin: 6px 0 2px; font-weight: 700; }
+.bv-enc { font-style: italic; color: #009E60; margin: 10px 0 12px; font-size: .92rem; }
+.bv-barre { height: 3px; background: #eee; border-radius: 2px; margin-top: 10px; overflow: hidden; } .bv-barre i { display: block; height: 100%; background: #F77F00; animation: bvBarre 8s linear forwards; }
+.bv-barre.arretee i { animation-play-state: paused; opacity: .4; }
+@keyframes bvFondu { from { opacity: 0; } } @keyframes bvMonte { from { transform: translateY(30px) scale(.96); opacity: 0; } } @keyframes bvBarre { from { width: 100%; } to { width: 0; } }
+@media (prefers-reduced-motion: reduce) { .bv-voile, .bv-carte { animation: none; } }
+@media print { .bv-voile { display: none !important; } }
