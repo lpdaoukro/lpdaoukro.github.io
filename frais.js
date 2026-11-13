@@ -319,7 +319,7 @@ function blocRecu(R, copie) {
         <div><span>Élève</span><b>${esc(e.nom)} ${esc(e.prenoms || '')}</b></div><div><span>Classe</span><b>${esc(R.classe)}</b></div>
         <div><span>Matricule</span><b>${esc(e.matricule || '—')}</b></div><div><span>Date</span><b>${fr(R.date)} ${esc(R.heure || '')}</b></div>
         <div><span>Versé par</span><b>${esc(R.payeur || 'Parent / tuteur')}</b></div><div><span>Mode</span><b>${esc(R.mode)}${R.reference ? ' — ' + esc(R.reference) : ''}</b></div></div>
-      <div class="rc-qr">${qr}<small>Vérification</small></div></div>
+      ${qr ? `<div class="rc-qr">${qr}<small>Vérification</small></div>` : ''}</div>
     <table class="rc-table"><thead><tr><th>Désignation</th><th style="width:38mm">Montant (F CFA)</th></tr></thead><tbody>
       ${R.lignes.map(l => `<tr><td>${esc(R.rubriques[l.rubrique] || l.rubrique)}</td><td class="n">${fcfa(l.montant)}</td></tr>`).join('')}
       <tr class="rc-total"><td>TOTAL PAYÉ</td><td class="n">${fcfa(R.total)}</td></tr></tbody></table>
@@ -329,8 +329,41 @@ function blocRecu(R, copie) {
   </div>`;
 }
 const S_ETAB = () => String(S.session.params.etablissement || 'LP DAOUKRO');
+const RC_CSS = `/* ===== v1.8 Frais de scolarité : reçu (2 exemplaires sur une feuille A4) ===== */
+@media print { @page recu { size: A4; margin: 0; } #impression .page.rc-page { page: recu; } }
+#impression .rc-page { width: 210mm; height: 296mm; box-sizing: border-box; padding: 7mm 10mm; overflow: hidden; color: #000; font-size: 9.5pt; }
+.rc { height: 136mm; box-sizing: border-box; border: 1.2px solid #000; border-radius: 2mm; padding: 3mm 4mm; position: relative; overflow: hidden; display: flex; flex-direction: column; }
+.rc-coupe { height: 10mm; display: flex; align-items: center; color: #666; font-size: 11pt; }
+.rc-coupe::after { content: ''; flex: 1; border-top: 1.2px dashed #888; margin-left: 2mm; }
+.rc-tete { display: grid; grid-template-columns: 1fr auto 1fr; align-items: center; gap: 3mm; }
+.rc-tete .rc-min { height: 21mm; justify-self: start; }
+.rc-tete .rc-logo { height: 20mm; justify-self: end; }
+.rc-etab { text-align: center; line-height: 1.3; }
+.rc-etab b { display: block; font-size: 13.5pt; letter-spacing: .3px; }
+.rc-etab span { display: block; font-size: 8pt; color: #222; }
+.rc-etab .ent-tri { display: flex; justify-content: center; gap: 0; margin-top: 1mm; } .rc-etab .ent-tri i { width: 12mm; height: 1.2mm; }
+.rc-etab .ent-tri i:nth-child(1) { background: #F77F00; } .rc-etab .ent-tri i:nth-child(2) { background: #ccc; } .rc-etab .ent-tri i:nth-child(3) { background: #009E60; }
+.rc-titre { display: grid; grid-template-columns: 1fr auto 1fr; align-items: center; background: #1F4E78; color: #fff; padding: 1.6mm 3mm; margin: 2mm 0; border-radius: 1mm; -webkit-print-color-adjust: exact; print-color-adjust: exact; }
+.rc-titre span { font-weight: 700; font-size: 11pt; } .rc-titre b { font-size: 13pt; text-align: center; } .rc-titre em { font-style: normal; font-size: 8pt; text-align: right; letter-spacing: .3px; }
+.rc-corps { display: flex; gap: 3mm; align-items: stretch; }
+.rc-infos { flex: 1; display: grid; grid-template-columns: 1.35fr 1fr; border: 1px solid #999; border-radius: 1mm; }
+.rc-infos div { padding: 1mm 2mm; border-bottom: 1px solid #ddd; display: flex; gap: 2mm; align-items: baseline; }
+.rc-infos div:nth-last-child(-n+2) { border-bottom: 0; }
+.rc-infos span { font-size: 7.5pt; color: #444; min-width: 15mm; } .rc-infos b { font-size: 9.5pt; }
+.rc-qr { width: 23mm; display: flex; flex-direction: column; align-items: center; justify-content: center; border: 1px solid #999; border-radius: 1mm; }
+.rc-qr small { font-size: 6.5pt; color: #444; margin-top: .5mm; }
+#impression .rc-table, .rc-table { width: 100%; border-collapse: collapse; margin: 2mm 0 1.5mm; }
+#impression .rc-table th, #impression .rc-table td { border: 1px solid #000; padding: 1.2mm 2.5mm; font-size: 9.5pt; }
+#impression .rc-table th { background: #d9d9d9 !important; color: #000 !important; text-align: center; }
+#impression .rc-table td.n { text-align: right; }
+#impression .rc-table .rc-total td { font-weight: 800; font-size: 10.5pt; background: #EAF3EA !important; -webkit-print-color-adjust: exact; print-color-adjust: exact; }
+.rc-lettres { font-size: 9pt; } .rc-sit { font-size: 8pt; color: #333; margin-top: 1mm; }
+.rc-sign { margin-top: auto; display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 3mm; text-align: center; font-size: 8.5pt; font-weight: 700; }
+.rc-sign div { border: 1px solid #999; height: 17mm; padding-top: 1mm; border-radius: 1mm; } .rc-sign small { display: block; font-weight: 400; font-size: 7.5pt; }
+.recu-annule { position: absolute; top: 50mm; left: 45mm; font-size: 40pt; color: rgba(192,0,0,.35); border: 4px solid rgba(192,0,0,.35); padding: 0 8mm; transform: rotate(-15deg); font-weight: 800; z-index: 2; }
+`;
 function imprimerRecu(R) {
-  imprimer(`<div class="page rc-page">${blocRecu(R, 'ORIGINAL — PARENT')}<div class="rc-coupe">✂</div>${blocRecu(R, 'SOUCHE — CAISSE')}</div>`);
+  imprimer(`<style>${RC_CSS}</style><div class="page rc-page">${blocRecu(R, 'ORIGINAL — PARENT')}<div class="rc-coupe">✂</div>${blocRecu(R, 'SOUCHE — CAISSE')}</div>`, `Reçu de paiement ${R.numero} - ${R.eleve.nom} ${R.eleve.prenoms || ''} - ${R.classe}`);
 }
 function imprimerCloture(k, lib) {
   if (!k) return;

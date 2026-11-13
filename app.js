@@ -662,14 +662,22 @@ function ajusterPages(z) {
   });
   z.style.cssText = '';
 }
-function imprimer(html) {
+/** Nom proposé quand on enregistre en PDF : le navigateur prend le titre de la page. */
+function nomFichier(t) { return String(t || '').replace(/[\\/:*?"<>|]+/g, '-').replace(/\s+/g, ' ').trim().slice(0, 120); }
+function imprimer(html, titre) {
   const z = $('#impression'); z.innerHTML = html;
+  if (!titre) { const b = $('.bandeau, .off-titre', z); titre = b ? b.textContent.trim().toLowerCase().replace(/^./, x => x.toUpperCase()) : ''; }
+  const titreAvant = imprimer.titreAvant || document.title; imprimer.titreAvant = titreAvant;
+  if (titre) document.title = nomFichier(titre);
   ajusterPages(z);
   const tour = imprimer.tour = (imprimer.tour || 0) + 1;
   document.body.classList.add('imprime');
-  const fin = () => { window.removeEventListener('afterprint', fin); if (tour !== imprimer.tour) return; document.body.classList.remove('imprime'); z.innerHTML = ''; };
+  const fin = () => { window.removeEventListener('afterprint', fin); if (tour !== imprimer.tour) return; document.body.classList.remove('imprime'); z.innerHTML = ''; document.title = imprimer.titreAvant; imprimer.titreAvant = null; };
   window.addEventListener('afterprint', fin);
-  setTimeout(() => { window.print(); setTimeout(() => { if (document.body.classList.contains('imprime') && !matchMedia('print').matches) fin(); }, 1500); }, 200);
+  // on attend que les logos et photos soient chargés (4 s au plus), sinon ils manquent sur la feuille
+  const imgs = $$('img', z).filter(i => !i.complete);
+  const pret = Promise.race([Promise.all(imgs.map(i => new Promise(ok => { i.onload = i.onerror = ok; }))), new Promise(ok => setTimeout(ok, 4000))]);
+  pret.then(() => setTimeout(() => { if (tour !== imprimer.tour) return; window.print(); setTimeout(() => { if (document.body.classList.contains('imprime') && !matchMedia('print').matches) fin(); }, 1500); }, 200));
 }
 const entete = titre => `<div class="entete-doc"><img src="medias/ministere.png" class="ent-ministere" alt=""><div class="ent-centre"><b>${esc(String(S.session.params.etablissement).toUpperCase())}</b><span>Année scolaire ${esc(S.session.params.annee)}</span><span class="ent-tri"><i></i><i></i><i></i></span></div><img src="medias/embleme-noir-petit.png" class="ent-lycee" alt=""></div><div class="bandeau">${esc(titre)}</div>`;
 function identPrint(F) {

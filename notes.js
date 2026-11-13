@@ -466,12 +466,12 @@ async function vueBulletinsClasse(c, classe, sem) {
   $$('[data-imp]', c).forEach(b => b.onclick = async () => {
     const el = K.eleves.find(e => e.id === b.dataset.imp);
     if (BQ[el.id]) { if (!(await documentAutorise(el, 'BULLETIN', sem))) return; delete BQ[el.id]; }
-    await prep([b.dataset.imp]); imprimer(bulletinHtml(K, el).repeat(ex()));
+    await prep([b.dataset.imp]); imprimer(bulletinHtml(K, el).repeat(ex()), `Bulletin S${sem} - ${el.nom} ${el.prenoms} - ${K.classe}`);
   });
   $('#bc-imp').onclick = async () => {
     const l = K.eleves.filter(e => (e.situation === 'INSCRIT' || e.moy !== null) && !BQ[e.id]), nb = Object.keys(BQ).length;
     if (nb && !confirm(`${nb} bulletin(s) retenu(s) pour impayé ne seront pas imprimés (🔒 dans la liste). Ils pourront être imprimés un par un après autorisation.\n\nImprimer les ${l.length} autres ?`)) return;
-    await prep(l.map(e => e.id)); imprimer(l.map(e => bulletinHtml(K, e).repeat(ex())).join(''));
+    await prep(l.map(e => e.id)); imprimer(l.map(e => bulletinHtml(K, e).repeat(ex())).join(''), `Bulletins S${sem} - ${K.classe}`);
   };
   $('#bc-pv').onclick = () => imprimerPV(K);
   $('#bc-mat').onclick = () => imprimerMatrice(K);
