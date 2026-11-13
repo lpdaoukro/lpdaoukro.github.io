@@ -306,21 +306,31 @@ function ongletTarifs(z, R) {
 
 /* ===================== IMPRESSIONS ===================== */
 function blocRecu(R, copie) {
-  const e = R.eleve, S = R.situation, P = S && S.lignes ? S : null;
-  const qr = qrSvg(`${S_ETAB()} — Reçu ${R.numero} du ${fr(R.date)} — ${e.nom} ${e.prenoms || ''} (${R.classe}) — ${R.total} F — ${R.statut}`, 20);
-  return `<div class="recu">${entete('REÇU DE PAIEMENT N° ' + R.numero + (copie ? ' — ' + copie : ''))}
+  const e = R.eleve, Sit = R.situation, P = S.session.params, E = P.etab || {};
+  const qr = qrSvg(`${S_ETAB()} — Reçu ${R.numero} du ${fr(R.date)} — ${e.nom} ${e.prenoms || ''} (${R.classe}) — ${R.total} F — ${R.statut}`, 19);
+  const tranche = Sit ? Sit.lignes.filter(l => l.tranches && l.tranches.length && l.reste) : [];
+  return `<div class="rc">
+    <div class="rc-tete"><img class="rc-min" src="medias/ministere.png" alt="">
+      <div class="rc-etab"><b>${esc(String(P.etablissement).toUpperCase())}</b><span>${E.code ? 'Code ' + esc(E.code) + ' · ' : ''}${esc(E.adresse || 'Daoukro')}${E.tel ? ' · Tél. ' + esc(E.tel) : ''}</span><span>Année scolaire ${esc(P.annee)}</span><span class="ent-tri"><i></i><i></i><i></i></span></div>
+      <img class="rc-logo" src="medias/logo-complet.png" alt=""></div>
+    <div class="rc-titre"><span>REÇU DE PAIEMENT</span><b>N° ${esc(R.numero)}</b><em>${esc(copie)}</em></div>
     ${R.statut !== 'VALIDE' ? '<div class="recu-annule">ANNULÉ</div>' : ''}
-    <div class="recu-haut"><div><p>Reçu de : <b>${esc(R.payeur || 'parent / tuteur')}</b></p><p>Pour l'élève : <b>${esc(e.nom)} ${esc(e.prenoms || '')}</b> — Classe : <b>${esc(R.classe)}</b> — Matricule : ${esc(e.matricule || '—')}</p>
-      <p>Date : <b>${fr(R.date)}</b> ${esc(R.heure || '')} — Mode : <b>${esc(R.mode)}</b>${R.reference ? ' — Réf. ' + esc(R.reference) : ''}</p></div><div class="recu-qr">${qr}</div></div>
-    <table><thead><tr><th>Rubrique</th><th style="width:35mm">Montant</th></tr></thead><tbody>${R.lignes.map(l => `<tr><td>${esc(R.rubriques[l.rubrique] || l.rubrique)}</td><td style="text-align:right">${fcfa(l.montant)}</td></tr>`).join('')}
-      <tr class="total"><td>TOTAL</td><td style="text-align:right">${fcfa(R.total)}</td></tr></tbody></table>
-    <p>Arrêté le présent reçu à la somme de : <b>${esc(enLettres(R.total))} francs CFA</b>.</p>
-    ${P ? `<p class="aide-print">Situation au ${fr(dateLocale())} — Payé : ${fcfa(P.paye)} · Reste à payer : <b>${fcfa(P.reste)}</b>${P.lignes.filter(l => l.tranches && l.tranches.length && l.reste).map(l => ` · ${esc(l.libelle)} : solde avant le ${fr(l.tranches[1].limite) || '…'}`).join('')}</p>` : ''}
-    <div class="sign-2"><div>Le Caissier<br><span class="aide-print">${esc(R.caissier)}</span></div><div>Le déposant</div></div></div>`;
+    <div class="rc-corps"><div class="rc-infos">
+        <div><span>Élève</span><b>${esc(e.nom)} ${esc(e.prenoms || '')}</b></div><div><span>Classe</span><b>${esc(R.classe)}</b></div>
+        <div><span>Matricule</span><b>${esc(e.matricule || '—')}</b></div><div><span>Date</span><b>${fr(R.date)} ${esc(R.heure || '')}</b></div>
+        <div><span>Versé par</span><b>${esc(R.payeur || 'Parent / tuteur')}</b></div><div><span>Mode</span><b>${esc(R.mode)}${R.reference ? ' — ' + esc(R.reference) : ''}</b></div></div>
+      <div class="rc-qr">${qr}<small>Vérification</small></div></div>
+    <table class="rc-table"><thead><tr><th>Désignation</th><th style="width:38mm">Montant (F CFA)</th></tr></thead><tbody>
+      ${R.lignes.map(l => `<tr><td>${esc(R.rubriques[l.rubrique] || l.rubrique)}</td><td class="n">${fcfa(l.montant)}</td></tr>`).join('')}
+      <tr class="rc-total"><td>TOTAL PAYÉ</td><td class="n">${fcfa(R.total)}</td></tr></tbody></table>
+    <div class="rc-lettres">Arrêté le présent reçu à la somme de : <b>${esc(enLettres(R.total))} francs CFA</b></div>
+    ${Sit ? `<div class="rc-sit">Situation au ${fr(dateLocale())} : payé ${fcfa(Sit.paye)} · <b>reste à payer ${fcfa(Sit.reste)}</b>${tranche.map(l => ` · ${esc(l.libelle)} : solde avant le ${fr(l.tranches[1].limite) || '…'}`).join('')}</div>` : ''}
+    <div class="rc-sign"><div>Le Caissier<small>${esc(R.caissier)}</small></div><div>Cachet de la comptabilité</div><div>Le déposant</div></div>
+  </div>`;
 }
 const S_ETAB = () => String(S.session.params.etablissement || 'LP DAOUKRO');
 function imprimerRecu(R) {
-  imprimer(`<div class="page">${blocRecu(R, 'ORIGINAL')}<div class="decoupe">✂ - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -</div>${blocRecu(R, 'SOUCHE')}</div>`);
+  imprimer(`<div class="page rc-page">${blocRecu(R, 'ORIGINAL — PARENT')}<div class="rc-coupe">✂</div>${blocRecu(R, 'SOUCHE — CAISSE')}</div>`);
 }
 function imprimerCloture(k, lib) {
   if (!k) return;
