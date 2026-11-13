@@ -53,7 +53,9 @@ async function ongletIntervenant(z, R) {
       <div id="formulaire"></div>
       ${JOURS.map(j => { const l = actives.filter(s => s.jour === j).sort(parHoraire); return `<h3>${j}</h3>${l.length ? `<div class="table-defil"><table><thead><tr><th>Horaire</th><th>Matière</th><th>Classe</th><th>Salle</th><th class="n">H</th><th>Validité</th><th></th></tr></thead><tbody>${l.map(ligneS).join('')}</tbody></table></div>` : '<div class="aide">Pas de cours.</div>'}`; }).join('')}
       ${finies.length ? `<details style="margin-top:14px"><summary>Séances terminées (historique : ${finies.length})</summary><div class="table-defil"><table><tbody>
-        ${finies.sort((a, b) => JOURS.indexOf(a.jour) - JOURS.indexOf(b.jour) || parHoraire(a, b)).map(s => `<tr style="opacity:.6"><td>${esc(s.jour)}</td><td>${esc(s.horaire)}</td><td>${esc(s.matiere)}</td><td>${esc(s.classe)}</td><td class="aide">au ${fr(s.au)}</td></tr>`).join('')}</tbody></table></div></details>` : ''}`;
+        ${finies.sort((a, b) => JOURS.indexOf(a.jour) - JOURS.indexOf(b.jour) || parHoraire(a, b)).map(s => `<tr><td style="opacity:.7">${esc(s.jour)}</td><td style="opacity:.7">${esc(s.horaire)}</td><td style="opacity:.7">${esc(s.matiere)}</td><td style="opacity:.7">${esc(s.classe)}</td><td class="aide">${s.du ? 'du ' + fr(s.du) + ' ' : ''}au ${fr(s.au)}</td>
+          <td style="white-space:nowrap"><button class="btn petit secondaire" data-ret="${s.id}">↺ Rétablir</button> <button class="btn petit secondaire" data-fin="${s.id}">Changer la fin</button></td></tr>`).join('')}</tbody></table></div>
+        <p class="aide">« Rétablir » annule l'arrêt de la séance. « Changer la fin » permet de l'arrêter plus tôt (impossible avant des pointages déjà faits : utilisez alors « Remplacer » en créant la nouvelle séance).</p></details>` : ''}`;
     appliquerPhotos();
     $('#imp1').onclick = () => imprimerEdtIntervenants([id], T);
     if ($('#sugg')) $('#sugg').onclick = () => suggerer(id, E.personne.nom);
@@ -98,6 +100,11 @@ async function ongletIntervenant(z, R) {
       f.scrollIntoView({ behavior: 'smooth' });
     };
     $('#ajouter').onclick = () => form(null);
+    $$('[data-ret]', zz).forEach(b => b.onclick = async () => { try { toast((await api('finSeance', { id: b.dataset.ret, au: '' })).message); charger(); } catch (e) { toast(e.message, 7000); } });
+    $$('[data-fin]', zz).forEach(b => b.onclick = async () => {
+      const x = E.seances.find(s => s.id === b.dataset.fin); const au = prompt(`Dernier jour où la séance compte (AAAA-MM-JJ) :`, x.au); if (!au) return;
+      try { toast((await api('finSeance', { id: x.id, au })).message, 6000); charger(); } catch (e) { toast(e.message, 9000); }
+    });
     $$('[data-mod]', zz).forEach(b => b.onclick = () => form(E.seances.find(s => s.id === b.dataset.mod)));
     $$('[data-sup]', zz).forEach(b => b.onclick = () => form(E.seances.find(s => s.id === b.dataset.sup), 'sup'));
   };
@@ -108,7 +115,11 @@ async function ongletIntervenant(z, R) {
 function pageConflit(r, d, envoyer) {
   const v = document.createElement('div'); v.className = 'bv-voile';
   v.innerHTML = `<div class="bv-carte imp-carte"><div class="bv-tete" style="background:${r.bloquant ? '#C0392B' : '#E67E22'}"><div><b>${r.bloquant ? '⛔ Chevauchement : la séance ne peut pas être placée ici' : '⚠ Même classe à la même heure'}</b><span>${esc(d.jour)} ${esc(d.debut)}-${esc(d.fin)} · ${esc(d.classe)}${d.salle ? ' · ' + esc(d.salle) : ''}</span></div></div>
-    <div class="imp-corps"><h3 style="margin-top:0">En conflit avec :</h3><ul>${r.conflits.map(c => `<li><b>${esc(c.jour)} ${esc(c.horaire)}</b> — ${esc(c.matiere)} · ${esc(c.classe)} · ${esc(c.nom)}${c.salle ? ' · ' + esc(c.salle) : ''} <span class="badge ${c.types.some(t => t !== 'CLASSE') ? 'A' : 'attente'}">${c.types.map(t => TYPES_CONFLIT[t]).join(', ')}</span></li>`).join('')}</ul>
+    <div class="imp-corps"><h3 style="margin-top:0">En conflit avec :</h3><ul class="cf-liste">${r.conflits.map(c => `<li><div><b>${esc(c.jour)} ${esc(c.horaire)}</b> — ${esc(c.matiere)} · ${esc(c.classe)} · ${esc(c.nom)}${c.salle ? ' · ' + esc(c.salle) : ''} <span class="badge ${c.types.some(t => t !== 'CLASSE') ? 'A' : 'attente'}">${c.types.map(t => TYPES_CONFLIT[t]).join(', ')}</span>
+      <div class="aide">${c.du ? 'en vigueur depuis le ' + fr(c.du) : 'en vigueur depuis la rentrée'}${c.au ? ' jusqu\'au ' + fr(c.au) + ' (séance déjà arrêtée)' : ''}</div></div>
+      <button class="btn petit orange" data-rmp="${c.id}">↻ Remplacer par la nouvelle à partir du ${fr(d.du)}</button></li>`).join('')}</ul>
+    ${r.conflits.length > 1 ? `<button class="btn orange" id="cf-tout" style="margin-bottom:10px">↻ Remplacer les ${r.conflits.length} séances à partir du ${fr(d.du)}</button>` : ''}
+    <p class="aide">« Remplacer » : la séance en conflit ne compte plus à partir du ${fr(d.du)} (même si cette date est passée). Ses pointages faits depuis cette date passent sur la nouvelle séance quand c'est le même intervenant.</p>
     ${!r.bloquant ? `<div class="info">La classe a déjà cours à ce moment. Si la classe est <b>partagée en groupes</b> (TP, ateliers), vous pouvez confirmer.</div><button class="btn orange" id="cf-gr" style="margin-bottom:12px">✔ Ce sont des groupes séparés : enregistrer</button>` : ''}
     <h3>Créneaux libres proposés <span class="aide">(intervenant, classe et salle disponibles, même durée)</span></h3>
     ${r.propositions.length ? `<div class="creneaux">${r.propositions.map((p, i) => `<button class="btn secondaire ${p.memeJour ? 'meme-jour' : ''}" data-i="${i}">${esc(p.jour)}<br><b>${esc(p.debut)} – ${esc(p.fin)}</b></button>`).join('')}</div>` : '<p class="aide">Aucun créneau libre de cette durée dans la semaine.</p>'}
@@ -117,6 +128,8 @@ function pageConflit(r, d, envoyer) {
   const essayer = async extra => { try { v.remove(); await envoyer(extra); } catch (e) { toast(e.message, 6000); } };
   $('#cf-ann', v).onclick = () => v.remove();
   if ($('#cf-gr', v)) $('#cf-gr', v).onclick = () => essayer({ groupes: true });
+  $$('[data-rmp]', v).forEach(b => b.onclick = () => { if (confirm('Remplacer cette séance par la nouvelle à partir du ' + fr(d.du) + ' ?')) essayer({ remplacer: [b.dataset.rmp], groupes: true }); });
+  if ($('#cf-tout', v)) $('#cf-tout', v).onclick = () => { if (confirm('Remplacer toutes ces séances à partir du ' + fr(d.du) + ' ?')) essayer({ remplacer: r.conflits.map(c => c.id), groupes: true }); };
   $$('[data-i]', v).forEach(b => b.onclick = () => { const p = r.propositions[+b.dataset.i]; const fs = $('#fs'); if (fs) { fs.jour.value = p.jour; fs.debut.value = p.debut; fs.fin.value = p.fin; } essayer({ jour: p.jour, debut: p.debut, fin: p.fin }); });
 }
 

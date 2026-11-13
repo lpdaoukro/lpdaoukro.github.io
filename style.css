@@ -520,3 +520,4 @@ tr.imp-vert td { background: #EEF8F1; } tr.imp-orange td { background: #FFF6E5; 
 #impression .edt-grille td.edt-s { background: #EAF2FB !important; -webkit-print-color-adjust: exact; print-color-adjust: exact; line-height: 1.25; }
 #impression .edt-grille td.edt-s hr { border: 0; border-top: 1px dashed #888; margin: 1mm 0; }
 #impression .edt-grille tr td { height: 10mm; } #impression .edt-grille tr.edt-pause td { height: 4mm; background: #ddd !important; font-size: 7.5pt; font-weight: 700; letter-spacing: 2px; -webkit-print-color-adjust: exact; print-color-adjust: exact; }
+.cf-liste { padding-left: 0; list-style: none; } .cf-liste li { display: flex; gap: 10px; justify-content: space-between; align-items: center; border-bottom: 1px solid #eee; padding: 6px 0; flex-wrap: wrap; }
