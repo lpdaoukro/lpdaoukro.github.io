@@ -56,6 +56,16 @@ const S = {
 };
 const modeProf = () => !!(S.session && S.session.profil.double && stock.lire('mode', 'admin') === 'professeur');
 const role = () => S.session && (S.session.profil.double ? (modeProf() ? 'intervenant' : 'admin') : S.session.profil.role);
+/* droits réglables (v2.3) : niveau effectif AGIT / CONSULTE / AUCUN d'un module pour l'utilisateur */
+const RANG_DROIT = { AUCUN: 0, CONSULTE: 1, AGIT: 2 };
+const droit = m => { if (!S.session || modeProf()) return undefined; if (role() === 'admin') return 'AGIT'; return (S.session.profil.droits || {})[m]; };
+function accesPage(k) {
+  const p = PAGES[k]; if (!p) return false;
+  const base = p.roles.includes(role());
+  if (!p.mod || modeProf() || role() === 'admin') return base;
+  const n = droit(p.mod[0]); if (n === undefined) return base;
+  return RANG_DROIT[n] >= RANG_DROIT[p.mod[1]];
+}
 const encadrement = () => ['admin', 'censeur'].includes(role());
 
 /* ================= SERVEUR ================= */
@@ -349,35 +359,36 @@ const PAGES = {
   'ma-fiche':      { titre: 'Ma fiche', roles: ['intervenant', 'censeur', 'admin'], si: () => S.session.profil.intervenant || role() === 'intervenant', fn: pageMaFiche },
   'appel':         { titre: 'Appel', roles: ['intervenant', 'educateur', 'admin'], fn: (c, a) => pageAppel(c, a) },
   'notes':         { titre: 'Notes', roles: ['intervenant', 'censeur', 'admin', 'directeur'], fn: c => pageNotes(c) },
-  'bulletins':     { titre: 'Bulletins', roles: ['directeur', 'censeur', 'admin'], fn: (c, a) => pageBulletins(c, a) },
-  'caisse':        { titre: 'Caisse', roles: ['comptable', 'admin'], fn: c => pageCaisse(c) },
-  'finances':      { titre: 'Finances', roles: ['comptable', 'admin', 'directeur', 'censeur'], fn: (c, a) => pageFinances(c, a) },
+  'bulletins':     { titre: 'Bulletins', mod: ['bulletins', 'CONSULTE'], roles: ['directeur', 'censeur', 'admin'], fn: (c, a) => pageBulletins(c, a) },
+  'caisse':        { titre: 'Caisse', mod: ['caisse', 'AGIT'], roles: ['comptable', 'admin'], fn: c => pageCaisse(c) },
+  'finances':      { titre: 'Finances', mod: ['caisse', 'CONSULTE'], roles: ['comptable', 'admin', 'directeur', 'censeur'], fn: (c, a) => pageFinances(c, a) },
   'stages':        { titre: 'Stages', roles: ['intervenant', 'educateur', 'censeur', 'admin', 'directeur', 'comptable'], si: () => accesStages(), fn: (c, a) => pageStages(c, a) },
   'discipline':    { titre: 'Discipline', roles: ['intervenant', 'educateur', 'censeur', 'admin', 'directeur'], fn: (c, a) => pageDiscipline(c, a) },
-  'absences':      { titre: 'Absences élèves', roles: ['educateur', 'censeur', 'admin', 'directeur'], fn: (c, a) => pageAbsences(c, a) },
+  'absences':      { titre: 'Absences élèves', mod: ['absences', 'CONSULTE'], roles: ['educateur', 'censeur', 'admin', 'directeur'], fn: (c, a) => pageAbsences(c, a) },
   'eleves':        { titre: 'Élèves', roles: ['educateur', 'comptable', 'censeur', 'admin', 'intervenant', 'directeur'], fn: (c, a) => pageEleves(c, a) },
   'effectifs':     { titre: 'Effectifs', roles: ['educateur', 'comptable', 'censeur', 'admin', 'directeur'], fn: c => pageEffectifs(c) },
-  'pointage':      { titre: 'Pointage du jour', roles: ['censeur', 'admin'], fn: pagePointage },
-  'tableau':       { titre: 'Heures supp.', roles: ['censeur', 'admin', 'directeur'], fn: pageTableau },
-  'intervenants':  { titre: 'Intervenants', roles: ['censeur', 'admin', 'directeur'], fn: pageIntervenants },
+  'pointage':      { titre: 'Pointage du jour', mod: ['pointage', 'AGIT'], roles: ['censeur', 'admin'], fn: pagePointage },
+  'tableau':       { titre: 'Heures supp.', mod: ['pointage', 'CONSULTE'], roles: ['censeur', 'admin', 'directeur'], fn: pageTableau },
+  'intervenants':  { titre: 'Intervenants', mod: ['pointage', 'CONSULTE'], roles: ['censeur', 'admin', 'directeur'], fn: pageIntervenants },
   'rattrapages':   { titre: 'Rattrapages', roles: ['intervenant', 'censeur', 'admin'], fn: pageRattrapages, pastille: 'rattrapagesAValider' },
   'reclamations':  { titre: 'Réclamations', roles: ['intervenant', 'censeur', 'admin'], fn: pageReclamations, pastille: 'reclamations' },
-  'paiement':      { titre: 'État de paiement', roles: ['censeur', 'admin', 'directeur'], fn: pagePaiement },
-  'personnel':     { titre: 'Personnel', roles: ['censeur', 'admin', 'directeur'], fn: pagePersonnel },
-  'emplois':       { titre: 'Emplois du temps', roles: ['admin', 'censeur'], fn: (c, a) => pageEmploisV2(c, a) },
+  'paiement':      { titre: 'État de paiement', mod: ['pointage', 'CONSULTE'], roles: ['censeur', 'admin', 'directeur'], fn: pagePaiement },
+  'personnel':     { titre: 'Personnel', mod: ['pointage', 'CONSULTE'], roles: ['censeur', 'admin', 'directeur'], fn: pagePersonnel },
+  'emplois':       { titre: 'Emplois du temps', mod: ['edt', 'CONSULTE'], roles: ['admin', 'censeur'], fn: (c, a) => pageEmploisV2(c, a) },
   'actions':       { titre: 'Mes actions', roles: ['intervenant', 'censeur', 'admin', 'educateur', 'comptable', 'directeur'], cache: true, fn: c => pageActions(c) },
-  'annonces':      { titre: 'Annonces et échéances', roles: ['admin', 'directeur', 'censeur'], fn: c => pageAnnonces(c) },
-  'droits':        { titre: 'Qui peut faire quoi', roles: ['admin'], fn: c => pageDroits(c) },
-  'comptes':       { titre: 'Comptes', roles: ['admin'], fn: pageComptes, pastille: 'comptesEnAttente' },
-  'journal':       { titre: 'Journal', roles: ['admin'], fn: pageJournal },
+  'annonces':      { titre: 'Annonces et échéances', mod: ['annonces', 'AGIT'], roles: ['admin', 'directeur', 'censeur'], fn: c => pageAnnonces(c) },
+  'droits':        { titre: 'Droits et délégations', roles: ['admin'], fn: c => pageDroits(c) },
+  'demandes-notes': { titre: 'Demandes sur les notes', roles: ['intervenant', 'censeur', 'admin', 'directeur'], cache: true, fn: c => pageDemandesNotes(c) },
+  'comptes':       { titre: 'Comptes', mod: ['comptes', 'CONSULTE'], roles: ['admin'], fn: pageComptes, pastille: 'comptesEnAttente' },
+  'journal':       { titre: 'Journal', mod: ['comptes', 'CONSULTE'], roles: ['admin'], fn: pageJournal },
   'conseil':       { titre: 'Conseil de classe', roles: ['intervenant', 'censeur', 'admin', 'directeur', 'educateur'], cache: true, fn: (c, a) => pageConseil(c, a) },
   'matieres':      { titre: 'Matières et coefficients', roles: ['admin'], cache: true, fn: c => pageMatieres(c) },
   'mon-compte':    { titre: 'Mon compte', roles: ['intervenant', 'censeur', 'admin', 'educateur', 'comptable', 'directeur'], cache: true, fn: pageMonCompte },
   'eleve':         { titre: 'Fiche élève', roles: ['educateur', 'comptable', 'censeur', 'admin', 'intervenant', 'directeur'], cache: true, fn: (c, a) => pageEleve(c, a) },
   'import-eleves': { titre: 'Importer des élèves', roles: ['educateur', 'admin'], cache: true, fn: c => pageImportEleves(c) },
   'param-eleves':  { titre: 'Classes et montants', roles: ['admin'], cache: true, fn: c => pageParamEleves(c) },
-  'absences-eleve': { titre: "Absences d'un élève", roles: ['educateur', 'censeur', 'admin', 'directeur'], cache: true, fn: (c, a) => pageAbsencesEleve(c, a) },
-  'fiche':         { titre: 'Fiche', roles: ['censeur', 'admin', 'directeur'], cache: true, fn: pageFicheIntervenant },
+  'absences-eleve': { titre: "Absences d'un élève", mod: ['absences', 'CONSULTE'], roles: ['educateur', 'censeur', 'admin', 'directeur'], cache: true, fn: (c, a) => pageAbsencesEleve(c, a) },
+  'fiche':         { titre: 'Fiche', mod: ['pointage', 'CONSULTE'], roles: ['censeur', 'admin', 'directeur'], cache: true, fn: pageFicheIntervenant },
   'frais-eleve':   { titre: "Frais d'un élève", roles: ['comptable', 'admin', 'directeur', 'censeur', 'educateur'], cache: true, fn: (c, a) => pageFraisEleve(c, a) },
   'stagiaire':     { titre: 'Stagiaire', roles: ['intervenant', 'educateur', 'censeur', 'admin', 'directeur', 'comptable'], cache: true, fn: (c, a) => pageStagiaire(c, a) },
   'incident':      { titre: 'Incident', roles: ['intervenant', 'educateur', 'censeur', 'admin', 'directeur'], cache: true, fn: (c, a) => pageIncident(c, a) },
@@ -395,7 +406,7 @@ const GROUPES_MENU = [
 let groupeOuvert = null;
 function menu() {
   const r = role(), act = (location.hash.slice(2) || '').split('/')[0];
-  const visible = k => PAGES[k] && !PAGES[k].cache && PAGES[k].roles.includes(r) && (!PAGES[k].si || PAGES[k].si());
+  const visible = k => PAGES[k] && !PAGES[k].cache && accesPage(k) && (!PAGES[k].si || PAGES[k].si());
   const past = k => { const p = PAGES[k]; return p.pastille && pastilles[p.pastille] && r !== 'intervenant' ? +pastilles[p.pastille] : 0; };
   const groupes = GROUPES_MENU.map(g => Object.assign({}, g, { pages: g.pages.filter(visible) })).filter(g => g.pages.length);
   const gAct = (groupes.find(g => g.pages.includes(act)) || {}).id;
@@ -423,8 +434,9 @@ function afficher() {
   $('#moi-nom').textContent = p.nom;
   $('#moi-photo').outerHTML = avatar(p.matricule, p.nom, 'petit').replace('class="avatar', 'id="moi-photo" class="avatar');
   let [page, arg] = (location.hash.slice(2) || '').split('/');
-  const def = role() === 'intervenant' ? 'ma-fiche' : role() === 'directeur' ? 'direction' : role() === 'comptable' ? 'caisse' : role() === 'educateur' ? 'eleves' : 'pointage';
-  if (!PAGES[page] || !PAGES[page].roles.includes(role())) { page = def; history.replaceState(null, '', '#/' + def); }
+  let def = role() === 'intervenant' ? 'ma-fiche' : role() === 'directeur' ? 'direction' : role() === 'comptable' ? 'caisse' : role() === 'educateur' ? 'eleves' : 'pointage';
+  if (!accesPage(def)) def = 'actions';
+  if (!PAGES[page] || !accesPage(page)) { page = def; history.replaceState(null, '', '#/' + def); }
   afficher.accueil = page === def;
   menu(); majReseau(); majEnteteMode(); majActions();
   c.innerHTML = '<div class="chargement">Chargement…</div>';
@@ -1269,7 +1281,11 @@ async function majActions(forcer) {
   if (!S.session || !navigator.onLine) return dessinerBande();
   if (!forcer && Date.now() - ACT.le < 60000) return dessinerBande();
   ACT.le = Date.now();
-  try { ACT.donnees = await api('mesActions'); } catch (e) { /* rien */ }
+  try {
+    ACT.donnees = await api('mesActions');
+    const p = S.session.profil, D = ACT.donnees;
+    if (D.droits && !modeProf() && (JSON.stringify(D.droits) !== JSON.stringify(p.droits) || D.serfe !== p.serfe)) { p.droits = D.droits; p.serfe = D.serfe; stock.ecrire('session', S.session); menu(); }
+  } catch (e) { /* rien */ }
   dessinerBande();
 }
 function dessinerBande() {
@@ -1318,24 +1334,51 @@ async function pageAnnonces(c) {
   };
   $$('[data-ret]', c).forEach(b => b.onclick = async () => { if (!confirm('Retirer cette annonce ?')) return; try { toast((await api('retirerAnnonce', { id: b.dataset.ret })).message); majActions(true); afficher(); } catch (e) { toast(e.message, 5000); } });
 }
-function pageDroits(c) {
-  const R = ['Admin', 'Directeur', 'Censeur', 'Éducateur', 'Comptable', 'Enseignant', 'SERFE*'];
-  const M = [
-    ['Comptes du personnel, journal, emplois du temps', '✏️', '—', '—', '—', '—', '—', '—'],
-    ['Pointage et heures supplémentaires', '✏️', '👁', '✏️', '—', '—', 'sa fiche', '—'],
-    ['Élèves : fiches, inscriptions', '✏️', '👁', '👁', '✏️', '👁', 'ses classes', '—'],
-    ['Absences des élèves (appel)', '✏️', '👁', '👁', '✏️', '—', 'ses cours', '—'],
-    ['Notes', '✏️', '✏️', '✏️', '—', '—', 'ses matières', '—'],
-    ['Validation des bulletins', '✏️', '✏️', '—', '—', '—', '—', '—'],
-    ['Discipline : signaler', '✏️', '✏️', '✏️', '✏️', '—', '✏️', '—'],
-    ['Discipline : sanctions', 'toutes', 'toutes', 'jusqu\'à 3 j', 'avert. écrit, retenue, TIG', '—', 'avert. oral, exclusion de séance', '—'],
-    ['Finances : encaisser, reçus, clôture', '✏️', '👁', '👁', '—', '✏️', '—', '—'],
-    ['Finances : réductions de frais', '✏️', 'accorde', '👁', '—', 'demande', '—', '—'],
-    ['Finances : tarifs', '✏️', '—', '—', '—', '—', '—', '—'],
-    ['Stages : placements, entreprises, documents', '✏️', '👁 (✏️ si autorisé par le SERFE)', '👁', '👁', '—', 'encadreur : ses stagiaires', '✏️'],
-    ['Annonces et échéances', '✏️', '✏️', '✏️', '—', '—', '—', '—']];
-  c.innerHTML = `<h1>Qui peut faire quoi</h1><p class="aide">✏️ agit et modifie · 👁 consulte seulement · — pas d'accès. Les droits sont aussi vérifiés par le serveur : ce tableau décrit les règles appliquées.</p>
-    <div class="table-defil"><table class="droits"><thead><tr><th>Module</th>${R.map(x => `<th>${x}</th>`).join('')}</tr></thead><tbody>
-    ${M.map(l => `<tr><td><b>${esc(l[0])}</b></td>${l.slice(1).map(v => `<td class="${v === '—' ? 'non' : v === '👁' ? 'vue' : 'oui'}">${esc(v)}</td>`).join('')}</tr>`).join('')}</tbody></table></div>
-    <p class="aide">* Le SERFE garde aussi les droits de sa fonction habituelle (enseignant, etc.). En mode Professeur, l'administrateur a exactement les droits d'un enseignant.</p>`;
+async function pageDroits(c) {
+  const [D, CP] = await Promise.all([api('droits'), api('comptes')]);
+  const NOMR = { directeur: 'Directeur', censeur: 'Censeur', educateur: 'Éducateur', comptable: 'Comptable', intervenant: 'Enseignant' };
+  const NIV = { AGIT: '✏️ Agit', CONSULTE: '👁 Consulte', AUCUN: '— Aucun accès' };
+  const actifs = (CP.comptes || []).filter(x => x.statut === 'ACTIF' && x.role !== 'admin').sort((a, b) => a.nom.localeCompare(b.nom));
+  const nomMod = {}; D.modules.forEach(m => nomMod[m.code] = m.libelle);
+  const auj = dateLocale();
+  c.innerHTML = `<h1>Droits et délégations</h1>
+    <p class="aide">Choisissez pour chaque module ce que chaque fonction peut faire : <b>✏️ Agit</b> (modifie), <b>👁 Consulte</b> (lecture seule) ou <b>— Aucun accès</b>. Une case <b class="dr-modif-t">orange</b> diffère du réglage d'origine. L'administrateur garde toujours tous les droits. Le serveur applique ces règles ; chaque changement est inscrit au Journal.</p>
+    <div class="table-defil"><table class="droits"><thead><tr><th>Module</th><th>Admin</th>${D.roles.map(r => `<th>${NOMR[r] || r}</th>`).join('')}</tr></thead><tbody>
+    ${D.modules.map(m => `<tr><td><b>${esc(m.libelle)}</b></td><td class="oui">✏️ toujours</td>${D.roles.map(r => { const x = m.roles[r];
+        return `<td class="${x.modifie ? 'dr-modif' : ''}"><select data-m="${m.code}" data-r="${r}" data-init="${x.niveau}" data-def="${x.defaut}">${Object.keys(NIV).map(k => `<option value="${k}" ${k === x.niveau ? 'selected' : ''}>${NIV[k]}${k === x.defaut ? ' •' : ''}</option>`).join('')}</select></td>`; }).join('')}</tr>`).join('')}
+    </tbody></table></div>
+    <p class="aide">• = réglage d'origine. Stages : le SERFE (paramètre SERFE) garde toujours la gestion ; ce réglage ajoute d'autres fonctions.</p>
+    <div id="dr-msg"></div>
+    <div class="ligne" style="gap:8px"><button class="btn vert" id="dr-ok" disabled>Enregistrer les changements</button><button class="btn secondaire" id="dr-def">↺ Revenir aux droits par défaut</button></div>
+
+    <h2>Donner la main à une personne (délégation)</h2>
+    <form id="f-del" class="carte"><div class="ligne">
+      <div style="flex:2 1 220px"><label>Personne</label><select name="matricule" required><option value="">— choisir —</option>${actifs.map(x => `<option value="${esc(x.matricule)}">${esc(x.nom)} (${esc(NOMR[x.role] || x.role)})</option>`).join('')}</select></div>
+      <div style="flex:2 1 220px"><label>Droit donné</label><select name="module" required><option value="">— choisir —</option>${D.modules.map(m => `<option value="${m.code}">${esc(m.libelle)}</option>`).join('')}</select></div>
+      <div style="flex:1 1 140px"><label>Niveau</label><select name="niveau"><option value="AGIT">✏️ Agit</option><option value="CONSULTE">👁 Consulte</option></select></div>
+      <div style="flex:1 1 150px"><label>Jusqu'au (facultatif)</label><input type="date" name="jusquau" min="${auj}"></div></div>
+      <label>Motif (facultatif)</label><input name="motif" maxlength="200" placeholder="ex. intérim pendant le congé du comptable">
+      <div id="del-msg"></div><button class="btn">Donner ce droit</button>
+      <p class="aide">Sans date de fin, la délégation dure jusqu'à ce que vous la retiriez. La personne voit son nouveau droit au plus tard 5 minutes après (ou en actualisant la page).</p></form>
+    <div class="table-defil"><table><thead><tr><th>Personne</th><th>Droit</th><th>Niveau</th><th>Jusqu'au</th><th>Motif</th><th></th></tr></thead><tbody>
+    ${D.delegations.map(x => `<tr class="${x.expiree ? 'barre-ligne' : ''}"><td><b>${esc(x.nom)}</b><div class="aide">${esc(x.matricule)}</div></td><td>${esc(nomMod[x.module] || x.module)}</td><td>${esc(NIV[x.niveau] || x.niveau)}</td>
+      <td>${x.jusquau ? fr(x.jusquau) + (x.expiree ? ' (terminée)' : '') : 'sans fin'}</td><td class="aide">${esc(x.motif || '')}</td><td><button class="btn petit rouge" data-rd="${x.id}">Retirer</button></td></tr>`).join('') || '<tr><td colspan="6" class="vide">Aucune délégation.</td></tr>'}</tbody></table></div>
+
+    <h2>Règles fixes (non réglables)</h2>
+    <div class="table-defil"><table class="droits"><thead><tr><th>Domaine</th><th>Règle</th></tr></thead><tbody>
+      <tr><td><b>Notes</b></td><td>Le professeur saisit et approuve ses notes. Toute modification par le censeur, le directeur ou l'administrateur passe par une demande acceptée par le professeur (ou par le directeur si le professeur n'a plus de compte).</td></tr>
+      <tr><td><b>Sanctions disciplinaires</b></td><td>Enseignant : avertissement oral, exclusion de séance · Éducateur : avertissement écrit, retenue, TIG · Censeur : jusqu'à 3 jours · Directeur et admin : toutes.</td></tr>
+      <tr><td><b>Tarifs, matières, paramètres</b></td><td>Administrateur seulement.</td></tr>
+      <tr><td><b>Mode Professeur</b></td><td>L'administrateur qui enseigne a exactement les droits d'un enseignant.</td></tr></tbody></table></div>`;
+  const sels = $$('select[data-m]', c), majBtn = () => { const n = sels.filter(x => x.value !== x.dataset.init).length; $('#dr-ok').disabled = !n; $('#dr-ok').textContent = n ? `Enregistrer les changements (${n})` : 'Enregistrer les changements'; };
+  sels.forEach(x => x.onchange = () => { x.parentNode.classList.toggle('dr-modif', x.value !== x.dataset.def); majBtn(); });
+  $('#dr-ok').onclick = async () => {
+    const ch = sels.filter(x => x.value !== x.dataset.init).map(x => ({ module: x.dataset.m, role: x.dataset.r, niveau: x.value }));
+    try { toast((await api('enregistrerDroits', { changements: ch })).message); afficher(); } catch (e) { $('#dr-msg').innerHTML = `<div class="erreur">${esc(e.message)}</div>`; }
+  };
+  $('#dr-def').onclick = async () => { if (!confirm('Revenir aux droits d\'origine pour toutes les fonctions ? (les délégations individuelles restent)')) return; try { toast((await api('enregistrerDroits', { defaut: true })).message); afficher(); } catch (e) { toast(e.message, 5000); } };
+  const f = $('#f-del');
+  f.onsubmit = async ev => { ev.preventDefault();
+    try { toast((await api('deleguer', { matricule: f.matricule.value, module: f.module.value, niveau: f.niveau.value, jusquau: f.jusquau.value, motif: f.motif.value })).message, 5000); afficher(); } catch (e) { $('#del-msg').innerHTML = `<div class="erreur">${esc(e.message)}</div>`; } };
+  $$('[data-rd]', c).forEach(b => b.onclick = async () => { if (!confirm('Retirer cette délégation ?')) return; try { toast((await api('retirerDelegation', { id: b.dataset.rd })).message); afficher(); } catch (e) { toast(e.message, 5000); } });
 }

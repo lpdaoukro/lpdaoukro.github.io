@@ -526,3 +526,11 @@ tr.imp-vert td { background: #EEF8F1; } tr.imp-orange td { background: #FFF6E5; 
 .cf-bloc { border: 1px solid #ddd; border-radius: 10px; padding: 10px; } .cf-moi { border-color: #2E75B6; background: #F5F9FD; } .cf-autre { border-color: #E67E22; background: #FFFAF2; }
 .cf-titre { font-weight: 800; margin-bottom: 6px; } .cf-seance { background: #fff; border: 1px solid #e3e3e3; border-radius: 8px; padding: 8px; margin-bottom: 8px; line-height: 1.5; }
 .cf-sous { font-size: .85rem; font-weight: 600; margin: 8px 0 4px; } .cf-dep .creneaux { grid-template-columns: repeat(auto-fill, minmax(105px, 1fr)); }
+/* v2.3 droits, notes verrouillées, catégories de recettes */
+table.droits td.dr-modif { background: #FFF1DE; } .dr-modif-t { color: #C46A00; }
+table.droits select { font-size: .8rem; padding: 4px; min-width: 120px; }
+.verrou-b { display: inline-block; padding: 2px 8px; border-radius: 10px; font-size: .78rem; font-weight: 600; }
+.verrou-b.ok { background: #E6F4EA; color: #1E7B3A; } .verrou-b.non { background: #FFF1DE; color: #9A5200; } .verrou-b.att { background: #EAF2FB; color: #1D5FA8; }
+.cat-recettes { display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap: 10px; margin: 10px 0; }
+.cat-recettes .carte { margin: 0; } .cat-recettes h3 { margin: 0 0 6px; font-size: .95rem; }
+.cat-recettes .chiffres { display: flex; justify-content: space-between; font-size: .85rem; gap: 6px; flex-wrap: wrap; }

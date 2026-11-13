@@ -142,7 +142,7 @@ async function pageNotes(c) {
       <p class="aide" style="margin-top:0">Semestre ${st.sem} · coefficient ${nb(m.coef)}${m.profs ? ' · ' + esc(m.profs) : ''}</p>
       ${v ? `<div class="alerte">🔒 ${esc(v)}</div>` : ''}
       <div class="actions" style="margin-bottom:10px">${!v ? '<button class="btn vert" id="n-nouv">➕ Nouvelle évaluation</button>' : ''}<button class="btn secondaire" id="n-fiche">🖨 Fiche de notes</button>${!v && role() !== 'directeur' ? '<button class="btn secondaire" id="n-app">✍ Appréciations</button>' : ''}</div>
-      <div class="table-defil"><table class="grille-notes"><thead><tr><th>Élève</th>${ev.map(x => `<th class="n cliquable" data-ev="${x.id}" title="Modifier">${esc(x.libelle || x.type)}<div class="aide">${frCourt(x.date)} · /${nb(x.bareme)} · c${nb(x.coef)}${x.attente ? ' ⏳' : ''}</div></th>`).join('')}<th class="n">Moy./20</th></tr></thead>
+      <div class="table-defil"><table class="grille-notes"><thead><tr><th>Élève</th>${ev.map(x => `<th class="n cliquable" data-ev="${x.id}" title="Modifier">${esc(x.libelle || x.type)}<div class="aide">${frCourt(x.date)} · /${nb(x.bareme)} · c${nb(x.coef)}${x.attente ? ' ⏳' : ''}</div>${badgeVerrou(ref, x)}</th>`).join('')}<th class="n">Moy./20</th></tr></thead>
       <tbody>${el.map(e => { const mo = moyenneMatiere(ev, e.id); return `<tr><td><b>${esc(e.nom)}</b> ${esc(e.prenoms)}${app[e.id] ? `<div class="aide">« ${esc(app[e.id])} »</div>` : ''}</td>${ev.map(x => `<td class="n">${esc(noteAffichee(x, e.id))}</td>`).join('')}<td class="n"><b>${n2(mo)}</b></td></tr>`; }).join('')}</tbody></table></div>
       ${!ev.length ? '<div class="info">Aucune évaluation ce semestre. Touchez « Nouvelle évaluation ».</div>' : '<p class="aide">Touchez le titre d\'une évaluation pour la modifier.</p>'}`;
     $('#n-retour').onclick = e => { e.preventDefault(); liste(); };
@@ -155,9 +155,25 @@ async function pageNotes(c) {
   const vueEval = () => {
     st.vue = 'eval'; window.scrollTo(0, 0);
     const m = st.mat, el = elevesClasse(m.classe), x = st.ev || { id: nouvelIdEval(), m: m.id, type: 'Devoir', libelle: '', date: dateLocale(), bareme: 20, coef: 1, notes: {} };
-    const nouveau = !st.ev, v = verrou(m.classe);
+    const nouveau = !st.ev, v0 = verrou(m.classe), moi = S.session.profil.matricule;
+    // v2.3 : approbation par le professeur, modification par la direction avec son accord
+    const E = (!nouveau && (ref.verrous || {})[x.id]) || {};
+    const lockProf = prof && !nouveau && !x.attente && E.statut === 'APPROUVÉE';
+    const lockDir = !prof && !nouveau && !x.attente && !E.autorise && (E.statut === 'APPROUVÉE' || (x.cp || x.par) !== moi);
+    const v = v0 || (lockProf ? 'Notes approuvées : demandez le déverrouillage au censeur pour les modifier.' : '') || (lockDir ? 'Notes du professeur de la matière : sa permission est nécessaire pour les modifier.' : '');
+    let panneau = '';
+    if (!nouveau && !v0 && !x.attente) {
+      if (prof) panneau = E.statut === 'APPROUVÉE'
+        ? `<div class="info">🔒 <b>Notes approuvées</b>${E.le ? ' le ' + esc(String(E.le).slice(0, 10).split('-').reverse().join('/')) : ''}. ${E.attente === 'DEVERROUILLAGE' ? '<b>Demande de déverrouillage envoyée au censeur</b> : en attente de sa réponse.' : '<button type="button" class="btn petit secondaire" id="ev-dev">🔓 Demander le déverrouillage</button>'}</div>`
+        : `<div class="alerte">${E.statut === 'DÉVERROUILLÉE' ? '🔓 Le censeur a levé le verrou : corrigez puis approuvez de nouveau.' : 'Ces notes ne sont pas encore approuvées.'} Quand elles sont justes : <button type="button" class="btn petit vert" id="ev-app">✔ Approuver mes notes</button><div class="aide">Une fois approuvées, elles sont verrouillées 🔒 et personne ne peut les changer sans votre accord.</div></div>`;
+      else if (lockDir) panneau = `<div class="info">🔒 ${E.statut === 'APPROUVÉE' ? 'Notes <b>approuvées</b> par le professeur.' : 'Notes saisies par le professeur.'} Pour les modifier, il faut son accord (ou celui du directeur si le professeur n'a plus de compte).
+          ${E.attente ? '<b>Votre demande est en attente de réponse.</b>' : '<button type="button" class="btn petit secondaire" id="ev-dmod">✉ Demander une modification</button>'}</div>`;
+      else if (E.autorise) panneau = `<div class="info">✅ Accord reçu : vous pouvez modifier ces notes jusqu'au ${fr(E.autorise)}. Le professeur sera informé.</div>`;
+      if (E.histo && role() !== 'educateur') panneau += `<button type="button" class="btn petit secondaire" id="ev-histo">🕘 Historique des modifications</button><div id="ev-h"></div>`;
+      panneau += '<div id="ev-dem"></div>';
+    }
     c.innerHTML = `<p><a href="#" id="n-retour">← ${esc(m.matiere)} — ${esc(m.classe)}</a></p><h1>${nouveau ? 'Nouvelle évaluation' : 'Modifier l\'évaluation'}</h1>
-      ${v ? `<div class="alerte">🔒 ${esc(v)}</div>` : ''}
+      ${v0 ? `<div class="alerte">🔒 ${esc(v0)}</div>` : ''}${panneau}
       <form id="f-ev"><div class="carte"><div class="grille-champs">
         <div><label>Type</label><select name="type">${ref.params.types.map(t => `<option ${t === x.type ? 'selected' : ''}>${t}</option>`).join('')}</select></div>
         <div><label>Intitulé</label><input name="libelle" value="${esc(x.libelle)}" placeholder="ex. Devoir n°1"></div>
@@ -172,6 +188,23 @@ async function pageNotes(c) {
       ${!v ? `<button class="btn vert large" id="ev-enr" style="position:sticky;bottom:10px">✔ Enregistrer les notes</button>${!nouveau ? '<button type="button" class="btn rouge petit" id="ev-sup" style="margin-top:10px">Supprimer cette évaluation</button>' : ''}` : ''}</form>`;
     appliquerPhotosEleves(); if (navigator.onLine) chargerPhotosEleves(el.map(e => e.id));
     $('#n-retour').onclick = e => { e.preventDefault(); vueMatiere(); };
+    if (v) $$('#f-ev input, #f-ev select', c).forEach(i => { i.disabled = true; });
+    const recharger = async () => { ref = await chargerRefNotes(st.classe); st.mat = ref.matieres.find(y => y.id === m.id) || st.mat; st.ev = evaluationsDe(ref).find(y => y.id === x.id) || st.ev; vueEval(); majActions(true); };
+    const formDemande = (type, titre) => {
+      $('#ev-dem').innerHTML = `<div class="carte"><label>${titre}</label><textarea id="dm-motif" rows="3" maxlength="400" placeholder="Élève(s) concerné(s), note actuelle → note correcte, raison"></textarea><div class="actions"><button type="button" class="btn" id="dm-ok">Envoyer la demande</button><button type="button" class="btn secondaire" id="dm-x">Annuler</button></div></div>`;
+      $('#dm-motif').focus(); $('#dm-x').onclick = () => { $('#ev-dem').innerHTML = ''; };
+      $('#dm-ok').onclick = async () => { try { toast((await api('demandeNotes', { type, id_eval: x.id, motif: $('#dm-motif').value })).message, 5000); await recharger(); } catch (e) { toast(e.message, 5000); } };
+    };
+    if ($('#ev-dev')) $('#ev-dev').onclick = () => formDemande('DEVERROUILLAGE', 'Pourquoi voulez-vous modifier ces notes ? (le censeur lira votre demande)');
+    if ($('#ev-dmod')) $('#ev-dmod').onclick = () => formDemande('MODIFICATION', 'Quelle modification demandez-vous au professeur ?');
+    if ($('#ev-app')) $('#ev-app').onclick = async () => {
+      if (!confirm('Approuver ces notes ? Elles seront verrouillées : pour les changer ensuite, il faudra demander le déverrouillage au censeur.')) return;
+      try { toast((await api('approuverNotes', { id: x.id })).message); await recharger(); } catch (e) { toast(e.message, 5000); }
+    };
+    if ($('#ev-histo')) $('#ev-histo').onclick = async () => {
+      try { const H = await api('historiqueNotes', { id: x.id });
+        $('#ev-h').innerHTML = `<div class="table-defil"><table><thead><tr><th>Élève</th><th class="n">Ancienne</th><th class="n">Nouvelle</th><th>Par</th><th>Le</th></tr></thead><tbody>${H.historique.map(h => `<tr><td>${esc(h.eleve)}</td><td class="n">${esc(h.ancienne || '—')}</td><td class="n"><b>${esc(h.nouvelle || '—')}</b></td><td>${esc(h.par)}</td><td class="aide">${esc(String(h.le).replace('T', ' ').slice(0, 16))}</td></tr>`).join('') || '<tr><td colspan="5" class="vide">Aucune modification.</td></tr>'}</tbody></table></div>`;
+      } catch (e) { toast(e.message, 5000); } };
     const champs = $$('.saisie-note', c);
     champs.forEach((inp, i) => {
       inp.onkeydown = e => { if (e.key === 'Enter') { e.preventDefault(); (champs[i + 1] || $('#ev-enr')).focus(); } };
@@ -284,6 +317,33 @@ function piedOfficiel() {
 const caseCoch = (b, t) => `<div class="off-case">${b ? '☒' : '☐'} ${esc(t)}</div>`;
 
 /* ===================== CONSEIL DE CLASSE ===================== */
+function badgeVerrou(ref, x) {
+  if (x.attente) return '';
+  const E = (ref.verrous || {})[x.id] || {};
+  if (E.statut === 'APPROUVÉE') return `<span class="verrou-b ok" title="Approuvées par le professeur">🔒 approuvées</span>${E.attente ? ' <span class="verrou-b att">demande</span>' : ''}`;
+  return `<span class="verrou-b non" title="Pas encore approuvées par le professeur">à approuver</span>${E.attente ? ' <span class="verrou-b att">demande</span>' : ''}`;
+}
+/* ===================== DEMANDES SUR LES NOTES (v2.3) ===================== */
+async function pageDemandesNotes(c) {
+  const D = await api('demandesNotes');
+  const typ = d => d.type === 'DEVERROUILLAGE' ? '🔓 Déverrouillage' : '✏️ Modification';
+  const st = d => `<span class="verrou-b ${d.statut === 'ACCEPTÉE' ? 'ok' : d.statut === 'REFUSÉE' ? 'non' : 'att'}">${esc(d.statut)}</span>`;
+  c.innerHTML = `<h1>Demandes sur les notes</h1>
+    <p class="aide">Le professeur approuve ses notes, qui sont alors verrouillées 🔒. Il demande au censeur de les déverrouiller s'il doit les corriger. Le censeur, le directeur ou l'administrateur qui veut modifier une note demande l'accord du professeur (ou du directeur si le professeur n'a plus de compte) : l'accord vaut <b>7 jours</b> pour cette évaluation seulement. Une demande sans réponse depuis 3 jours passe en URGENT.</p>
+    <h2>À traiter (${D.aTraiter.length})</h2>
+    ${D.aTraiter.map(d => `<div class="carte ${d.ancienne ? 'action-l urg' : ''}"><div><b>${typ(d)}</b> · ${esc(d.classe)} · ${esc(d.matiere)} · ${esc(d.evaluation)}${d.ancienne ? ' <span class="bande-tag urg">URGENT</span>' : ''}
+        <div>Demandé par <b>${esc(d.demandeur)}</b> le ${esc(String(d.cree_le).slice(0, 10).split('-').reverse().join('/'))}</div><div class="info" style="margin:6px 0">« ${esc(d.motif)} »</div>
+        <label>Votre réponse (facultatif)</label><input data-rep="${d.id}" maxlength="300">
+        <div class="actions" style="margin-top:6px"><button class="btn vert petit" data-dec="ACCEPTÉE" data-id="${d.id}">✔ ${d.type === 'DEVERROUILLAGE' ? 'Lever le verrou' : 'Donner mon accord'}</button><button class="btn rouge petit" data-dec="REFUSÉE" data-id="${d.id}">✕ Refuser</button></div></div></div>`).join('') || '<div class="info">✅ Aucune demande à traiter.</div>'}
+    <h2>Mes demandes</h2>
+    <div class="table-defil"><table><thead><tr><th>Type</th><th>Évaluation</th><th>Motif</th><th>Statut</th><th>Réponse</th></tr></thead><tbody>
+    ${D.mesDemandes.map(d => `<tr><td>${typ(d)}</td><td>${esc(d.classe)} · ${esc(d.matiere)}<div class="aide">${esc(d.evaluation)}</div></td><td class="aide">${esc(d.motif)}</td><td>${st(d)}${d.statut === 'ACCEPTÉE' && d.type === 'MODIFICATION' && d.valable_jusquau ? `<div class="aide">jusqu'au ${fr(d.valable_jusquau)}</div>` : ''}</td><td class="aide">${esc(d.repondu_par || '')}${d.reponse ? ' : ' + esc(d.reponse) : ''}</td></tr>`).join('') || '<tr><td colspan="5" class="vide">Aucune demande.</td></tr>'}</tbody></table></div>`;
+  $$('[data-dec]', c).forEach(b => b.onclick = async () => {
+    const id = b.dataset.id, dec = b.dataset.dec;
+    if (dec === 'REFUSÉE' && !confirm('Refuser cette demande ?')) return;
+    try { toast((await api('repondreDemandeNotes', { id, decision: dec, reponse: $(`[data-rep="${id}"]`).value })).message, 5000); majActions(true); afficher(); } catch (e) { toast(e.message, 5000); }
+  });
+}
 async function pageConseil(c, classe) {
   const { r: D } = await chargerEleves(!EL.donnees);
   const prof = role() === 'intervenant';
@@ -301,6 +361,7 @@ async function pageConseil(c, classe) {
       ${bloque ? `<div class="info">🔒 Bulletins validés par le directeur le ${esc(K.validation.le)} : plus de modification possible.</div>` : ''}
       <div class="kpis"><div class="kpi"><div class="lib">Moyenne de la classe</div><div class="val">${n2(K.stats.moy) || '—'}</div></div><div class="kpi vert"><div class="lib">Moyenne ≥ 10</div><div class="val">${K.stats.admis}/${K.stats.classes}</div></div>
         <div class="kpi"><div class="lib">Plus forte</div><div class="val">${n2(K.stats.max) || '—'}</div></div><div class="kpi rouge"><div class="lib">Plus faible</div><div class="val">${n2(K.stats.min) || '—'}</div></div></div>
+      ${(K.nonApprouvees || []).length && !prof ? `<div class="alerte"><b>${K.nonApprouvees.length} évaluation(s) pas encore approuvée(s) par le professeur :</b><ul style="margin:4px 0 0">${K.nonApprouvees.slice(0, 10).map(x => `<li>${esc(x.matiere)} — ${esc(x.evaluation)}${x.profs ? ' (' + esc(x.profs) + ')' : ''}</li>`).join('')}${K.nonApprouvees.length > 10 ? '<li>…</li>' : ''}</ul></div>` : ''}
       ${K.manques.length ? `<div class="alerte"><b>Notes manquantes :</b><ul style="margin:4px 0 0">${K.manques.slice(0, 8).map(x => `<li>${esc(x.texte)}</li>`).join('')}</ul></div>` : ''}
       <p class="aide">Les distinctions et sanctions marquées <span class="badge attente">proposé</span> ont été calculées automatiquement (moyenne et absences) : le conseil les confirme ou les change. Une distinction et une sanction ne peuvent pas être données ensemble.${aCond ? ' Conduite : une case vide prend la note proposée automatiquement (20 moins les sanctions, absences non justifiées et retards — détail dans la fiche disciplinaire).' : ''}</p>
       <div class="actions" style="margin-bottom:8px">${dr.app && !bloque ? '<button type="button" class="btn secondaire" id="cs-auto">✍ Proposer les appréciations manquantes</button>' : ''}
@@ -671,7 +732,7 @@ async function pageDirection(c) {
     ${T.bulletins.classes.some(k => k.moy !== null) ? `<h2>Résultats par classe</h2><div class="table-defil"><table><thead><tr><th>Classe</th><th class="n">Moyenne</th><th class="n">≥ 10</th><th>État</th></tr></thead><tbody>
       ${T.bulletins.classes.filter(k => k.moy !== null).map(k => `<tr class="cliquable" onclick="location.hash='#/bulletins/${encodeURIComponent(k.classe)}'"><td><b>${esc(k.classe)}</b></td><td class="n">${n2(k.moy)}</td><td class="n">${k.taux === null ? '—' : String(k.taux).replace('.', ',') + ' %'}</td><td><span class="badge ${STATUTS_BUL[k.statut][0]}">${STATUTS_BUL[k.statut][1]}</span></td></tr>`).join('')}</tbody></table></div>` : ''}
     ${T.recettes ? `<h2>💰 Recettes</h2><div class="kpis"><div class="kpi vert"><div class="lib">Encaissé (année)</div><div class="val">${fcfa(T.recettes.total)}</div></div><div class="kpi"><div class="lib">Encaissé aujourd'hui</div><div class="val">${fcfa(T.recettes.jour)}</div></div>
-      <div class="kpi ${T.recettes.taux >= 75 ? 'vert' : 'orange'}"><div class="lib">Taux de recouvrement</div><div class="val">${T.recettes.taux === null ? '—' : String(T.recettes.taux).replace('.', ',') + ' %'}</div></div><div class="kpi rouge"><div class="lib">Élèves en retard</div><div class="val">${T.recettes.retards}</div></div></div>
+      <div class="kpi ${T.recettes.taux >= 75 ? 'vert' : 'orange'}"><div class="lib">Taux de recouvrement</div><div class="val">${T.recettes.taux === null ? '—' : String(T.recettes.taux).replace('.', ',') + ' %'}</div></div><div class="kpi rouge"><div class="lib">Élèves en retard</div><div class="val">${T.recettes.retards}</div></div></div>${typeof blocCategories === 'function' ? blocCategories(T.recettes.parCategorie, T.recettes.categRecettes) : ''}
       <div class="actions" style="margin-bottom:12px"><a class="btn secondaire" href="#/finances/etats">📊 États financiers</a><a class="btn secondaire" href="#/finances/reductions">Réductions à accorder</a></div>` : ''}
     ${T.discipline ? `<h2>⚖ Discipline</h2><div class="kpis"><div class="kpi ${T.discipline.attente ? 'rouge' : 'vert'}"><div class="lib">Sanctions à valider</div><div class="val">${T.discipline.attente}</div></div>
       <div class="kpi orange"><div class="lib">Incidents (30 jours)</div><div class="val">${T.discipline.incidents30}</div></div><div class="kpi"><div class="lib">Incidents à traiter</div><div class="val">${T.discipline.aTraiter}</div></div>

@@ -2,8 +2,8 @@
 'use strict';
 
 const FI = { ref: null };
-const caissier = () => ['admin', 'comptable'].includes(role());
-const valideurFin = () => ['admin', 'directeur'].includes(role());
+const caissier = () => role() === 'admin' || droit('caisse') === 'AGIT';
+const valideurFin = () => role() === 'admin' || droit('reductions') === 'AGIT';
 const CAT_LIB = { PAYANT: 'Payant', AFFECTE: "Affecté de l'État", '': 'Statut à préciser' };
 const ST_REMISE = { 'VALIDÉE': ['P', 'Accordée'], 'EN ATTENTE': ['attente', 'En attente du directeur'], 'REFUSÉE': ['A', 'Refusée'], 'ANNULÉE': ['', 'Retirée'] };
 async function chargerRefFin(forcer) {
@@ -37,6 +37,17 @@ function enLettres(n) {
 }
 
 /* ===================== CAISSE ===================== */
+/* v2.3 : recettes en trois catégories (le reçu des parents reste unique) */
+const CAT_ORDRE = ['RESSOURCES_ADD', 'INSCRIPTION', 'ANNEXES'];
+function blocCategories(parCat, CR, enc) {
+  if (!parCat || !CR) return '';
+  return `<div class="cat-recettes">${CAT_ORDRE.map(k => { const a = parCat[k] || { du: 0, paye: 0, reste: 0, horsCaisse: 0 }; return `<div class="carte"><h3>${esc(CR[k])}</h3>
+    <div class="chiffres"><span>Attendu <b>${fcfa(a.du)}</b></span><span>Encaissé <b style="color:#1E7B3A">${fcfa(a.paye)}</b></span><span>Reste <b style="color:#B3261E">${fcfa(a.reste)}</b></span></div>
+    ${enc ? `<div class="aide">Encaissé sur la période : <b>${fcfa(enc[k] || 0)}</b></div>` : ''}${a.horsCaisse ? `<div class="aide">dont ${fcfa(a.horsCaisse)} d'inscription en ligne (hors caisse)</div>` : ''}</div>`; }).join('')}</div>`;
+}
+function tableCategoriesImp(parCat, CR) {
+  return `<table><thead><tr><th>Catégorie</th><th>Attendu</th><th>Encaissé</th><th>Reste</th></tr></thead><tbody>${CAT_ORDRE.map(k => { const a = parCat[k] || { du: 0, paye: 0, reste: 0 }; return `<tr><td>${esc(CR[k])}</td><td>${fcfa(a.du)}</td><td>${fcfa(a.paye)}</td><td>${fcfa(a.reste)}</td></tr>`; }).join('')}</tbody></table>`;
+}
 async function pageCaisse(c) {
   const [{ r: D }, J] = await Promise.all([chargerEleves(!EL.donnees), api('journalCaisse')]);
   c.innerHTML = `<h1>Caisse</h1>
@@ -58,7 +69,7 @@ async function pageCaisse(c) {
   brancherRecus(c);
   if ($('#ca-clot')) $('#ca-clot').onclick = async () => {
     if (!confirm('Clôturer votre caisse ? Les reçus clôturés ne pourront plus être annulés que par l\'administrateur.')) return;
-    try { const r = await api('cloturerCaisse', { observation: $('#ca-obs').value }); toast(r.message, 5000); const L = await api('clotures'); imprimerCloture(L.clotures.find(x => x.id === r.id), L.libelles); afficher(); }
+    try { const r = await api('cloturerCaisse', { observation: $('#ca-obs').value }); toast(r.message, 5000); const L = await api('clotures'); imprimerCloture(L.clotures.find(x => x.id === r.id), L.libelles, L); afficher(); }
     catch (e) { toast(e.message, 5000); }
   };
 }
@@ -186,14 +197,17 @@ async function ongletSituation(z) {
     const L = await api('fraisClasse', { classe: cls }), t = L.eleves.reduce((a, e) => ({ du: a.du + e.du, paye: a.paye + e.paye, reste: a.reste + e.reste, retard: a.retard + e.retard }), { du: 0, paye: 0, reste: 0, retard: 0 });
     $('#fs-res').innerHTML = `<div class="kpis"><div class="kpi"><div class="lib">Attendu</div><div class="val">${fcfa(t.du)}</div></div><div class="kpi vert"><div class="lib">Encaissé</div><div class="val">${fcfa(t.paye)}</div></div>
       <div class="kpi orange"><div class="lib">Reste</div><div class="val">${fcfa(t.reste)}</div></div><div class="kpi rouge"><div class="lib">En retard</div><div class="val">${fcfa(t.retard)}</div></div></div>
+      ${blocCategories(L.parCategorie, L.categRecettes)}
       <div class="actions" style="margin-bottom:8px"><button class="btn secondaire" id="fs-imp">🖨 État de la classe</button><button class="btn secondaire" id="fs-xls">📥 Excel</button></div>
       <div class="table-defil"><table><thead><tr><th>Élève</th><th>Statut</th><th>En ligne</th><th>Rames</th><th class="n">Dû</th><th class="n">Payé</th><th class="n">Reste</th><th></th></tr></thead><tbody>
       ${L.eleves.map(e => `<tr class="cliquable" data-id="${e.id}"><td><b>${esc(e.nom)}</b> ${esc(e.prenoms)}</td><td>${e.aPreciser ? '<span class="badge attente">à préciser</span>' : esc(e.statut)}</td><td>${e.en_ligne ? '✓' : '<span class="aide">non</span>'}</td><td>${e.rames ? '✓' : '<span class="aide">non</span>'}</td>
         <td class="n">${fcfa(e.du)}</td><td class="n">${fcfa(e.paye)}</td><td class="n"><b>${e.reste ? fcfa(e.reste) : '✓'}</b></td><td>${e.retard ? '<span class="badge A">Retard</span>' : ''}</td></tr>`).join('') || '<tr><td colspan="8" class="vide">Aucun élève.</td></tr>'}</tbody></table></div>`;
     $$('#fs-res tr[data-id]').forEach(tr => tr.onclick = () => { location.hash = '#/frais-eleve/' + tr.dataset.id; });
-    const lignesX = () => [['Nom', 'Prénoms', 'Matricule', 'Statut', 'Inscription en ligne', 'Rames', 'Dû', 'Payé', 'Reste', 'Retard'], ...L.eleves.map(e => [e.nom, e.prenoms, e.matricule, e.statut, e.en_ligne ? 'OUI' : 'NON', e.rames ? 'OUI' : 'NON', e.du, e.paye, e.reste, e.retard])];
+    const cc = e => CAT_ORDRE.flatMap(k => { const a = (e.cats || {})[k] || {}; return [a.paye || 0, a.reste || 0]; });
+    const lignesX = () => [['Nom', 'Prénoms', 'Matricule', 'Statut', 'Inscription en ligne', 'Rames', 'Dû', 'Payé', 'Reste', 'Retard', ...CAT_ORDRE.flatMap(k => [(L.categRecettes || {})[k] + ' payé', (L.categRecettes || {})[k] + ' reste'])], ...L.eleves.map(e => [e.nom, e.prenoms, e.matricule, e.statut, e.en_ligne ? 'OUI' : 'NON', e.rames ? 'OUI' : 'NON', e.du, e.paye, e.reste, e.retard, ...cc(e)])];
     $('#fs-xls').onclick = () => exporterExcel(`Frais_${cls.replace(/\//g, '-')}.xlsx`, [{ nom: cls.replace(/\//g, '-'), lignes: [[`Frais de scolarité — ${cls} — ${fr(dateLocale())}`], [], ...lignesX()] }]);
     $('#fs-imp').onclick = () => imprimer(`<div class="page">${entete('ÉTAT DES FRAIS DE SCOLARITÉ — ' + cls)}<p>Situation au ${fr(dateLocale())} — Attendu : <b>${fcfa(t.du)}</b> · Encaissé : <b>${fcfa(t.paye)}</b> · Reste : <b>${fcfa(t.reste)}</b> · En retard : <b>${fcfa(t.retard)}</b></p>
+      ${L.categRecettes ? tableCategoriesImp(L.parCategorie, L.categRecettes) : ''}
       <table><thead><tr><th>N°</th><th>Nom et prénoms</th><th>Statut</th><th>En ligne</th><th>Rames</th><th>Dû</th><th>Payé</th><th>Reste</th></tr></thead><tbody>
       ${L.eleves.map((e, i) => `<tr><td>${i + 1}</td><td>${esc(e.nom)} ${esc(e.prenoms)}</td><td>${esc(e.statut || '?')}</td><td>${e.en_ligne ? 'Oui' : 'Non'}</td><td>${e.rames ? 'Oui' : 'Non'}</td><td>${fcfa(e.du)}</td><td>${fcfa(e.paye)}</td><td><b>${e.reste ? fcfa(e.reste) : '—'}</b>${e.retard ? ' (retard)' : ''}</td></tr>`).join('')}</tbody></table>
       <div class="signatures" style="grid-template-columns:1fr 1fr"><div>Le Comptable</div><div>Le Chef d'établissement</div></div></div>`);
@@ -229,6 +243,7 @@ async function ongletEtats(z, R) {
         <div style="flex:0 0 auto;align-self:flex-end"><button class="btn secondaire" id="fe-imp">🖨 Imprimer</button> <button class="btn secondaire" id="fe-xls">📥 Excel</button></div></div>
       <div class="kpis" style="margin-top:12px"><div class="kpi vert"><div class="lib">Encaissé sur la période</div><div class="val">${fcfa(E.total)}</div></div><div class="kpi"><div class="lib">Reçus</div><div class="val">${E.nbRecus}</div></div>
         <div class="kpi rouge"><div class="lib">Élèves en retard</div><div class="val">${E.eleves.retards}</div></div><div class="kpi orange"><div class="lib">Statut à préciser</div><div class="val">${E.eleves.aPreciser}</div></div></div>
+      <h2>Recettes par catégorie (année, élèves inscrits)</h2>${blocCategories(E.attenduCategories, E.categRecettes, E.encaisseCategories)}
       <h2>Recouvrement (année, élèves inscrits)</h2><div class="table-defil"><table><thead><tr><th>Rubrique</th><th class="n">Attendu</th><th class="n">Encaissé</th><th class="n">Reste</th><th class="n">Dont en retard</th><th class="n">Taux</th></tr></thead><tbody>
         ${att.map(([k, a]) => `<tr><td>${esc(lib(k))}</td><td class="n">${fcfa(a.du)}</td><td class="n">${fcfa(a.paye)}</td><td class="n">${fcfa(a.reste)}</td><td class="n">${fcfa(a.retard)}</td><td class="n">${a.du ? Math.round(a.paye / a.du * 100) + ' %' : '—'}</td></tr>`).join('')}</tbody></table></div>
       <p class="aide">Inscription en ligne cochée : ${E.eleves.enLigne.faits} / ${E.eleves.enLigne.attendus} élèves · Paquets de rames remis : ${E.eleves.rames} / ${E.eleves.inscrits}</p>
@@ -240,11 +255,14 @@ async function ongletEtats(z, R) {
     $('#fe-au').onchange = ev => { f.au = ev.target.value; dessiner(); };
     $('#fe-xls').onclick = () => exporterExcel(`Etats_financiers_${E.au}.xlsx`, [
       { nom: 'Recouvrement', lignes: [[`États financiers — encaissements du ${E.du ? fr(E.du) : 'début'} au ${fr(E.au)}`], [], ['Rubrique', 'Attendu', 'Encaissé', 'Reste', 'En retard'], ...att.map(([k, a]) => [lib(k), a.du, a.paye, a.reste, a.retard])] },
-      { nom: 'Rubriques', lignes: [['Rubrique', 'Encaissé'], ...E.parRubrique.map(x => [lib(x.cle), x.montant])] },
+      { nom: 'Catégories', lignes: [['Catégorie', 'Attendu (année)', 'Encaissé (année)', 'Reste', 'Encaissé sur la période'], ...CAT_ORDRE.map(k => { const a = E.attenduCategories[k] || {}; return [E.categRecettes[k], a.du || 0, a.paye || 0, a.reste || 0, E.encaisseCategories[k] || 0]; })] },
+      { nom: 'Rubriques', lignes: [['Rubrique', 'Catégorie', 'Encaissé'], ...E.parRubrique.map(x => [lib(x.cle), E.categRecettes[E.categories[x.cle] || 'ANNEXES'], x.montant])] },
       { nom: 'Modes', lignes: [['Mode', 'Encaissé'], ...E.parMode.map(x => [x.cle, x.montant])] },
       { nom: 'Classes', lignes: [['Classe', 'Encaissé'], ...E.parClasse.map(x => [x.cle, x.montant])] },
       { nom: 'Jours', lignes: [['Date', 'Encaissé'], ...E.parJour.map(x => [fr(x.cle), x.montant])] }]);
     $('#fe-imp').onclick = () => imprimer(`<div class="page">${entete('ÉTAT DES RECETTES')}<p>Encaissements du <b>${E.du ? fr(E.du) : 'début de l\'année'}</b> au <b>${fr(E.au)}</b> : <b>${fcfa(E.total)}</b> (${E.nbRecus} reçus)</p>
+      <h3>Par catégorie de recettes (période)</h3><table><tbody>${CAT_ORDRE.map(k => `<tr><td>${esc(E.categRecettes[k])}</td><td>${fcfa(E.encaisseCategories[k] || 0)}</td></tr>`).join('')}</tbody></table>
+      <h3>Par catégorie (année, élèves inscrits)</h3>${tableCategoriesImp(E.attenduCategories, E.categRecettes)}
       <h3>Par rubrique</h3><table><tbody>${E.parRubrique.map(x => `<tr><td>${esc(lib(x.cle))}</td><td>${fcfa(x.montant)}</td></tr>`).join('')}</tbody></table>
       <h3>Par mode de paiement</h3><table><tbody>${E.parMode.map(x => `<tr><td>${esc(x.cle)}</td><td>${fcfa(x.montant)}</td></tr>`).join('')}</tbody></table>
       <h3>Recouvrement de l'année (élèves inscrits)</h3><table><thead><tr><th>Rubrique</th><th>Attendu</th><th>Encaissé</th><th>Reste</th><th>En retard</th></tr></thead><tbody>${att.map(([k, a]) => `<tr><td>${esc(lib(k))}</td><td>${fcfa(a.du)}</td><td>${fcfa(a.paye)}</td><td>${fcfa(a.reste)}</td><td>${fcfa(a.retard)}</td></tr>`).join('')}</tbody></table>
@@ -257,7 +275,7 @@ async function ongletClotures(z) {
   z.innerHTML = `<div class="table-defil"><table><thead><tr><th>N°</th><th>Date</th><th>Caissier</th><th class="n">Reçus</th><th class="n">Total</th><th>Détail</th><th></th></tr></thead><tbody>
     ${L.clotures.map(k => `<tr><td><b>${esc(k.id)}</b></td><td>${fr(k.date)}</td><td>${esc(k.caissier)}</td><td class="n">${k.nb}</td><td class="n"><b>${fcfa(k.total)}</b></td><td class="aide">${Object.entries(k.modes).map(([m, v]) => `${esc(m)} : ${fcfa(v)}`).join(' · ')}${k.observation ? '<br>' + esc(k.observation) : ''}</td>
       <td><button class="btn petit secondaire" data-cl="${k.id}">🖨</button></td></tr>`).join('') || '<tr><td colspan="7" class="vide">Aucune clôture.</td></tr>'}</tbody></table></div>`;
-  $$('[data-cl]', z).forEach(b => b.onclick = () => imprimerCloture(L.clotures.find(k => k.id === b.dataset.cl), L.libelles));
+  $$('[data-cl]', z).forEach(b => b.onclick = () => imprimerCloture(L.clotures.find(k => k.id === b.dataset.cl), L.libelles, L));
 }
 async function ongletReductions(z) {
   const L = await api('remises', {});
@@ -268,7 +286,8 @@ async function ongletReductions(z) {
   $$('[data-rm]', z).forEach(b => b.onclick = async () => { try { toast((await api('validerRemise', { id: b.dataset.rm, decision: b.dataset.d })).message); afficher(); } catch (e) { toast(e.message, 5000); } });
 }
 function ongletTarifs(z, R) {
-  const NIV = ['', 'CAP', 'BT', 'BTS'];
+  const NIV = ['', 'CAP', 'BT', 'BTS'], CR = R.categRecettes || {};
+  const selCat = v => `<select name="categorie_r">${CAT_ORDRE.map(k => `<option value="${k}" ${k === v ? 'selected' : ''}>${esc(CR[k] || k)}</option>`).join('')}</select>`;
   const ligneT = t => `<tr data-id="${t.id || ''}"><td><select name="rubrique">${R.rubriques.map(r => `<option value="${r.code}" ${r.code === t.rubrique ? 'selected' : ''}>${esc(r.libelle)}</option>`).join('')}</select></td>
     <td><select name="niveau">${NIV.map(n => `<option value="${n}" ${n === (t.niveau || '') ? 'selected' : ''}>${n || 'Tous'}</option>`).join('')}</select></td>
     <td><select name="annee">${['', '1', '2', '3'].map(a => `<option value="${a}" ${a === String(t.annee || '') ? 'selected' : ''}>${a ? a + 'e année' : 'Toutes'}</option>`).join('')}</select></td>
@@ -281,9 +300,10 @@ function ongletTarifs(z, R) {
     <form id="ft"><div class="table-defil"><table><thead><tr><th>Rubrique</th><th>Niveau</th><th>Année</th><th>Élèves concernés</th><th>Montant</th><th>1re tranche</th><th>Limite 1re tranche</th><th>Limite (solde)</th><th>Actif</th></tr></thead>
       <tbody>${R.tarifs.map(ligneT).join('')}${ligneT({ rubrique: R.rubriques[0].code, categorie: 'TOUS', montant: '', tranche1: '', actif: false })}</tbody></table></div>
       <p class="aide">La dernière ligne (décochée) sert à ajouter un tarif : remplissez-la et cochez « Actif ».</p><button class="btn vert">Enregistrer les tarifs</button></form></div>
-    <div class="carte"><h2 style="margin-top:0">Rubriques</h2><div class="table-defil"><table><thead><tr><th>Rubrique</th><th>Obligatoire</th><th>Active</th><th></th></tr></thead><tbody>
-      ${R.rubriques.map(r => `<tr data-code="${r.code}"><td><input name="libelle" value="${esc(r.libelle)}" style="min-width:240px">${r.hors_caisse ? ' <span class="badge bleu">hors caisse</span>' : ''}</td><td><input type="checkbox" name="obligatoire" ${r.obligatoire ? 'checked' : ''} style="width:auto;min-height:0"></td><td><input type="checkbox" name="actif" ${r.actif ? 'checked' : ''} style="width:auto;min-height:0"></td><td><button class="btn petit secondaire" data-enr>Enregistrer</button></td></tr>`).join('')}
-      <tr data-code=""><td><input name="libelle" placeholder="Nouvelle rubrique (ex. Tenue d'atelier)" style="min-width:240px"></td><td><input type="checkbox" name="obligatoire" style="width:auto;min-height:0"></td><td><input type="checkbox" name="actif" checked style="width:auto;min-height:0"></td><td><button class="btn petit vert" data-enr>➕ Ajouter</button></td></tr></tbody></table></div>
+    <div class="carte"><h2 style="margin-top:0">Rubriques</h2><div class="table-defil"><table><thead><tr><th>Rubrique</th><th>Catégorie de recettes</th><th>Obligatoire</th><th>Active</th><th></th></tr></thead><tbody>
+      ${R.rubriques.map(r => `<tr data-code="${r.code}"><td><input name="libelle" value="${esc(r.libelle)}" style="min-width:240px">${r.hors_caisse ? ' <span class="badge bleu">hors caisse</span>' : ''}</td><td>${selCat(r.categorie)}</td><td><input type="checkbox" name="obligatoire" ${r.obligatoire ? 'checked' : ''} style="width:auto;min-height:0"></td><td><input type="checkbox" name="actif" ${r.actif ? 'checked' : ''} style="width:auto;min-height:0"></td><td><button class="btn petit secondaire" data-enr>Enregistrer</button></td></tr>`).join('')}
+      <tr data-code=""><td><input name="libelle" placeholder="Nouvelle rubrique (ex. Tenue d'atelier)" style="min-width:240px"></td><td>${selCat('ANNEXES')}</td><td><input type="checkbox" name="obligatoire" style="width:auto;min-height:0"></td><td><input type="checkbox" name="actif" checked style="width:auto;min-height:0"></td><td><button class="btn petit vert" data-enr>➕ Ajouter</button></td></tr></tbody></table></div>
+      <p class="aide"><b>Catégorie de recettes</b> : sert aux totaux séparés (tableau du directeur, états financiers, clôture, situation par classe). Le parent reçoit toujours un seul reçu.</p>
       <p class="aide">Une rubrique facultative n'est jamais réclamée : on l'encaisse seulement si l'élève la paie (tenue, etc.). Après l'ajout d'une rubrique obligatoire, ajoutez son tarif dans le tableau ci-dessus.</p></div>
     <form id="fpf" class="carte"><h2 style="margin-top:0">Élèves qui paient la scolarité</h2><p class="aide">Les statuts cochés sont « payants ». Les autres sont considérés comme affectés de l'État.</p>
       <div class="actions">${R.statuts.map(s => `<label style="font-weight:400"><input type="checkbox" name="p" value="${esc(s)}" ${R.payants.includes(s) ? 'checked' : ''} style="width:auto;min-height:0"> ${esc(s)}</label>`).join('')}</div>
@@ -296,7 +316,7 @@ function ongletTarifs(z, R) {
   };
   $$('[data-enr]', z).forEach(b => b.onclick = async () => {
     const tr = b.closest('tr'), q = n => $(`[name=${n}]`, tr);
-    try { toast((await api('enregistrerRubrique', { rubrique: { code: tr.dataset.code, libelle: q('libelle').value, obligatoire: q('obligatoire').checked, actif: q('actif').checked } })).message); FI.ref = null; afficher(); } catch (e) { toast(e.message, 5000); }
+    try { toast((await api('enregistrerRubrique', { rubrique: { code: tr.dataset.code, libelle: q('libelle').value, categorie: q('categorie_r').value, obligatoire: q('obligatoire').checked, actif: q('actif').checked } })).message); FI.ref = null; afficher(); } catch (e) { toast(e.message, 5000); }
   });
   $('#fpf').onsubmit = async ev => {
     ev.preventDefault(); const f = ev.target;
@@ -365,11 +385,13 @@ const RC_CSS = `/* ===== v1.8 Frais de scolarité : reçu (2 exemplaires sur une
 function imprimerRecu(R) {
   imprimer(`<style>${RC_CSS}</style><div class="page rc-page">${blocRecu(R, 'ORIGINAL — PARENT')}<div class="rc-coupe">✂</div>${blocRecu(R, 'SOUCHE — CAISSE')}</div>`, `Reçu de paiement ${R.numero} - ${R.eleve.nom} ${R.eleve.prenoms || ''} - ${R.classe}`);
 }
-function imprimerCloture(k, lib) {
+function imprimerCloture(k, lib, L) {
   if (!k) return;
+  const cat = {}; if (L && L.categories) Object.entries(k.rubriques).forEach(([r, v]) => { const c = L.categories[r] || 'ANNEXES'; cat[c] = (cat[c] || 0) + v; });
   imprimer(`<div class="page">${entete('CLÔTURE DE CAISSE N° ' + k.id)}<p>Date : <b>${fr(k.date)}</b> — Caissier : <b>${esc(k.caissier)}</b> — Clôturée le ${esc(k.le)}</p>
     <p>Nombre de reçus valides : <b>${k.nb}</b> — Total encaissé : <b>${fcfa(k.total)}</b> (${esc(enLettres(k.total))} francs CFA)</p>
     <h3>Par mode de paiement</h3><table><tbody>${Object.entries(k.modes).map(([m, v]) => `<tr><td>${esc(m)}</td><td style="text-align:right">${fcfa(v)}</td></tr>`).join('')}</tbody></table>
+    ${L && L.categRecettes ? `<h3>Par catégorie de recettes</h3><table><tbody>${CAT_ORDRE.map(c => `<tr><td>${esc(L.categRecettes[c])}</td><td style="text-align:right">${fcfa(cat[c] || 0)}</td></tr>`).join('')}</tbody></table>` : ''}
     <h3>Par rubrique</h3><table><tbody>${Object.entries(k.rubriques).map(([m, v]) => `<tr><td>${esc(lib[m] || m)}</td><td style="text-align:right">${fcfa(v)}</td></tr>`).join('')}</tbody></table>
     <p>Reçus : ${k.numeros.map(esc).join(', ')}</p>${k.observation ? `<p>Observation : ${esc(k.observation)}</p>` : ''}
     <p>Espèces remises : ……………………………… F &nbsp;&nbsp; Écart : ……………………… F</p>
