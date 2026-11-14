@@ -107,7 +107,9 @@ async function pageNotes(c) {
   const verrou = (classe) => {
     if (!ref) return '';
     if (ref.valides[classe + '|' + st.sem]) return 'Bulletins validés par le directeur : notes bloquées.';
-    const lim = ref.params.limites[st.sem];
+    const cs = (ref.conseils || {})[classe + '|' + st.sem];
+    const lim = cs ? cs.limite : ref.params.limites[st.sem];
+    if (prof && lim && dateLocale() > lim) return cs ? `Conseil de classe le ${fr(cs.date)} : saisie fermée depuis le ${fr(cs.approbation)} (notes approuvées automatiquement). Pour corriger, demandez le déverrouillage.` : `Date limite de saisie dépassée (${fr(lim)}) : seuls le censeur et la direction peuvent corriger.`;
     if (prof && lim && dateLocale() > lim) return `Date limite de saisie dépassée (${fr(lim)}) : seuls le censeur et la direction peuvent corriger.`;
     return '';
   };
@@ -140,6 +142,7 @@ async function pageNotes(c) {
     const app = (ref.appreciations || {})[m.id + '|' + st.sem] || {};
     c.innerHTML = `<p><a href="#" id="n-retour">← Toutes les matières</a></p><h1 style="margin-bottom:2px">${esc(m.matiere)} — ${esc(m.classe)}</h1>
       <p class="aide" style="margin-top:0">Semestre ${st.sem} · coefficient ${nb(m.coef)}${m.profs ? ' · ' + esc(m.profs) : ''}</p>
+      ${(() => { const cs = (ref.conseils || {})[m.classe + '|' + st.sem]; return cs && dateLocale() <= cs.date ? `<div class="info">📅 Conseil de classe le <b>${fr(cs.date)}</b>${cs.heure ? ' à ' + esc(cs.heure) : ''} · saisie et approbation jusqu'au <b>${fr(cs.limite)}</b> ; le ${fr(cs.approbation)}, les notes non approuvées le seront automatiquement.</div>` : ''; })()}
       ${v ? `<div class="alerte">🔒 ${esc(v)}</div>` : ''}
       <div class="actions" style="margin-bottom:10px">${!v ? '<button class="btn vert" id="n-nouv">➕ Nouvelle évaluation</button>' : ''}<button class="btn secondaire" id="n-fiche">🖨 Fiche de notes</button>${!v && role() !== 'directeur' ? '<button class="btn secondaire" id="n-app">✍ Appréciations</button>' : ''}</div>
       <div class="table-defil"><table class="grille-notes"><thead><tr><th>Élève</th>${ev.map(x => `<th class="n cliquable" data-ev="${x.id}" title="Modifier">${esc(x.libelle || x.type)}<div class="aide">${frCourt(x.date)} · /${nb(x.bareme)} · c${nb(x.coef)}${x.attente ? ' ⏳' : ''}</div>${badgeVerrou(ref, x)}</th>`).join('')}<th class="n">Moy./20</th></tr></thead>
@@ -344,6 +347,54 @@ async function pageDemandesNotes(c) {
     try { toast((await api('repondreDemandeNotes', { id, decision: dec, reponse: $(`[data-rep="${id}"]`).value })).message, 5000); majActions(true); afficher(); } catch (e) { toast(e.message, 5000); }
   });
 }
+/* ===================== CALENDRIER DES CONSEILS DE CLASSE (v2.4) ===================== */
+async function pageCalendrierConseils(c) {
+  let sem = stock.lire('notes_sem', 0) || 1;
+  const gere = ['admin', 'directeur', 'censeur'].includes(role());
+  const jour = d => { const j = ['dimanche', 'lundi', 'mardi', 'mercredi', 'jeudi', 'vendredi', 'samedi'][new Date(d + 'T12:00:00').getDay()]; return j + ' ' + fr(d); };
+  const hm = h => String(h || '').replace('h', ':').padStart(5, '0');
+  const dessiner = async () => {
+    const L = await api('conseilsProgrammes', { semestre: sem }), P = {}; L.conseils.forEach(x => P[x.classe] = x);
+    const auj = L.aujourdhui;
+    c.innerHTML = `<h1>Calendrier des conseils de classe</h1>
+      <div class="ligne"><div><label>Semestre</label><select id="cc-sem"><option value="1">Semestre 1</option><option value="2" ${sem === 2 ? 'selected' : ''}>Semestre 2</option></select></div>
+        <div style="flex:0 0 auto;align-self:flex-end"><button class="btn secondaire" id="cc-imp">🖨 Imprimer le calendrier</button></div></div>
+      <p class="aide">À l'approche du conseil, la bande d'annonces prévient les enseignants de la classe, le professeur principal, l'éducateur et la direction : annonce <b>7 jours avant</b>, puis <b>URGENT</b> 4 et 3 jours avant pour ceux qui ont encore des notes à approuver (3 jours avant = dernier jour de saisie). <b>2 jours avant</b>, les notes non approuvées sont approuvées automatiquement et la saisie est fermée pour les enseignants de la classe.</p>
+      <h2>Conseils programmés (${L.conseils.length})</h2>
+      <div class="table-defil"><table><thead><tr><th>Date</th><th>Heure</th><th>Classe</th><th>Salle</th><th>Approbation automatique</th></tr></thead><tbody>
+      ${L.conseils.map(x => `<tr class="${x.date < auj ? 'barre-ligne' : ''}"><td><b>${jour(x.date)}</b></td><td>${esc(x.heure)}</td><td><a href="#/conseil/${encodeURIComponent(x.classe)}">${esc(x.classe)}</a></td><td>${esc(x.salle)}</td><td class="aide">${fr(x.approbation)}${auj >= x.approbation ? ' ✓' : ''}</td></tr>`).join('') || '<tr><td colspan="5" class="vide">Aucun conseil programmé pour ce semestre.</td></tr>'}</tbody></table></div>
+      ${gere ? `<h2>Programmer</h2>
+        <div class="carte"><b>Remplir plusieurs classes d'un coup</b><div class="ligne">
+          <div><label>Classes commençant par</label><input id="cc-pref" placeholder="ex. 2BT/ ou 1CAP"></div><div><label>Date</label><input type="date" id="cc-d"></div>
+          <div><label>1re heure</label><input type="time" id="cc-h" value="14:00"></div><div><label>Durée par classe (min)</label><input type="number" id="cc-dur" value="45" min="10" step="5"></div>
+          <div><label>Salle</label><input id="cc-s" placeholder="ex. Salle des professeurs"></div><div style="flex:0 0 auto;align-self:flex-end"><button class="btn secondaire" id="cc-rem">Remplir</button></div></div>
+          <p class="aide">Les classes choisies sont placées l'une après l'autre. Vérifiez puis touchez « Enregistrer ».</p></div>
+        <form id="f-cc"><div class="table-defil"><table><thead><tr><th>Classe</th><th>Date</th><th>Heure</th><th>Salle</th></tr></thead><tbody>
+        ${L.classes.map(k => { const x = P[k] || {}; return `<tr data-k="${esc(k)}" data-i="${esc((x.date || '') + '|' + (x.heure ? hm(x.heure) : '') + '|' + (x.salle || ''))}"><td><b>${esc(k)}</b></td><td><input type="date" name="date" value="${x.date || ''}"></td><td><input type="time" name="heure" value="${x.heure ? hm(x.heure) : ''}"></td><td><input name="salle" value="${esc(x.salle || '')}" maxlength="40"></td></tr>`; }).join('')}
+        </tbody></table></div><p class="aide">Effacez la date pour retirer un conseil.</p><div id="cc-msg"></div><button class="btn vert large" style="position:sticky;bottom:10px">✔ Enregistrer</button></form>` : ''}`;
+    $('#cc-sem').onchange = e => { sem = +e.target.value; stock.ecrire('notes_sem', sem); dessiner(); };
+    $('#cc-imp').onclick = () => imprimer(`<div class="page">${typeof entete === 'function' ? entete('CALENDRIER DES CONSEILS DE CLASSE — SEMESTRE ' + sem) : '<h2>Calendrier des conseils de classe — semestre ' + sem + '</h2>'}
+      <table><thead><tr><th>Date</th><th>Heure</th><th>Classe</th><th>Salle</th><th>Fin de saisie des notes</th></tr></thead><tbody>${L.conseils.map(x => `<tr><td>${jour(x.date)}</td><td>${esc(x.heure)}</td><td>${esc(x.classe)}</td><td>${esc(x.salle)}</td><td>${fr(x.limite)}</td></tr>`).join('')}</tbody></table>
+      <p>Les notes non approuvées par les enseignants sont approuvées automatiquement deux jours avant le conseil.</p><div class="signatures" style="grid-template-columns:1fr 1fr"><div>Le Censeur</div><div>Le Chef d'établissement</div></div></div>`, `Calendrier des conseils de classe - semestre ${sem}`);
+    if (!gere) return;
+    $('#cc-rem').onclick = () => {
+      const pref = normal($('#cc-pref').value), d = $('#cc-d').value, dur = +$('#cc-dur').value || 45; let [h, m] = ($('#cc-h').value || '14:00').split(':').map(Number);
+      if (!pref || !d) return toast('Indiquez le début du nom des classes et la date.');
+      const lignes = $$('#f-cc tr[data-k]').filter(tr => normal(tr.dataset.k).startsWith(pref));
+      if (!lignes.length) return toast('Aucune classe ne commence par « ' + $('#cc-pref').value + ' ».');
+      lignes.forEach(tr => { $('[name=date]', tr).value = d; $('[name=heure]', tr).value = String(h).padStart(2, '0') + ':' + String(m).padStart(2, '0'); if ($('#cc-s').value) $('[name=salle]', tr).value = $('#cc-s').value; tr.classList.add('note-importee'); m += dur; h += Math.floor(m / 60); m %= 60; });
+      toast(lignes.length + ' classe(s) remplie(s). Vérifiez puis touchez « Enregistrer ».', 5000);
+    };
+    $('#f-cc').onsubmit = async ev => {
+      ev.preventDefault();
+      const items = $$('#f-cc tr[data-k]').map(tr => ({ classe: tr.dataset.k, date: $('[name=date]', tr).value, heure: $('[name=heure]', tr).value, salle: $('[name=salle]', tr).value, init: tr.dataset.i }))
+        .filter(x => (x.date + '|' + x.heure + '|' + x.salle) !== x.init);
+      if (!items.length) return toast('Aucun changement.');
+      try { toast((await api('programmerConseils', { semestre: sem, items })).message, 5000); majActions(true); dessiner(); } catch (e) { $('#cc-msg').innerHTML = `<div class="erreur">${esc(e.message)}</div>`; }
+    };
+  };
+  await dessiner();
+}
 async function pageConseil(c, classe) {
   const { r: D } = await chargerEleves(!EL.donnees);
   const prof = role() === 'intervenant';
@@ -358,6 +409,7 @@ async function pageConseil(c, classe) {
     const aCond = K.matieres.some(m => m.conduite);
     const tri = K.eleves.slice().sort((a, b) => (a.rang || 999) - (b.rang || 999) || cmp(a.nom, b.nom));
     $('#cs-res').innerHTML = `<p class="aide">${esc(K.libelle)} · PP : ${esc(K.pp || 'non indiqué')} · Éducateur : ${esc(K.educateur || 'non indiqué')} · Semestre ${sem} (${fr(K.du)} – ${fr(K.au)})</p>
+      ${K.programme ? `<div class="info">📅 Conseil programmé le <b>${fr(K.programme.date)}</b>${K.programme.heure ? ' à ' + esc(K.programme.heure) : ''}${K.programme.salle ? ', ' + esc(K.programme.salle) : ''} · approbation automatique des notes le ${fr(K.programme.approbation)}. <a href="#/calendrier-conseils">Calendrier</a></div>` : direction() ? '<p class="aide">Conseil pas encore programmé : <a href="#/calendrier-conseils">📅 programmer la date</a>.</p>' : ''}
       ${bloque ? `<div class="info">🔒 Bulletins validés par le directeur le ${esc(K.validation.le)} : plus de modification possible.</div>` : ''}
       <div class="kpis"><div class="kpi"><div class="lib">Moyenne de la classe</div><div class="val">${n2(K.stats.moy) || '—'}</div></div><div class="kpi vert"><div class="lib">Moyenne ≥ 10</div><div class="val">${K.stats.admis}/${K.stats.classes}</div></div>
         <div class="kpi"><div class="lib">Plus forte</div><div class="val">${n2(K.stats.max) || '—'}</div></div><div class="kpi rouge"><div class="lib">Plus faible</div><div class="val">${n2(K.stats.min) || '—'}</div></div></div>

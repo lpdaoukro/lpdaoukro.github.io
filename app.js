@@ -378,6 +378,7 @@ const PAGES = {
   'actions':       { titre: 'Mes actions', roles: ['intervenant', 'censeur', 'admin', 'educateur', 'comptable', 'directeur'], cache: true, fn: c => pageActions(c) },
   'annonces':      { titre: 'Annonces et échéances', mod: ['annonces', 'AGIT'], roles: ['admin', 'directeur', 'censeur'], fn: c => pageAnnonces(c) },
   'droits':        { titre: 'Droits et délégations', roles: ['admin'], fn: c => pageDroits(c) },
+  'calendrier-conseils': { titre: 'Calendrier des conseils', roles: ['intervenant', 'censeur', 'admin', 'directeur', 'educateur'], fn: c => pageCalendrierConseils(c) },
   'demandes-notes': { titre: 'Demandes sur les notes', roles: ['intervenant', 'censeur', 'admin', 'directeur'], cache: true, fn: c => pageDemandesNotes(c) },
   'comptes':       { titre: 'Comptes', mod: ['comptes', 'CONSULTE'], roles: ['admin'], fn: pageComptes, pastille: 'comptesEnAttente' },
   'journal':       { titre: 'Journal', mod: ['comptes', 'CONSULTE'], roles: ['admin'], fn: pageJournal },
@@ -399,7 +400,7 @@ const GROUPES_MENU = [
   { id: 'accueil', titre: '🏠 Accueil', pages: ['direction', 'ma-fiche'] },
   { id: 'personnel', titre: '👨‍🏫 Personnel', pages: ['pointage', 'tableau', 'intervenants', 'rattrapages', 'reclamations', 'paiement', 'personnel'] },
   { id: 'eleves', titre: '🎓 Élèves', pages: ['eleves', 'effectifs', 'appel', 'absences', 'discipline', 'stages'] },
-  { id: 'notes', titre: '📝 Notes', pages: ['notes', 'bulletins'] },
+  { id: 'notes', titre: '📝 Notes', pages: ['notes', 'bulletins', 'calendrier-conseils'] },
   { id: 'finances', titre: '💰 Finances', pages: ['caisse', 'finances'] },
   { id: 'admin', titre: '⚙ Administration', pages: ['annonces', 'emplois', 'comptes', 'droits', 'journal'] }
 ];
