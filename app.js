@@ -105,6 +105,7 @@ function majReseau(etat) {
   const n = S.file.length + (typeof nbAppelsEnAttente === 'function' ? nbAppelsEnAttente() : 0) + (typeof nbNotesEnAttente === 'function' ? nbNotesEnAttente() : 0);
   b.className = 'reseau ' + (!S.enLigne ? 'hors-ligne' : n ? 'attente' : 'en-ligne');
   b.textContent = !S.enLigne ? (n ? `Hors ligne · ${n} en attente` : 'Hors ligne') : n ? `${n} en attente…` : 'En ligne ✓';
+  b.dataset.court = !S.enLigne ? (n ? '⚠ ' + n : '⚠') : n ? n + '…' : '✓';   // version courte pour les petits écrans
 }
 window.addEventListener('online', () => { majReseau(true); synchroniser(); if (typeof synchroniserAppels === 'function') synchroniserAppels(); if (typeof synchroniserNotes === 'function') synchroniserNotes(); });
 window.addEventListener('offline', () => majReseau(false));
@@ -1417,7 +1418,7 @@ function choisirMode(suite) {
 function majEnteteMode() {
   const b = $('#btn-mode'); if (!b) return;
   const d = S.session && S.session.profil.double; b.hidden = !d;
-  if (d) { b.textContent = modeProf() ? '👨‍🏫 Prof' : '⚙ Admin'; b.title = modeProf() ? 'Vous êtes en mode Professeur — passer en mode Administrateur' : 'Vous êtes en mode Administrateur — passer en mode Professeur'; b.classList.toggle('prof', modeProf()); }
+  if (d) { b.textContent = modeProf() ? '👨‍🏫 Prof' : '⚙ Admin'; b.dataset.court = modeProf() ? '👨‍🏫' : '⚙'; b.title = modeProf() ? 'Vous êtes en mode Professeur — passer en mode Administrateur' : 'Vous êtes en mode Administrateur — passer en mode Professeur'; b.classList.toggle('prof', modeProf()); }
   $('#btn-actions').hidden = !S.session;
   if ($('#btn-sugg')) $('#btn-sugg').hidden = !S.session || role() === 'admin';
 }

@@ -541,4 +541,21 @@ table.droits select { font-size: .8rem; padding: 4px; min-width: 120px; }
 .sugg-st { display: inline-block; padding: 1px 8px; border-radius: 10px; font-size: .75rem; font-weight: 600; background: #EAF2FB; color: #1D5FA8; }
 .sugg-st.st-FAIT { background: #E6F4EA; color: #1E7B3A; } .sugg-st.st-REFUS { background: #FDECEA; color: #B3261E; } .sugg-st.st-NOUVEAU { background: #FFF1DE; color: #9A5200; }
 #btn-sugg { margin-right: 6px; }
-@media (max-width: 430px) { .etab { white-space: nowrap; } .entete-droite .btn-actions { width: 32px; height: 32px; font-size: .95rem; } #btn-sugg { margin-right: 2px; } }
+/* en-tête sur téléphone : rien ne se chevauche (2.6.2) */
+.entete-droite { flex-shrink: 0; } .entete-droite > * { flex-shrink: 0; } .btn-mode { white-space: nowrap; }
+.entete-gauche { flex: 1 1 auto; overflow: hidden; } .entete-gauche > div { min-width: 0; } .etab { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+@media (max-width: 560px) {
+  header { padding-left: 8px; padding-right: 8px; gap: 6px; }
+  .entete-gauche { gap: 6px; } .entete-droite { gap: 4px; }
+  .entete-droite .btn-actions { width: 32px; height: 32px; font-size: .95rem; } #btn-sugg { margin-right: 0; }
+  .reseau { font-size: 0; padding: 0; width: 30px; height: 30px; display: inline-flex; align-items: center; justify-content: center; }
+  .reseau::after { content: attr(data-court); font-size: .8rem; font-weight: 700; }
+  .reseau.attente, .reseau.hors-ligne { width: auto; min-width: 30px; padding: 0 7px; }
+  .btn-mode { padding: 4px 8px; font-size: .72rem; }
+}
+@media (max-width: 380px) { .logo-arm { display: none; } }
+@media (max-width: 430px) {
+  .btn-mode { font-size: 0; padding: 0; width: 32px; height: 32px; border-radius: 50%; display: inline-flex; align-items: center; justify-content: center; }
+  .btn-mode::after { content: attr(data-court); font-size: 1rem; }
+}
+@media (max-width: 340px) { .etab { display: none; } }
