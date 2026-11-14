@@ -559,3 +559,24 @@ table.droits select { font-size: .8rem; padding: 4px; min-width: 120px; }
   .btn-mode::after { content: attr(data-court); font-size: 1rem; }
 }
 @media (max-width: 340px) { .etab { display: none; } }
+/* v2.7 : fiche de notes compacte (une page jusqu'à 35 élèves), rang et signature de l'élève */
+@media print { @page fiche { size: A4; margin: 8mm 9mm; } #impression .page.fiche-notes { page: fiche; } #impression .page.fiche-notes.paysage { page: paysage; } }
+#impression .fiche-notes .entete-doc { grid-template-columns: 34mm 1fr 13mm; gap: 3mm; margin-bottom: 1mm; }
+#impression .fiche-notes .ent-ministere { width: 34mm; } #impression .fiche-notes .ent-lycee { width: 12mm; }
+#impression .fiche-notes .ent-centre { line-height: 1.2; } #impression .fiche-notes .ent-centre b { font-size: 10.5pt; } #impression .fiche-notes .ent-centre span { font-size: 8.5pt; }
+#impression .fiche-notes .bandeau { font-size: 11pt; padding: 3px; margin: 2px 0 4px; }
+#impression .fn-info { font-size: 9pt; margin: 2px 0 4px; }
+#impression .fn-table { width: 100%; border-collapse: collapse; table-layout: auto; }
+#impression .fn-table th { font-size: 7.5pt; padding: 2px 3px; line-height: 1.15; }
+#impression .fn-table th small { font-weight: 400; font-size: 6.5pt; }
+#impression .fn-table td { font-size: 8.5pt; padding: 0 3px; height: var(--h, 6mm); border: 1px solid #888; line-height: 1.1; }
+#impression .fn-table td.c { text-align: center; } #impression .fn-table .fn-n { width: 6mm; text-align: center; }
+#impression .fn-table .fn-mat { width: 19mm; font-size: 7.5pt; } #impression .fn-table .fn-moy { width: 12mm; } #impression .fn-table .fn-rang { width: 10mm; }
+#impression .fn-table .fn-sig { width: 26mm; } #impression .fn-table .fn-nom { white-space: nowrap; overflow: hidden; max-width: 62mm; text-overflow: ellipsis; }
+#impression .fn-table tr { page-break-inside: avoid; } #impression .fn-table thead { display: table-header-group; }
+#impression .fn-pied { display: flex; justify-content: space-between; gap: 6mm; font-size: 8.5pt; } #impression .fn-pied p { margin: 3px 0; }
+#impression .fn-signatures { grid-template-columns: 1fr 1fr; margin-top: 3mm; } #impression .fn-signatures div { height: 17mm; }
+#impression .fiche-notes.serre .fn-mat { display: none; } #impression .fiche-notes.serre .fn-sig { width: 22mm; } #impression .fiche-notes.serre .fn-nom { max-width: 52mm; }
+#impression .fiche-notes.serre .fn-table td { font-size: 8pt; padding: 0 2px; }
+.prefs-notif { display: grid; gap: 6px; margin-top: 10px; } .prefs-notif label { display: flex; gap: 8px; align-items: flex-start; font-weight: 600; margin: 0; }
+.prefs-notif input { width: auto; min-height: 0; margin-top: 3px; } .prefs-notif .aide { font-weight: 400; }

@@ -245,7 +245,7 @@ function redimensionnerPhoto(fichier) {
 
 /* ================= BOÎTE À SUGGESTIONS (v2.5) ================= */
 let SUGG_PAGE = '';
-const VERSION_SITE = '2.6';
+const VERSION_SITE = '2.7';
 /* ================= NOTIFICATIONS SUR LE TÉLÉPHONE (v2.6, Firebase) ================= */
 // configuration publique du projet Firebase (faite pour être dans le site) ; la clé privée reste dans Apps Script
 const FIREBASE_CFG = { apiKey: 'AIzaSyDVRNmLz5ph73vf2a9vFhd2RVni8H9swt0', authDomain: 'lpdaoukro-notification.firebaseapp.com', projectId: 'lpdaoukro-notification',
@@ -294,9 +294,16 @@ function blocPush(id) {
   const e = etatPush();
   const txt = { actif: '✅ Activées sur cet appareil.', inactif: 'Recevez sur ce téléphone les annonces, les demandes et les actions urgentes, même quand l\'application est fermée.', refuse: '⛔ Bloquées dans le navigateur.',
     non: 'Ce navigateur ne permet pas les notifications.', ios: 'Sur iPhone : ajoutez d\'abord l\'application à l\'écran d\'accueil (Partager → « Sur l\'écran d\'accueil »), puis ouvrez-la depuis l\'icône.' }[e];
-  return `<div id="${id}"><p class="aide" style="margin-top:0">${txt}</p>${e === 'actif' ? `<button class="btn petit secondaire" data-push="tester">Envoyer un test</button> <button class="btn petit rouge" data-push="couper">Couper</button>` : e === 'inactif' || e === 'refuse' ? '<button class="btn" data-push="activer">🔔 Activer les notifications</button>' : ''}</div>`;
+  return `<div id="${id}"><p class="aide" style="margin-top:0">${txt}</p>${e === 'actif' ? `<button class="btn petit secondaire" data-push="tester">Envoyer un test</button> <button class="btn petit rouge" data-push="couper">Couper</button>
+    <div class="prefs-notif" data-prefs><label><input type="checkbox" data-pref="matin" checked> ☀ Message du matin <span class="aide">(enseignants : 30 min avant le 1er cours ; autres : 7 h s'il y a quelque chose à signaler)</span></label>
+    <label><input type="checkbox" data-pref="soir" checked> 🌙 Bilan du soir à 18 h 30</label></div>` : e === 'inactif' || e === 'refuse' ? '<button class="btn" data-push="activer">🔔 Activer les notifications</button>' : ''}</div>`;
 }
 function brancherPush(zone, apres) {
+  const P = $('[data-prefs]', zone);
+  if (P) {
+    api('prefsNotif').then(x => { $('[data-pref=matin]', P).checked = x.matin; $('[data-pref=soir]', P).checked = x.soir; }).catch(() => {});
+    $$('[data-pref]', P).forEach(c => c.onchange = async () => { try { await api('reglerNotif', { matin: $('[data-pref=matin]', P).checked, soir: $('[data-pref=soir]', P).checked }); toast('Préférences enregistrées.'); } catch (e) { toast(e.message, 5000); } });
+  }
   $$('[data-push]', zone).forEach(b => b.onclick = async () => {
     b.disabled = true;
     try {

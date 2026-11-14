@@ -311,16 +311,21 @@ async function pageNotes(c) {
   liste();
 }
 
-function imprimerFicheNotes(m, ev, el, sem, app) {
+function imprimerFicheNotes(m, ev, el, sem) {
+  // v2.7 : rang + signature de l'élève (l'appréciation reste sur le bulletin) ; une seule page jusqu'à 35 élèves
   const moys = el.map(e => moyenneMatiere(ev, e.id));
   const v = moys.filter(x => x !== null);
-  imprimer(`<div class="page">${entete('FICHE DE NOTES — SEMESTRE ' + sem)}
-    <p style="font-size:10pt;margin:4px 0">Classe : <b>${esc(m.classe)}</b> · Matière : <b>${esc(m.matiere)}</b> (coefficient ${nb(m.coef)}) · Enseignant : <b>${esc(m.profs || S.session.profil.nom)}</b></p>
-    <table class="petit-print"><thead><tr><th>N°</th><th>Nom et prénoms</th><th>Matricule</th>${ev.map(x => `<th>${esc(x.libelle || x.type)}<br><small>${frCourt(x.date)} · /${nb(x.bareme)} · coef ${nb(x.coef)}</small></th>`).join('')}<th>Moyenne /20</th><th>Appréciation</th></tr></thead>
-    <tbody>${el.map((e, i) => `<tr><td>${i + 1}</td><td><b>${esc(e.nom)}</b> ${esc(e.prenoms)}</td><td>${esc(e.matricule)}</td>${ev.map(x => `<td style="text-align:center">${esc(noteAffichee(x, e.id))}</td>`).join('')}<td style="text-align:center"><b>${n2(moys[i])}</b></td><td>${esc((app || {})[e.id] || '')}</td></tr>`).join('')}</tbody></table>
-    <p style="font-size:9.5pt">Moyenne de la classe : <b>${v.length ? n2(v.reduce((a, b) => a + b, 0) / v.length) : '—'}</b> · Plus forte : <b>${v.length ? n2(Math.max(...v)) : '—'}</b> · Plus faible : <b>${v.length ? n2(Math.min(...v)) : '—'}</b> · Moyenne ≥ 10 : <b>${v.filter(x => x >= 10).length}/${v.length}</b></p>
-    <p style="font-size:9pt;text-align:right">Daoukro, le ${fr(dateLocale())}</p>
-    <div class="signatures" style="grid-template-columns:1fr 1fr"><div>L'enseignant</div><div>Visa du Censeur</div></div></div>`);
+  const rang = i => { const mo = moys[i]; if (mo === null) return ''; const r = 1 + moys.filter(x => x !== null && x > mo + 1e-9).length, ex = moys.filter(x => x !== null && Math.abs(x - mo) < 1e-9).length > 1; return rangTxt(r, ex, el[i].sexe); };
+  const paysage = ev.length > 12, serre = ev.length > 6, n = Math.max(el.length, 1);
+  const dispo = paysage ? 125 : 200;                       // hauteur (mm) laissée aux lignes d'élèves
+  const h = Math.max(5.1, Math.min(8, dispo / Math.min(n, 35)));
+  imprimer(`<div class="page fiche-notes ${paysage ? 'paysage' : ''} ${serre ? 'serre' : ''}">${entete('FICHE DE NOTES — SEMESTRE ' + sem)}
+    <p class="fn-info">Classe : <b>${esc(m.classe)}</b> · Matière : <b>${esc(m.matiere)}</b> (coef. ${nb(m.coef)}) · Enseignant : <b>${esc(m.profs || S.session.profil.nom)}</b> · Effectif : <b>${el.length}</b></p>
+    <table class="fn-table" style="--h:${h.toFixed(2)}mm"><thead><tr><th class="fn-n">N°</th><th>Nom et prénoms</th><th class="fn-mat">Matricule</th>${ev.map(x => `<th class="fn-ev">${esc(x.libelle || x.type)}<br><small>${frCourt(x.date)} · /${nb(x.bareme)} · c${nb(x.coef)}</small></th>`).join('')}<th class="fn-moy">Moy. /20</th><th class="fn-rang">Rang</th><th class="fn-sig">Signature de l'élève</th></tr></thead>
+    <tbody>${el.map((e, i) => `<tr><td class="fn-n">${i + 1}</td><td class="fn-nom"><b>${esc(e.nom)}</b> ${esc(e.prenoms)}</td><td class="fn-mat">${esc(e.matricule)}</td>${ev.map(x => `<td class="c">${esc(noteAffichee(x, e.id))}</td>`).join('')}<td class="c"><b>${n2(moys[i])}</b></td><td class="c">${rang(i)}</td><td></td></tr>`).join('')}</tbody></table>
+    <div class="fn-pied"><p>Moyenne de la classe : <b>${v.length ? n2(v.reduce((a, b) => a + b, 0) / v.length) : '—'}</b> · Plus forte : <b>${v.length ? n2(Math.max(...v)) : '—'}</b> · Plus faible : <b>${v.length ? n2(Math.min(...v)) : '—'}</b> · Moyenne ≥ 10 : <b>${v.filter(x => x >= 10).length}/${v.length}</b></p>
+    <p style="text-align:right">Daoukro, le ${fr(dateLocale())}</p></div>
+    <div class="signatures fn-signatures"><div>L'enseignant</div><div>Visa du Censeur</div></div></div>`, `Fiche de notes - ${m.classe.replace(/\//g, "-")} - ${m.matiere} - semestre ${sem}`);
 }
 
 /* ===================== OUTILS v1.6 ===================== */
