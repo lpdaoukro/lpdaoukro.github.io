@@ -486,7 +486,7 @@ details.carte > summary { cursor: pointer; padding: 2px 0; } details.carte[open]
 .btn-mode { background: rgba(255,255,255,.15); color: #fff; border: 1px solid rgba(255,255,255,.4); border-radius: 16px; padding: 5px 10px; font-size: .8rem; font-weight: 700; cursor: pointer; }
 .btn-mode.prof { background: #009E60; border-color: #009E60; }
 .btn-actions { position: relative; background: rgba(255,255,255,.15); border: 0; border-radius: 50%; width: 36px; height: 36px; font-size: 1.05rem; cursor: pointer; }
-.btn-actions .pastille { position: absolute; top: -4px; right: -4px; }
+.btn-actions .pastille { position: absolute; top: -5px; right: -5px; min-width: 19px; height: 19px; line-height: 19px; padding: 0 5px; border-radius: 999px; background: #E53935; color: #fff; font-size: .72rem; font-weight: 700; text-align: center; border: 2px solid #fff; box-shadow: 0 1px 3px rgba(0,0,0,.35); font-family: inherit; }
 .mode-choix { display: grid; gap: 10px; margin: 14px 0 8px; }
 .bande { position: relative; display: flex; align-items: center; overflow: hidden; background: #EAF2FB; border-bottom: 1px solid #c9d9ea; height: 36px; }
 .bande.urgente { background: #FDECEC; border-bottom-color: #f2c4c4; }
