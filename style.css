@@ -534,3 +534,10 @@ table.droits select { font-size: .8rem; padding: 4px; min-width: 120px; }
 .cat-recettes { display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap: 10px; margin: 10px 0; }
 .cat-recettes .carte { margin: 0; } .cat-recettes h3 { margin: 0 0 6px; font-size: .95rem; }
 .cat-recettes .chiffres { display: flex; justify-content: space-between; font-size: .85rem; gap: 6px; flex-wrap: wrap; }
+/* v2.5 suggestions */
+.choix-genre { display: grid; gap: 6px; margin: 4px 0 10px; } .choix-genre label { display: flex; gap: 8px; align-items: center; font-weight: 400; margin: 0; }
+.choix-genre input { width: auto; min-height: 0; }
+.sugg-new { border-left: 4px solid #F28C00; } .sugg-l { border-top: 1px solid #eee; padding: 8px 0; }
+.sugg-st { display: inline-block; padding: 1px 8px; border-radius: 10px; font-size: .75rem; font-weight: 600; background: #EAF2FB; color: #1D5FA8; }
+.sugg-st.st-FAIT { background: #E6F4EA; color: #1E7B3A; } .sugg-st.st-REFUS { background: #FDECEA; color: #B3261E; } .sugg-st.st-NOUVEAU { background: #FFF1DE; color: #9A5200; }
+#btn-sugg { margin-right: 6px; }

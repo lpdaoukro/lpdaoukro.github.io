@@ -242,6 +242,79 @@ function redimensionnerPhoto(fichier) {
   });
 }
 
+/* ================= BOÎTE À SUGGESTIONS (v2.5) ================= */
+let SUGG_PAGE = '';
+const VERSION_SITE = '2.5';
+function reduireCapture(fichier) {
+  return new Promise((ok, ko) => {
+    const img = new Image();
+    img.onload = () => {
+      let L = Math.min(900, img.width), H = Math.round(img.height * L / img.width), d = '';
+      for (let essai = 0; essai < 6; essai++) {
+        const c = document.createElement('canvas'); c.width = L; c.height = H; const g = c.getContext('2d'); g.fillStyle = '#fff'; g.fillRect(0, 0, L, H); g.drawImage(img, 0, 0, L, H);
+        let q = 0.7; d = c.toDataURL('image/jpeg', q); while (d.length > 47000 && q > 0.3) { q -= 0.1; d = c.toDataURL('image/jpeg', q); }
+        if (d.length <= 47000) break; L = Math.round(L * 0.75); H = Math.round(H * 0.75);
+      }
+      URL.revokeObjectURL(img.src); d.length <= 47000 ? ok(d) : ko(new Error('Capture trop lourde.'));
+    };
+    img.onerror = () => ko(new Error('Image illisible.'));
+    img.src = URL.createObjectURL(fichier);
+  });
+}
+function pageSuggestion(c) {
+  const pg = SUGG_PAGE && PAGES[SUGG_PAGE] ? SUGG_PAGE : '';
+  c.innerHTML = `<h1>💡 Suggestion ou problème</h1>
+    <p class="aide">Votre message arrive directement chez l'administrateur, et lui seul le lit. Vous suivrez sa réponse dans « Mon compte ». Merci : vos remarques font avancer l'application.</p>
+    <form id="f-sg" class="carte">
+      <label>C'est…</label><div class="choix-genre">
+        <label><input type="radio" name="genre" value="IDEE" checked> 💡 Une idée d'amélioration</label>
+        <label><input type="radio" name="genre" value="PROBLEME"> 🐞 Un problème (quelque chose ne marche pas)</label>
+        <label><input type="radio" name="genre" value="QUESTION"> ❓ Une question</label></div>
+      <label>Votre message</label><textarea name="message" rows="6" maxlength="2000" required placeholder="Décrivez votre idée, ou ce que vous faisiez quand le problème est arrivé."></textarea>
+      ${pg ? `<p class="aide">Page concernée : <b>${esc(PAGES[pg].titre)}</b> (notée automatiquement)</p>` : ''}
+      <label>Capture d'écran (facultatif)</label><input type="file" id="sg-f" accept="image/*"><div id="sg-ap"></div>
+      <div id="sg-msg"></div><button class="btn vert large">Envoyer à l'administrateur</button></form>`;
+  let capture = '';
+  $('#sg-f').onchange = async e => { const f = e.target.files[0]; if (!f) return;
+    try { capture = await reduireCapture(f); $('#sg-ap').innerHTML = `<img src="${capture}" alt="" style="max-width:100%;max-height:220px;margin-top:6px;border-radius:8px;border:1px solid #ddd">`; }
+    catch (er) { capture = ''; $('#sg-ap').innerHTML = `<div class="erreur">${esc(er.message)}</div>`; } };
+  $('#f-sg').onsubmit = async e => {
+    e.preventDefault(); const f = e.target, b = $('button.vert', f); b.disabled = true;
+    try {
+      const r = await api('envoyerSuggestion', { genre: f.genre.value, message: f.message.value, page: pg ? PAGES[pg].titre : '', capture,
+        appareil: (navigator.userAgentData && navigator.userAgentData.platform ? navigator.userAgentData.platform + ' · ' : '') + (/Mobi/.test(navigator.userAgent) ? 'téléphone' : 'ordinateur') + ' · ' + innerWidth + '×' + innerHeight + ' · ' + navigator.userAgent.slice(0, 60),
+        version: VERSION_SITE });
+      toast(r.message, 6000); SUGG_PAGE = ''; location.hash = '#/mon-compte';
+    } catch (er) { b.disabled = false; $('#sg-msg').innerHTML = `<div class="erreur">${esc(er.message)}</div>`; }
+  };
+}
+async function pageSuggestions(c) {
+  const S2 = await api('suggestions');
+  let filtre = stock.lire('sugg_filtre', 'OUVERTES');
+  const dessiner = () => {
+    const L = S2.suggestions.filter(x => filtre === 'TOUTES' || (filtre === 'OUVERTES' ? !['FAIT', 'REFUSÉ'].includes(x.statut) : x.statut === filtre));
+    const nb = k => S2.suggestions.filter(x => x.statut === k).length;
+    c.innerHTML = `<h1>Suggestions du personnel</h1>
+      <p class="aide">Vous seul voyez cette page. Chaque nouveau message vous est aussi envoyé par e-mail à <b>${esc(S2.email || '(adresse non trouvée)')}</b> <a href="#" id="sg-mail">changer</a>.</p>
+      <div class="onglets" style="overflow-x:auto">${['OUVERTES', ...S2.statuts, 'TOUTES'].map(k => `<button class="${k === filtre ? 'actif' : ''}" data-f="${k}">${k === 'OUVERTES' ? 'À traiter' : k === 'TOUTES' ? 'Toutes' : k.charAt(0) + k.slice(1).toLowerCase()}${S2.statuts.includes(k) && nb(k) ? ' (' + nb(k) + ')' : ''}</button>`).join('')}</div>
+      ${L.map(x => `<div class="carte sugg ${x.statut === 'NOUVEAU' ? 'sugg-new' : ''}"><div><b>${esc(x.genreLib)}</b> · ${esc(x.id)} · <b>${esc(x.nom)}</b> · ${esc(String(x.cree_le).replace('T', ' ').slice(0, 16))}</div>
+        <div style="white-space:pre-wrap;margin:6px 0">${esc(x.message)}</div>
+        <div class="aide">${x.page ? 'Page : ' + esc(x.page) + ' · ' : ''}${esc(x.appareil || '')}${x.version ? ' · v' + esc(x.version) : ''}</div>
+        ${x.capture ? `<button class="btn petit secondaire" data-cap="${x.id}">🖼 Voir la capture</button><div id="cap-${x.id}"></div>` : ''}
+        <div class="ligne" style="margin-top:6px"><div style="flex:0 0 160px"><label>Statut</label><select data-st="${x.id}">${S2.statuts.map(k => `<option ${k === x.statut ? 'selected' : ''}>${k}</option>`).join('')}</select></div>
+          <div style="flex:1 1 240px"><label>Réponse à ${esc(x.nom)} (facultatif)</label><input data-rep="${x.id}" value="${esc(x.reponse || '')}" maxlength="500"></div>
+          <div style="flex:0 0 auto;align-self:flex-end"><button class="btn petit" data-ok="${x.id}">Enregistrer</button></div></div></div>`).join('') || '<div class="info">Aucune suggestion ici.</div>'}`;
+    $$('[data-f]', c).forEach(b => b.onclick = () => { filtre = b.dataset.f; stock.ecrire('sugg_filtre', filtre); dessiner(); });
+    $$('[data-cap]', c).forEach(b => b.onclick = async () => { try { const r = await api('captureSuggestion', { id: b.dataset.cap }); $('#cap-' + b.dataset.cap).innerHTML = `<img src="${r.capture}" alt="" style="max-width:100%;margin-top:6px;border:1px solid #ddd;border-radius:8px">`; b.remove(); } catch (e) { toast(e.message); } });
+    $$('[data-ok]', c).forEach(b => b.onclick = async () => { const id = b.dataset.ok;
+      try { const st = $(`[data-st="${id}"]`).value, rep = $(`[data-rep="${id}"]`).value; toast((await api('repondreSuggestion', { id, statut: st, reponse: rep })).message);
+        Object.assign(S2.suggestions.find(x => x.id === id), { statut: st, reponse: rep }); majActions(true); dessiner(); } catch (e) { toast(e.message, 5000); } });
+    $('#sg-mail').onclick = async e => { e.preventDefault(); const v = prompt('Adresse e-mail qui reçoit les alertes (laisser vide = adresse du compte Google du serveur) :', S2.email || ''); if (v === null) return;
+      try { const r = await api('emailSuggestions', { email: v }); S2.email = r.email; toast(r.message); dessiner(); } catch (er) { toast(er.message, 5000); } };
+  };
+  dessiner();
+}
+
 /* ================= DIAPORAMA ================= */
 const PHOTOS_ACCUEIL = [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11].map(i => `medias/accueil-${i}.jpg`);      // sans visages : page publique de connexion
 const PHOTOS_ATELIERS = [1, 2, 3, 4, 5, 6].map(i => `medias/atelier-${i}.jpg`); // après connexion
@@ -375,6 +448,8 @@ const PAGES = {
   'paiement':      { titre: 'État de paiement', mod: ['pointage', 'CONSULTE'], roles: ['censeur', 'admin', 'directeur'], fn: pagePaiement },
   'personnel':     { titre: 'Personnel', mod: ['pointage', 'CONSULTE'], roles: ['censeur', 'admin', 'directeur'], fn: pagePersonnel },
   'emplois':       { titre: 'Emplois du temps', mod: ['edt', 'CONSULTE'], roles: ['admin', 'censeur'], fn: (c, a) => pageEmploisV2(c, a) },
+  'suggestion':    { titre: 'Suggestion', roles: ['intervenant', 'censeur', 'admin', 'educateur', 'comptable', 'directeur'], cache: true, fn: c => pageSuggestion(c) },
+  'suggestions':   { titre: 'Suggestions', roles: ['admin'], fn: c => pageSuggestions(c) },
   'actions':       { titre: 'Mes actions', roles: ['intervenant', 'censeur', 'admin', 'educateur', 'comptable', 'directeur'], cache: true, fn: c => pageActions(c) },
   'annonces':      { titre: 'Annonces et échéances', mod: ['annonces', 'AGIT'], roles: ['admin', 'directeur', 'censeur'], fn: c => pageAnnonces(c) },
   'droits':        { titre: 'Droits et délégations', roles: ['admin'], fn: c => pageDroits(c) },
@@ -402,7 +477,7 @@ const GROUPES_MENU = [
   { id: 'eleves', titre: '🎓 Élèves', pages: ['eleves', 'effectifs', 'appel', 'absences', 'discipline', 'stages'] },
   { id: 'notes', titre: '📝 Notes', pages: ['notes', 'bulletins', 'calendrier-conseils'] },
   { id: 'finances', titre: '💰 Finances', pages: ['caisse', 'finances'] },
-  { id: 'admin', titre: '⚙ Administration', pages: ['annonces', 'emplois', 'comptes', 'droits', 'journal'] }
+  { id: 'admin', titre: '⚙ Administration', pages: ['annonces', 'emplois', 'comptes', 'droits', 'suggestions', 'journal'] }
 ];
 let groupeOuvert = null;
 function menu() {
@@ -454,6 +529,8 @@ document.addEventListener('DOMContentLoaded', () => {
   $('#etat-reseau').onclick = () => { if (!navigator.onLine) return toast('Pas de connexion : les pointages et les appels partiront automatiquement au retour du réseau.'); synchroniser(false); if (typeof synchroniserAppels === 'function') synchroniserAppels(false); if (typeof synchroniserNotes === 'function') synchroniserNotes(false); };
   $('#btn-moi').onclick = () => { location.hash = '#/mon-compte'; };
   $('#btn-actions').onclick = () => { location.hash = '#/actions'; };
+  if (!$('#btn-sugg')) { const b = document.createElement('button'); b.id = 'btn-sugg'; b.className = 'btn-actions'; b.title = 'Suggestion ou problème : écrire à l\'administrateur'; b.textContent = '💡'; b.hidden = true;
+    $('#btn-actions').before(b); b.onclick = () => { if (!location.hash.startsWith('#/suggestion')) SUGG_PAGE = (location.hash.slice(2) || '').split('/')[0]; location.hash = '#/suggestion'; }; }
   $('#btn-mode').onclick = () => { stock.ecrire('mode', modeProf() ? 'admin' : 'professeur'); NT.ref = null; history.replaceState(null, '', '#/'); toast(modeProf() ? 'Mode Professeur : interface enseignant.' : 'Mode Administrateur.'); afficher(); majActions(true); };
   setInterval(() => majActions(true), 5 * 60 * 1000);
   if ('serviceWorker' in navigator) navigator.serviceWorker.register('sw.js').catch(() => {});
@@ -1190,9 +1267,13 @@ function pageMonCompte(c) {
       <div class="ligne"><div><label>Code actuel</label><input name="a" class="code" type="password" inputmode="numeric" maxlength="4" required></div>
       <div><label>Nouveau code</label><input name="n" class="code" type="password" inputmode="numeric" maxlength="4" required></div></div>
       <div id="msg"></div><button class="btn" style="margin-top:10px">Changer</button></form></div>
+    <div class="carte"><h2 style="margin-top:0">💡 Mes suggestions</h2><div id="mc-sugg" class="aide">Chargement…</div><a class="btn secondaire" href="#/suggestion">Écrire une suggestion ou signaler un problème</a></div>
     ${S.file.length ? `<div class="alerte">${S.file.length} pointage(s) pas encore envoyé(s). Connectez-vous à internet avant de vous déconnecter, sinon ils seront perdus.</div>` : ''}
     <button class="btn rouge" id="dec">Se déconnecter</button>
     <p class="aide" style="margin-top:20px">Astuce : sur téléphone, utilisez « Ajouter à l'écran d'accueil » dans le menu du navigateur pour installer l'application avec son icône.</p>`;
+  api('mesSuggestions').then(M => { const z = $('#mc-sugg'); if (!z) return;
+    z.innerHTML = M.suggestions.length ? M.suggestions.map(x => `<div class="sugg-l"><b>${esc(x.genreLib)}</b> · ${esc(String(x.cree_le).slice(0, 10).split('-').reverse().join('/'))} · <span class="sugg-st st-${esc(x.statut).replace(/\s|É/g, '')}">${esc(x.statut)}</span>
+      <div>${esc(x.message)}</div>${x.reponse ? `<div class="info" style="margin:4px 0">Réponse : ${esc(x.reponse)}</div>` : ''}</div>`).join('') : 'Vous n\'avez pas encore envoyé de suggestion.'; }).catch(() => { const z = $('#mc-sugg'); if (z) z.textContent = ''; });
   let nouvellePhoto = '';
   activerZonePhoto($('.photo-zone', c), d => { nouvellePhoto = d; $('#env-ph').disabled = false; }, err => { $('#msg-ph').innerHTML = `<div class="erreur">${esc(err)}</div>`; });
   $('#env-ph').onclick = async () => {
@@ -1274,6 +1355,7 @@ function majEnteteMode() {
   const d = S.session && S.session.profil.double; b.hidden = !d;
   if (d) { b.textContent = modeProf() ? '👨‍🏫 Prof' : '⚙ Admin'; b.title = modeProf() ? 'Vous êtes en mode Professeur — passer en mode Administrateur' : 'Vous êtes en mode Administrateur — passer en mode Professeur'; b.classList.toggle('prof', modeProf()); }
   $('#btn-actions').hidden = !S.session;
+  if ($('#btn-sugg')) $('#btn-sugg').hidden = !S.session || role() === 'admin';
 }
 
 /* ================= BANDE D'ANNONCES ET BOÎTE « MES ACTIONS » (v2.1) ================= */
