@@ -89,6 +89,32 @@ async function api(action, donnees = {}) {
 }
 function cacheVue(cle, v) { if (v !== undefined) { stock.ecrire('vue_' + cle, { t: new Date().toLocaleString('fr-FR'), v }); return v; } return stock.lire('vue_' + cle, null); }
 /** Appelle le serveur ; si pas de réseau, renvoie la dernière version gardée en mémoire. */
+/* ================= MARQUE DE L'ÉTABLISSEMENT, DÉMO ET LICENCE (v2.9) ================= */
+const MQ = () => S.marque || stock.lire('marque', null) || { lpd: true, nom: 'LYCÉE PROFESSIONNEL DE DAOUKRO', court: 'LP DAOUKRO', ville: 'Daoukro', devise: '« Je dois créer mon entreprise ! »' };
+const logoCouleur = () => MQ().logo || (MQ().lpd ? 'medias/logo-complet.png' : 'medias/embleme-generique.svg');
+const logoNoir = () => MQ().logo || (MQ().lpd ? 'medias/embleme-noir-petit.png' : 'medias/embleme-generique.svg');
+const logoBlanc = () => MQ().lpd ? 'medias/embleme-blanc.png' : (MQ().logo || 'medias/embleme-generique-blanc.svg');
+const villeEtab = () => MQ().ville || '';
+const lieuLe = (maj) => villeEtab() ? (maj ? villeEtab().toUpperCase() : villeEtab()) + ', le' : 'Le';
+const faitA = () => villeEtab() ? 'Fait à ' + villeEtab() + ', le' : 'Fait le';
+const nomEtabTitre = () => String(MQ().nom || '').toLowerCase().replace(/(^|[\s'’-])(\p{L})/gu, (m, a, b) => a + b.toUpperCase()).replace(/\b(De|Du|Des|La|Le|Les|Et)\b/g, x => x.toLowerCase());
+async function chargerMarque() {
+  try { const m = await api('marque'); S.marque = m; stock.ecrire('marque', m); appliquerMarque(); return m; } catch (e) { appliquerMarque(); return MQ(); }
+}
+function appliquerMarque() {
+  const m = MQ();
+  document.title = (m.court || 'Établissement') + ' — Gestion de l\'établissement';
+  const e = $('.etab'); if (e) e.textContent = m.court || '';
+  const l = $('.logo-emb'); if (l) l.src = logoBlanc();
+  let d = $('#bandeau-special');
+  const L = m.licence || {}, txt = m.demo ? `🎓 <b>Version de démonstration</b> : données fictives, remises à zéro chaque nuit. <a href="https://wa.me/${String(m.contact || '').replace(/\D/g, '')}?text=${encodeURIComponent("Bonjour, j'ai essayé la démonstration de l'application de gestion d'établissement et je souhaite en savoir plus.")}" target="_blank" rel="noopener">💬 Nous écrire sur WhatsApp</a>`
+    : S.session && L.lectureSeule ? `🔒 <b>Lecture seule</b> : ${L.statut === 'EXPIREE' ? 'la licence a expiré' : 'aucune licence valable'}. Consultation, impression et export restent possibles. Contact : <a href="https://wa.me/${String(m.contact || '').replace(/\D/g, '')}" target="_blank" rel="noopener">WhatsApp ${esc(m.contact || '')}</a>`
+    : S.session && L.statut === 'ESSAI' ? `⏳ Version d'essai : il reste <b>${L.jours}</b> jour(s)${L.jours <= 15 ? ` · <a href="https://wa.me/${String(m.contact || '').replace(/\D/g, '')}" target="_blank" rel="noopener">obtenir la licence annuelle</a>` : ''}` : '';
+  if (!txt) { if (d) d.remove(); return; }
+  if (!d) { d = document.createElement('div'); d.id = 'bandeau-special'; document.body.prepend(d); }
+  d.className = m.demo ? 'demo' : L.lectureSeule ? 'bloque' : 'essai'; d.innerHTML = txt;
+}
+
 async function apiAvecCache(cle, action, donnees) {
   try { const r = await api(action, donnees); cacheVue(cle, r); return { r, ancien: null }; }
   catch (e) {
@@ -245,7 +271,7 @@ function redimensionnerPhoto(fichier) {
 
 /* ================= BOÎTE À SUGGESTIONS (v2.5) ================= */
 let SUGG_PAGE = '';
-const VERSION_SITE = '2.8';
+const VERSION_SITE = '2.9';
 /* ================= NOTIFICATIONS SUR LE TÉLÉPHONE (v2.6, Firebase) ================= */
 // configuration publique du projet Firebase (faite pour être dans le site) ; la clé privée reste dans Apps Script
 const FIREBASE_CFG = { apiKey: 'AIzaSyDVRNmLz5ph73vf2a9vFhd2RVni8H9swt0', authDomain: 'lpdaoukro-notification.firebaseapp.com', projectId: 'lpdaoukro-notification',
@@ -414,12 +440,52 @@ async function pageCalendrierScolaire(c) {
   $('#nf-ok').onclick = () => go({ action: 'enregistrerFerie', date: $('#nf-d').value, libelle: $('#nf-l').value, type: $('#nf-t').value, confirme: true });
 }
 
+/* ================= ÉTABLISSEMENT ET LICENCE (v2.9) ================= */
+async function pageEtablissement(c) {
+  const D = await api('etablissement'), E = D.etab;
+  const champ = (k, lib, aide = '') => `<label>${lib}</label><input name="${k}" value="${esc(E[k] || '')}">${aide ? `<div class="aide">${aide}</div>` : ''}`;
+  c.innerHTML = `<h1>Établissement</h1><p class="aide">Ces informations apparaissent sur la page de connexion, dans l'en-tête et sur tous les documents imprimés (bulletins, reçus, attestations…).</p>
+    <form id="f-et" class="carte">
+      ${champ('nom', 'Nom complet', ['ESSAI', 'ANNUELLE'].includes(D.licence.statut) ? 'Lié à la licence : pour le changer, contactez l’auteur.' : '')}
+      <div class="ligne"><div>${champ('court', 'Nom court (en-tête)', 'ex. LP DAOUKRO')}</div><div>${champ('ville', 'Ville', 'pour « Fait à …, le »')}</div><div>${champ('annee', 'Année scolaire', 'ex. 2026-2027')}</div></div>
+      ${champ('devise', 'Devise')}
+      <div class="ligne"><div>${champ('code', 'Code établissement')}</div><div>${champ('statut', 'Statut', 'Public / Privé')}</div><div>${champ('dretfpa', 'Direction régionale')}</div></div>
+      ${champ('adresse', 'Adresse postale')}<div class="ligne"><div>${champ('tel', 'Téléphone')}</div><div>${champ('email', 'E-mail')}</div></div>
+      ${champ('ministere', 'Ministère (en-tête des bulletins)')}
+      <label>Logo de l'établissement</label><div class="ligne" style="align-items:center"><img id="et-logo" src="${E.logo || logoCouleur()}" alt="" style="height:70px;width:auto;background:#fff;border:1px solid #ddd;border-radius:8px;padding:4px">
+        <div><input type="file" id="et-f" accept="image/*"><div class="aide">Image carrée de préférence (PNG). Elle est réduite automatiquement.</div>${E.logo ? '<button type="button" class="btn petit secondaire" id="et-sans">Retirer le logo</button>' : ''}</div></div>
+      <div id="et-msg"></div><button class="btn vert large">Enregistrer</button></form>`;
+  let logo;
+  $('#et-f').onchange = async e => { const f = e.target.files[0]; if (!f) return; try { logo = await reduireCapture(f); $('#et-logo').src = logo; } catch (er) { toast(er.message); } };
+  if ($('#et-sans')) $('#et-sans').onclick = () => { logo = ''; $('#et-logo').src = logoCouleur(); };
+  $('#f-et').onsubmit = async e => {
+    e.preventDefault(); const etab = Object.fromEntries(new FormData(e.target)); if (logo !== undefined) etab.logo = logo;
+    if (['ESSAI', 'ANNUELLE'].includes(D.licence.statut)) delete etab.nom;
+    try { const r = await api('enregistrerEtablissement', { etab }); S.marque = r.marque; stock.ecrire('marque', r.marque); appliquerMarque(); toast(r.message); } catch (er) { $('#et-msg').innerHTML = `<div class="erreur">${esc(er.message)}</div>`; }
+  };
+}
+async function pageLicence(c) {
+  const L = (await api('licence')).licence, wa = String(L.contact || '').replace(/\D/g, '');
+  const ST = { LIBRE: ['✅', 'Usage libre (aucune licence nécessaire)'], DEMO: ['🎓', 'Version de démonstration'], ESSAI: ['⏳', 'Version d\'essai'], ANNUELLE: ['✅', 'Licence annuelle'],
+    EXPIREE: ['🔒', 'Licence expirée : lecture seule'], ABSENTE: ['🔒', 'Aucune licence : lecture seule'], INVALIDE: ['⚠', 'Licence non valable : lecture seule'] }[L.statut] || ['', L.statut];
+  c.innerHTML = `<h1>Licence</h1>
+    <div class="carte ${L.lectureSeule ? 'alerte' : ''}"><h2 style="margin-top:0">${ST[0]} ${esc(ST[1])}</h2>
+      ${L.fin ? `<p>Établissement : <b>${esc(L.etab || '')}</b><br>Valable jusqu'au <b>${fr(L.fin)}</b>${L.jours >= 0 ? ` (encore ${L.jours} jour(s))` : ''}</p>` : ''}${L.erreur ? `<p class="erreur">${esc(L.erreur)}</p>` : ''}
+      <p class="aide">Sans licence valable, l'application passe en lecture seule : consultation, impression et export restent possibles, et aucune donnée n'est effacée.</p>
+      <a class="btn secondaire" href="https://wa.me/${wa}?text=${encodeURIComponent('Bonjour, je souhaite une licence pour l\'application de gestion : ' + (MQ().nom || ''))}" target="_blank" rel="noopener">💬 Contacter l'auteur sur WhatsApp</a></div>
+    ${['LIBRE', 'DEMO'].includes(L.statut) ? '' : `<form id="f-lic" class="carte"><label>Coller la clé reçue (essai ou licence annuelle)</label><textarea name="cle" rows="4" placeholder="LIC1.…" required style="font-family:monospace;font-size:.8rem"></textarea>
+      <div id="lic-msg"></div><button class="btn vert">Activer la clé</button></form>`}`;
+  if ($('#f-lic')) $('#f-lic').onsubmit = async e => { e.preventDefault();
+    try { const r = await api('enregistrerLicence', { cle: e.target.cle.value }); toast(r.message, 6000); await chargerMarque(); afficher(); } catch (er) { $('#lic-msg').innerHTML = `<div class="erreur">${esc(er.message)}</div>`; } };
+}
+
 /* ================= DIAPORAMA ================= */
 const PHOTOS_ACCUEIL = [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11].map(i => `medias/accueil-${i}.jpg`);      // sans visages : page publique de connexion
 const PHOTOS_ATELIERS = [1, 2, 3, 4, 5, 6].map(i => `medias/atelier-${i}.jpg`); // après connexion
 function carrousel(images, mode) {
+  if (!MQ().lpd) return `<div class="carrousel ${mode} sans-photo">${mode === 'bandeau' ? `<div class="legende"><b>${esc(nomEtabTitre())}</b><span>${esc(MQ().devise || '')}</span></div>` : ''}</div>`;   // photos réservées au LP Daoukro
   return `<div class="carrousel ${mode}">${images.map((src, i) => `<div class="diapo ${i === 0 ? 'visible' : ''}" style="background-image:url('${src}')"></div>`).join('')}
-    ${mode === 'bandeau' ? `<div class="legende"><b>Lycée Professionnel de Daoukro</b><span>« Je dois créer mon entreprise ! »</span></div>` : ''}</div>`;
+    ${mode === 'bandeau' ? `<div class="legende"><b>${esc(nomEtabTitre())}</b><span>${esc(MQ().devise || '')}</span></div>` : ''}</div>`;
 }
 let minuteurCarrousel;
 function lancerCarrousels() {
@@ -447,9 +513,11 @@ function ecranConnexion(onglet = 'connexion') {
   c.innerHTML = `
   <div class="ecran-connexion">${carrousel(PHOTOS_ACCUEIL, 'fond')}<div class="boite-connexion">
     <div class="titre"><img src="medias/ministere.png" alt="République de Côte d'Ivoire — Ministère délégué chargé de l'Enseignement technique" class="logo-ministere">
-      <img src="medias/logo-complet.png" alt="Logo du Lycée Professionnel de Daoukro" class="logo-complet">
-      <h1>Lycée Professionnel de Daoukro</h1><div class="aide">Gestion de l'établissement</div>
+      <img src="${logoCouleur()}" alt="Logo de l'établissement" class="logo-complet">
+      <h1>${esc(nomEtabTitre())}</h1><div class="aide">Gestion de l'établissement</div>
       <div class="drapeau"><i></i><i></i><i></i></div></div>
+    ${MQ().demo ? `<div class="demo-roles"><p><b>Essayez l'application en un clic</b> : choisissez un rôle.</p><div>${(MQ().comptesDemo || []).map((x, i) => `<button class="btn" data-demo="${i}">${x.icone} ${esc(x.role)}</button>`).join('')}</div>
+      <p class="aide">Données fictives, remises à zéro chaque nuit. <a href="https://wa.me/${String(MQ().contact || '').replace(/\D/g, '')}" target="_blank" rel="noopener">💬 WhatsApp ${esc(MQ().contact || '')}</a></p></div>` : ''}
     <div class="onglets"><button data-o="connexion">Se connecter</button><button data-o="inscription">Première connexion / nouveau code</button></div>
     <div id="zone"></div>
   </div></div>`;
@@ -458,6 +526,7 @@ function ecranConnexion(onglet = 'connexion') {
     b.onclick = () => ecranConnexion(b.dataset.o);
   });
   if (onglet === 'connexion') formConnexion(); else formInscription();
+  $$('[data-demo]', c).forEach(b => b.onclick = () => { const x = MQ().comptesDemo[b.dataset.demo]; const f = $('#f'); if (!f) return; f.m.value = x.matricule; f.c.value = x.code; f.requestSubmit(); });
   lancerCarrousels();
 }
 
@@ -549,6 +618,8 @@ const PAGES = {
   'emplois':       { titre: 'Emplois du temps', mod: ['edt', 'CONSULTE'], roles: ['admin', 'censeur'], fn: (c, a) => pageEmploisV2(c, a) },
   'suggestion':    { titre: 'Suggestion', roles: ['intervenant', 'censeur', 'admin', 'educateur', 'comptable', 'directeur'], cache: true, fn: c => pageSuggestion(c) },
   'suggestions':   { titre: 'Suggestions', roles: ['admin'], fn: c => pageSuggestions(c) },
+  'etablissement': { titre: 'Établissement', roles: ['admin'], fn: c => pageEtablissement(c) },
+  'licence':       { titre: 'Licence', roles: ['admin'], fn: c => pageLicence(c) },
   'calendrier-scolaire': { titre: 'Congés et jours fériés', roles: ['admin', 'censeur'], fn: c => pageCalendrierScolaire(c) },
   'actions':       { titre: 'Mes actions', roles: ['intervenant', 'censeur', 'admin', 'educateur', 'comptable', 'directeur'], cache: true, fn: c => pageActions(c) },
   'annonces':      { titre: 'Annonces et échéances', mod: ['annonces', 'AGIT'], roles: ['admin', 'directeur', 'censeur'], fn: c => pageAnnonces(c) },
@@ -577,7 +648,7 @@ const GROUPES_MENU = [
   { id: 'eleves', titre: '🎓 Élèves', pages: ['eleves', 'effectifs', 'appel', 'absences', 'discipline', 'stages'] },
   { id: 'notes', titre: '📝 Notes', pages: ['notes', 'bulletins', 'calendrier-conseils'] },
   { id: 'finances', titre: '💰 Finances', pages: ['caisse', 'finances'] },
-  { id: 'admin', titre: '⚙ Administration', pages: ['annonces', 'calendrier-scolaire', 'emplois', 'comptes', 'droits', 'suggestions', 'journal'] }
+  { id: 'admin', titre: '⚙ Administration', pages: ['annonces', 'calendrier-scolaire', 'emplois', 'comptes', 'droits', 'suggestions', 'etablissement', 'licence', 'journal'] }
 ];
 let groupeOuvert = null;
 function menu() {
@@ -634,6 +705,7 @@ document.addEventListener('DOMContentLoaded', () => {
   $('#btn-mode').onclick = () => { stock.ecrire('mode', modeProf() ? 'admin' : 'professeur'); NT.ref = null; history.replaceState(null, '', '#/'); toast(modeProf() ? 'Mode Professeur : interface enseignant.' : 'Mode Administrateur.'); afficher(); majActions(true); };
   setInterval(() => majActions(true), 5 * 60 * 1000);
   if ('serviceWorker' in navigator) navigator.serviceWorker.register('sw.js').then(() => setTimeout(rafraichirPush, 4000)).catch(() => {});
+  appliquerMarque(); chargerMarque().then(() => { if (!S.session) afficher(); });
   afficher();
   if (S.session && encadrement()) synchroniser();
   if (S.session && typeof synchroniserAppels === 'function') synchroniserAppels();
@@ -888,7 +960,7 @@ function imprimer(html, titre) {
   const pret = Promise.race([Promise.all(imgs.map(i => new Promise(ok => { i.onload = i.onerror = ok; }))), new Promise(ok => setTimeout(ok, 4000))]);
   pret.then(() => setTimeout(() => { if (tour !== imprimer.tour) return; window.print(); setTimeout(() => { if (document.body.classList.contains('imprime') && !matchMedia('print').matches) fin(); }, 1500); }, 200));
 }
-const entete = titre => `<div class="entete-doc"><img src="medias/ministere.png" class="ent-ministere" alt=""><div class="ent-centre"><b>${esc(String(S.session.params.etablissement).toUpperCase())}</b><span>Année scolaire ${esc(S.session.params.annee)}</span><span class="ent-tri"><i></i><i></i><i></i></span></div><img src="medias/embleme-noir-petit.png" class="ent-lycee" alt=""></div><div class="bandeau">${esc(titre)}</div>`;
+const entete = titre => `<div class="entete-doc"><img src="medias/ministere.png" class="ent-ministere" alt=""><div class="ent-centre"><b>${esc(String(S.session.params.etablissement).toUpperCase())}</b><span>Année scolaire ${esc(S.session.params.annee)}</span><span class="ent-tri"><i></i><i></i><i></i></span></div><img src="${logoNoir()}" class="ent-lycee" alt=""></div><div class="bandeau">${esc(titre)}</div>`;
 function identPrint(F) {
   const P = F.personne, K = F.calcul, ph = S.photos[P.matricule];
   return `${ph ? `<img class="photo-print" src="${ph}">` : ''}<div class="ident-print">
@@ -995,7 +1067,7 @@ async function pageTableau(c) {
           <td class="n">${nb(x.heuresFaites)}</td><td class="n"><b style="color:${x.heuresPerdues ? '#C00000' : 'inherit'}">${nb(x.heuresPerdues)}</b></td><td class="n">${pct(x.taux)}</td></tr>`).join('')}
       </tbody></table></div>${sc.length > 12 ? `<button class="btn petit secondaire" id="toutes-classes" style="margin-top:8px">Voir les ${sc.length} classes</button>` : ''}`
       : '<div class="vide">Pas encore de pointage.</div>'}</div>
-    <div class="carte"><h2 style="margin-top:0">💾 Sauvegarde</h2><p class="aide" style="margin:0">Une copie complète des données est faite automatiquement chaque vendredi à 19 h dans le Google Drive du lycée (dossier « SAUVEGARDES APPLI LP DAOUKRO », 12 dernières semaines conservées).</p></div>`;
+    <div class="carte"><h2 style="margin-top:0">💾 Sauvegarde</h2><p class="aide" style="margin:0">Une copie complète des données est faite automatiquement chaque vendredi à 19 h dans le Google Drive du lycée (dossier « SAUVEGARDES APPLI ${esc(String(MQ().court).toUpperCase())} », 12 dernières semaines conservées).</p></div>`;
   $$('tr[data-id]', c).forEach(tr => tr.onclick = () => { location.hash = '#/fiche/' + tr.dataset.id; });
   if ($('#toutes-classes')) $('#toutes-classes').onclick = e => { $$('.cache-classe', c).forEach(tr => tr.hidden = false); e.target.remove(); };
 }
@@ -1403,9 +1475,9 @@ function pageMonCompte(c) {
 /* ================= BIENVENUE (v1.9) ================= */
 const civ = c => c === 'F' ? 'Madame' : c === 'M' ? 'Monsieur' : '';
 const salutation = () => { const h = new Date().getHours(); return h < 13 ? 'Bonjour' : h < 18 ? 'Bon après-midi' : 'Bonsoir'; };
-const ENCOURAGEMENTS = ['Bonne journée de travail au LP Daoukro !', 'Ensemble, formons les professionnels de demain.', 'Chaque élève compte : merci pour votre engagement.',
+const ENCOURAGEMENTS = ['Bonne journée de travail !', 'Ensemble, formons les professionnels de demain.', 'Chaque élève compte : merci pour votre engagement.',
   'Une journée bien organisée est une journée réussie.', 'Votre travail fait la réussite du lycée. Merci !', 'Rigueur, discipline et travail : bonne journée !',
-  'Le savoir-faire se transmet un jour à la fois.', 'Merci de faire vivre le Lycée Professionnel de Daoukro.'];
+  'Le savoir-faire se transmet un jour à la fois.', 'Merci de faire vivre notre établissement.'];
 function encouragement() { const d = new Date(), n = d.getFullYear() * 400 + d.getMonth() * 31 + d.getDate(); return ENCOURAGEMENTS[n % ENCOURAGEMENTS.length]; }
 const nomAppel = p => `${civ(p.civilite) ? civ(p.civilite) + ' ' : ''}${p.nom}`;
 const LIB_ROLE = { admin: 'Administrateur', directeur: 'Directeur', censeur: 'Censeur', intervenant: 'Enseignant', educateur: 'Éducateur', comptable: 'Comptable' };
@@ -1416,7 +1488,7 @@ async function carteBienvenue() {
   const date = new Date().toLocaleDateString('fr-FR', { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' }).replace(/^./, x => x.toUpperCase());
   const dessiner = B => {
     const ph = S.photos[p.matricule];
-    voile.innerHTML = `<div class="bv-carte" role="dialog" aria-label="Bienvenue"><div class="bv-tete"><img src="medias/embleme-blanc.png" alt=""><div><b>${esc(String(S.session.params.etablissement || 'LP DAOUKRO').toUpperCase())}</b><span>${esc(date)}</span></div></div>
+    voile.innerHTML = `<div class="bv-carte" role="dialog" aria-label="Bienvenue"><div class="bv-tete"><img src="${logoBlanc()}" alt=""><div><b>${esc(String(S.session.params.etablissement || MQ().court).toUpperCase())}</b><span>${esc(date)}</span></div></div>
       <div class="bv-corps">${ph ? `<img class="bv-photo" src="${ph}" alt="">` : `<div class="bv-photo bv-init">${esc((p.nom || '?').split(' ').map(x => x[0]).slice(0, 2).join(''))}</div>`}
         <div class="bv-sal">${salutation()},</div><div class="bv-nom">${esc(nomAppel(p))}</div><div class="bv-fct">${esc(p.fonction || LIB_ROLE[p.role] || '')}</div>
         ${!p.civilite ? `<div class="bv-civ"><span>Comment souhaitez-vous être appelé(e) ?</span><div class="actions" style="justify-content:center"><button class="btn petit" data-cv="M">Monsieur</button><button class="btn petit" data-cv="F">Madame</button></div></div>` : ''}
@@ -1446,7 +1518,7 @@ async function carteBienvenue() {
 /* ================= MODE ADMINISTRATEUR / PROFESSEUR (v2.1) ================= */
 function choisirMode(suite) {
   const v = document.createElement('div'); v.className = 'bv-voile';
-  v.innerHTML = `<div class="bv-carte"><div class="bv-tete"><img src="medias/embleme-blanc.png" alt=""><div><b>LP DAOUKRO</b><span>Choix de l'espace</span></div></div>
+  v.innerHTML = `<div class="bv-carte"><div class="bv-tete"><img src="${logoBlanc()}" alt=""><div><b>${esc(MQ().court)}</b><span>Choix de l'espace</span></div></div>
     <div class="bv-corps"><p class="bv-sal">Vous êtes administrateur et enseignant.</p><div class="bv-nom" style="font-size:1.1rem">Entrer comme :</div>
     <div class="mode-choix"><button class="btn large" data-m="admin">⚙ Administrateur</button><button class="btn large vert" data-m="professeur">👨‍🏫 Professeur</button></div>
     <p class="aide">Vous pourrez changer à tout moment avec le bouton en haut de l'écran.</p></div></div>`;
@@ -1468,7 +1540,7 @@ async function majActions(forcer) {
   if (!forcer && Date.now() - ACT.le < 60000) return dessinerBande();
   ACT.le = Date.now();
   try {
-    ACT.donnees = await api('mesActions');
+    ACT.donnees = await api('mesActions'); chargerMarque();
     const p = S.session.profil, D = ACT.donnees;
     if (D.droits && !modeProf() && (JSON.stringify(D.droits) !== JSON.stringify(p.droits) || D.serfe !== p.serfe)) { p.droits = D.droits; p.serfe = D.serfe; stock.ecrire('session', S.session); menu(); }
   } catch (e) { /* rien */ }

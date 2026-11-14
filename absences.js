@@ -357,7 +357,7 @@ async function pageAbsencesEleve(c, id) {
     ${gere ? `<div class="carte"><h2 style="margin-top:0">✔ Justifier des absences</h2>
       <form id="f-just"><div class="ligne"><div><label>Du</label><input type="date" name="du" required value="${auj}"></div><div><label>Au</label><input type="date" name="au" required value="${auj}"></div>
         <div><label>Motif</label><select name="motif" required><option value="">— choisir —</option>${MOTIFS_JUSTIF.map(m => `<option>${m}</option>`).join('')}</select></div></div>
-        <label>Précisions</label><input name="detail" placeholder="ex. certificat médical du CSU de Daoukro">
+        <label>Précisions</label><input name="detail" placeholder="ex. certificat médical du centre de santé">
         <label>Photo du justificatif (facultatif)</label><div class="actions"><input type="file" id="f-piece" accept="image/*" hidden><button type="button" class="btn secondaire petit" id="b-piece">📷 Ajouter une photo</button><span id="apercu-piece" class="aide"></span></div>
         <div id="m-just"></div><button class="btn vert" style="margin-top:8px">Enregistrer la justification</button></form></div>` : ''}
     ${E.justifs.length ? `<h2>Justifications</h2><div class="table-defil"><table><thead><tr><th>Période</th><th>Motif</th><th>Saisie par</th><th></th></tr></thead><tbody>
@@ -425,7 +425,7 @@ function reduireDocument(fichier) {
 /* ===================== IMPRESSIONS ===================== */
 const ligneSign = (g, d) => `<div class="sign-2"><div>${g}</div><div>${d}</div></div>`;
 function blocBillet(titre, corps, sign) {
-  return `<div class="billet">${entete(titre)}${corps}${sign}<p class="aide-print">Fait à Daoukro, le ${fr(dateLocale())}</p></div>`;
+  return `<div class="billet">${entete(titre)}${corps}${sign}<p class="aide-print">${faitA()} ${fr(dateLocale())}</p></div>`;
 }
 function imprimerBillet(E, a) {
   const e = E.eleve, f = e.sexe === 'F';
@@ -460,7 +460,7 @@ function imprimerConvocation(E, sem) {
   const parent = e.pere_nom || e.mere_nom || e.tuteur_nom || '';
   imprimer(`<div class="page">${entete('CONVOCATION DES PARENTS')}
     <div style="font-size:12pt;line-height:1.8;margin:24px 10px">
-    <p style="text-align:right">Daoukro, le ${fr(dateLocale())}</p>
+    <p style="text-align:right">${lieuLe()} ${fr(dateLocale())}</p>
     <p>À l'attention de <b>${parent ? esc(parent) : 'Monsieur / Madame ………………………………………………'}</b>,<br>parent ou tuteur de l'élève <b>${esc(e.nom)} ${esc(e.prenoms)}</b>, classe de <b>${esc(e.classe)}</b>.</p>
     <p>Nous avons le regret de vous informer que ${f ? 'votre fille' : 'votre enfant'} totalise <b>${hTxt(sem.hNJ)} d'absence non justifiée(s)</b> au semestre ${sem.n} (depuis le ${fr(sem.du)})${sem.retards ? ` et <b>${sem.retards} retard(s)</b>` : ''}.</p>
     <p>Vous êtes prié(e) de vous présenter au lycée, au bureau de la Vie scolaire, le <b>……………………………</b> à <b>…………</b>, muni(e) de la présente convocation.</p>

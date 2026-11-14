@@ -301,7 +301,7 @@ function imprimerSanction(E, s) {
   const e = E.eleve, f = e.sexe === 'F';
   if (s.type === 'EXCLU_TEMP') {
     const ret = dateRetour(s.date_fin);
-    return imprimer(`<div class="page">${entete("AVIS D'EXCLUSION TEMPORAIRE")}<div class="lettre"><p style="text-align:right">Daoukro, le ${fr(dateLocale())}</p>
+    return imprimer(`<div class="page">${entete("AVIS D'EXCLUSION TEMPORAIRE")}<div class="lettre"><p style="text-align:right">${lieuLe()} ${fr(dateLocale())}</p>
       <p>À l'attention de <b>${parentDe(e) ? esc(parentDe(e)) : 'Monsieur / Madame ………………………………………'}</b>, parent ou tuteur de l'élève :</p>${identEleveDisc(e)}
       <p>Nous avons le regret de vous informer que ${f ? 'votre fille' : 'votre enfant'} est <b>exclu${f ? 'e' : ''} temporairement</b> de l'établissement pour une durée de <b>${s.jours} jour(s) de classe</b>,
       du <b>${fr(s.date)}</b> au <b>${fr(s.date_fin)}</b> inclus.</p><p>Motif : <b>${esc(s.motif)}</b></p>
@@ -310,7 +310,7 @@ function imprimerSanction(E, s) {
   }
   if (s.type === 'CONVOC') return imprimerConvocDisc(E, s);
   if (s.type === 'CONSEIL') return imprimerConvocConseil(E);
-  imprimer(`<div class="page">${entete('NOTIFICATION DE SANCTION')}<div class="lettre"><p style="text-align:right">Daoukro, le ${fr(dateLocale())}</p>
+  imprimer(`<div class="page">${entete('NOTIFICATION DE SANCTION')}<div class="lettre"><p style="text-align:right">${lieuLe()} ${fr(dateLocale())}</p>
     <p>À l'attention de <b>${parentDe(e) ? esc(parentDe(e)) : 'Monsieur / Madame ………………………………………'}</b>, parent ou tuteur de l'élève :</p>${identEleveDisc(e)}
     <p>Nous vous informons que ${f ? 'votre fille' : 'votre enfant'} a fait l'objet, le <b>${fr(s.date)}</b>, de la sanction suivante : <b>${libSanc(s)}</b>.</p>
     <p>Motif : <b>${esc(s.motif)}</b></p>${s.heure ? `<p>${s.type === 'RETENUE' ? 'La retenue aura lieu' : 'Elle aura lieu'} le <b>${fr(s.date)}</b> à <b>${esc(s.heure)}</b>${s.duree ? ` (durée : ${esc(s.duree)})` : ''}.</p>` : ''}
@@ -320,14 +320,14 @@ function imprimerSanction(E, s) {
 }
 function imprimerConvocDisc(E, s) {
   const e = E.eleve, f = e.sexe === 'F';
-  imprimer(`<div class="page">${entete('CONVOCATION DES PARENTS')}<div class="lettre"><p style="text-align:right">Daoukro, le ${fr(dateLocale())}</p>
+  imprimer(`<div class="page">${entete('CONVOCATION DES PARENTS')}<div class="lettre"><p style="text-align:right">${lieuLe()} ${fr(dateLocale())}</p>
     <p>À l'attention de <b>${parentDe(e) ? esc(parentDe(e)) : 'Monsieur / Madame ………………………………………'}</b>, parent ou tuteur de l'élève :</p>${identEleveDisc(e)}
     <p>Vous êtes prié(e) de vous présenter au lycée, au bureau de la Vie scolaire, le <b>${s && s.type === 'CONVOC' ? fr(s.date) : '……………………………'}</b> à <b>${s && s.heure ? esc(s.heure) : '…………'}</b>, au sujet du comportement de ${f ? 'votre fille' : 'votre enfant'}${s ? ` (${esc(s.motif)})` : ''}.</p>
     <p>Comptant sur votre présence, veuillez recevoir nos salutations distinguées.</p></div>${sign2("L'Éducateur", "Le Chef d'établissement")}</div>`);
 }
 function imprimerConvocConseil(E) {
   const e = E.eleve, f = e.sexe === 'F', s = E.sanctions.find(x => x.type === 'CONSEIL' && x.statut === 'VALIDÉE');
-  imprimer(`<div class="page">${entete('CONVOCATION AU CONSEIL DE DISCIPLINE')}<div class="lettre"><p style="text-align:right">Daoukro, le ${fr(dateLocale())}</p>
+  imprimer(`<div class="page">${entete('CONVOCATION AU CONSEIL DE DISCIPLINE')}<div class="lettre"><p style="text-align:right">${lieuLe()} ${fr(dateLocale())}</p>
     <p>À l'attention de <b>${parentDe(e) ? esc(parentDe(e)) : 'Monsieur / Madame ………………………………………'}</b>, parent ou tuteur de l'élève :</p>${identEleveDisc(e)}
     <p>Suite aux faits suivants : <b>${esc(s ? s.motif : '……………………………………')}</b>, ${f ? 'votre fille' : 'votre enfant'} est traduit${f ? 'e' : ''} devant le <b>conseil de discipline</b> de l'établissement.</p>
     <p>Le conseil se réunira le <b>……………………………</b> à <b>…………</b> dans les locaux du lycée. Votre présence ainsi que celle de l'élève est obligatoire.

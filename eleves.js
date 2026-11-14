@@ -365,7 +365,7 @@ async function imprimerListeClasse(cl, eleves, avecPhotos) {
     <table><thead><tr><th>N°</th>${avecPhotos ? '<th>Photo</th>' : ''}<th>Nom</th><th>Prénoms</th><th>Matricule</th><th>Sexe</th><th>Né(e) le</th><th>Statut</th>${avecPhotos ? '' : '<th style="width:22%">Observations</th>'}</tr></thead><tbody>
     ${eleves.map((e, i) => `<tr><td>${i + 1}</td>${avecPhotos ? `<td style="width:16mm">${EL.photos[e.id] ? `<img src="${EL.photos[e.id]}" style="width:13mm;height:16mm;object-fit:cover">` : ''}</td>` : ''}
       <td><b>${esc(e.nom)}</b></td><td>${esc(e.prenoms)}</td><td>${esc(e.matricule)}</td><td>${esc(e.sexe)}</td><td>${frD(e.date_naissance)}</td><td>${esc(e.statut)}${e.redoublant === 'OUI' ? ' (R)' : ''}</td>${avecPhotos ? '' : '<td></td>'}</tr>`).join('')}
-    </tbody></table><p style="font-size:9pt;text-align:right">Daoukro, le ${fr(dateLocale())}</p></div>`);
+    </tbody></table><p style="font-size:9pt;text-align:right">${lieuLe()} ${fr(dateLocale())}</p></div>`);
 }
 function imprimerFicheEleve(e, cl) {
   const ph = EL.photos[e.id];
@@ -390,7 +390,7 @@ function imprimerCertificat(e, cl) {
       <p>Matricule : <b>${esc(e.matricule || '……………')}</b>, ${nee} le <b>${frD(e.date_naissance) || '……………'}</b> à <b>${esc(e.lieu_naissance || '……………')}</b>,</p>
       <p>est régulièrement ${insc} dans notre établissement en classe de <b>${esc(e.classe)}</b>${cl ? ` (${esc(cl.libelle)})` : ''} au titre de l'année scolaire <b>${esc(P.annee)}</b>.</p>
       <p>En foi de quoi, le présent certificat lui est délivré pour servir et valoir ce que de droit.</p></div>
-    <p style="text-align:right;margin-right:20px">Fait à Daoukro, le ${fr(dateLocale())}</p>
+    <p style="text-align:right;margin-right:20px">${faitA()} ${fr(dateLocale())}</p>
     <p style="text-align:right;margin-right:20px;margin-top:10px"><b>Le Chef d'établissement</b></p></div>`);
 }
 async function imprimerCartes(eleves) {
@@ -398,7 +398,7 @@ async function imprimerCartes(eleves) {
   await chargerPhotosEleves(eleves.map(e => e.id));
   const P = S.session.params;
   const carte = e => `<div class="carte-scolaire">
-    <div class="cs-tete"><img src="medias/embleme-noir-petit.png" alt=""><div><b>${esc(P.etablissement)}</b><span>CARTE SCOLAIRE ${esc(P.annee)}</span></div></div>
+    <div class="cs-tete"><img src="${logoNoir()}" alt=""><div><b>${esc(P.etablissement)}</b><span>CARTE SCOLAIRE ${esc(P.annee)}</span></div></div>
     <div class="cs-corps"><div class="cs-photo" style="${EL.photos[e.id] ? `background-image:url('${EL.photos[e.id]}')` : ''}"></div>
       <div class="cs-info"><div class="cs-nom">${esc(e.nom)}</div><div>${esc(e.prenoms)}</div><div>Matricule : <b>${esc(e.matricule)}</b></div><div>Classe : <b>${esc(e.classe)}</b></div>
       <div>${e.sexe === 'F' ? 'Née' : 'Né'} le ${frD(e.date_naissance)}</div><div class="cs-sign">Le Chef d'établissement</div></div></div>

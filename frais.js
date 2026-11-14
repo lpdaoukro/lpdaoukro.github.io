@@ -96,7 +96,7 @@ async function pageFraisEleve(c, id) {
   const facult = R.rubriques.filter(r => r.actif && !r.obligatoire && !r.hors_caisse);
   const tarifFac = code => { const t = R.tarifs.filter(x => x.rubrique === code && x.actif); return t.length ? t[0].montant : ''; };
   const contacts = (e.contacts || []).filter(x => telInter(x[2]));
-  const msg = `Bonjour, le ${S.retard > 0 ? 'Lycée Professionnel de Daoukro vous rappelle qu\'un montant de ' + fcfa(S.retard) + ' est en retard' : 'Lycée Professionnel de Daoukro vous informe que le reste à payer est de ' + fcfa(S.reste)} pour les frais de scolarité de ${e.nom} ${e.prenoms} (${e.classe}). Merci de passer à la caisse du lycée. Le service financier.`;
+  const msg = `Bonjour, le ${S.retard > 0 ? nomEtabTitre() + ' vous rappelle qu\'un montant de ' + fcfa(S.retard) + ' est en retard' : nomEtabTitre() + ' vous informe que le reste à payer est de ' + fcfa(S.reste)} pour les frais de scolarité de ${e.nom} ${e.prenoms} (${e.classe}). Merci de passer à la caisse du lycée. Le service financier.`;
   const ligneSit = l => l.aPreciser ? `<tr><td>${esc(l.libelle)}</td><td colspan="4" class="aide">Statut affecté / payant à préciser dans la fiche de l'élève</td></tr>`
     : `<tr><td><b>${esc(l.libelle)}</b>${l.horsCaisse ? ' <span class="badge bleu">plateforme de l\'État</span>' : ''}${!l.obligatoire ? ' <span class="aide">(facultatif)</span>' : ''}${l.remise ? `<div class="aide">Tarif ${fcfa(l.tarif)} − réduction ${fcfa(l.remise)}</div>` : ''}
       ${l.tranches.length ? `<div class="aide">${l.tranches.map(t => `${t.n === 1 ? '1re' : '2e'} tranche : ${fcfa(t.montant)}${t.limite ? ` avant le ${fr(t.limite)}` : ''} — ${t.reste ? `reste ${fcfa(t.reste)}` : 'soldée ✓'}`).join('<br>')}</div>` : l.limite ? `<div class="aide">À payer avant le ${fr(l.limite)}</div>` : ''}</td>
@@ -225,7 +225,7 @@ async function ongletRetards(z) {
       <div class="actions" style="margin-bottom:8px"><button class="btn secondaire" id="fr-xls">📥 Excel</button></div>
       <div class="table-defil"><table><thead><tr><th>Élève</th><th>Classe</th><th class="n">En retard</th><th class="n">Reste total</th><th>Rappel</th></tr></thead><tbody>
       ${L.eleves.map(e => { const t = (e.contacts || []).map(x => telInter(x[2])).find(Boolean); return `<tr><td><a href="#/frais-eleve/${e.id}"><b>${esc(e.nom)}</b> ${esc(e.prenoms)}</a></td><td>${esc(e.classe)}</td><td class="n"><b>${fcfa(e.retard)}</b></td><td class="n">${fcfa(e.reste)}</td>
-        <td>${t ? `<a class="btn petit vert" target="_blank" href="https://wa.me/${t}?text=${encodeURIComponent(`Bonjour, le Lycée Professionnel de Daoukro vous rappelle qu'un montant de ${fcfa(e.retard)} est en retard pour les frais de scolarité de ${e.nom} ${e.prenoms} (${e.classe}). Merci de passer à la caisse du lycée. Le service financier.`)}">WhatsApp</a>` : '<span class="aide">pas de numéro</span>'}</td></tr>`; }).join('') || '<tr><td colspan="5" class="vide">Aucun retard.</td></tr>'}</tbody></table></div>`;
+        <td>${t ? `<a class="btn petit vert" target="_blank" href="https://wa.me/${t}?text=${encodeURIComponent(`Bonjour, le ${nomEtabTitre()} vous rappelle qu'un montant de ${fcfa(e.retard)} est en retard pour les frais de scolarité de ${e.nom} ${e.prenoms} (${e.classe}). Merci de passer à la caisse du lycée. Le service financier.`)}">WhatsApp</a>` : '<span class="aide">pas de numéro</span>'}</td></tr>`; }).join('') || '<tr><td colspan="5" class="vide">Aucun retard.</td></tr>'}</tbody></table></div>`;
     $('#fr-cl').onchange = ev => { cls = ev.target.value; dessiner(); };
     $('#fr-xls').onclick = () => exporterExcel('Retards_paiement.xlsx', [{ nom: 'Retards', lignes: [[`Retards de paiement au ${fr(dateLocale())}`], [], ['Nom', 'Prénoms', 'Classe', 'En retard', 'Reste', 'Téléphone'], ...L.eleves.map(e => [e.nom, e.prenoms, e.classe, e.retard, e.reste, ((e.contacts || [])[0] || [])[2] || ''])] }]);
   };
@@ -331,8 +331,8 @@ function blocRecu(R, copie) {
   const tranche = Sit ? Sit.lignes.filter(l => l.tranches && l.tranches.length && l.reste) : [];
   return `<div class="rc">
     <div class="rc-tete"><img class="rc-min" src="medias/ministere.png" alt="">
-      <div class="rc-etab"><b>${esc(String(P.etablissement).toUpperCase())}</b><span>${E.code ? 'Code ' + esc(E.code) + ' · ' : ''}${esc(E.adresse || 'Daoukro')}${E.tel ? ' · Tél. ' + esc(E.tel) : ''}</span><span>Année scolaire ${esc(P.annee)}</span><span class="ent-tri"><i></i><i></i><i></i></span></div>
-      <img class="rc-logo" src="medias/logo-complet.png" alt=""></div>
+      <div class="rc-etab"><b>${esc(String(P.etablissement).toUpperCase())}</b><span>${E.code ? 'Code ' + esc(E.code) + ' · ' : ''}${esc(E.adresse || villeEtab())}${E.tel ? ' · Tél. ' + esc(E.tel) : ''}</span><span>Année scolaire ${esc(P.annee)}</span><span class="ent-tri"><i></i><i></i><i></i></span></div>
+      <img class="rc-logo" src="${logoCouleur()}" alt=""></div>
     <div class="rc-titre"><span>REÇU DE PAIEMENT</span><b>N° ${esc(R.numero)}</b><em>${esc(copie)}</em></div>
     ${R.statut !== 'VALIDE' ? '<div class="recu-annule">ANNULÉ</div>' : ''}
     <div class="rc-corps"><div class="rc-infos">
@@ -348,7 +348,7 @@ function blocRecu(R, copie) {
     <div class="rc-sign"><div>Le Caissier<small>${esc(R.caissier)}</small></div><div>Cachet de la comptabilité</div><div>Le déposant</div></div>
   </div>`;
 }
-const S_ETAB = () => String(S.session.params.etablissement || 'LP DAOUKRO');
+const S_ETAB = () => String(S.session.params.etablissement || MQ().court);
 const RC_CSS = `/* ===== v1.8 Frais de scolarité : reçu (2 exemplaires sur une feuille A4) ===== */
 @media print { @page recu { size: A4; margin: 0; } #impression .page.rc-page { page: recu; } }
 #impression .rc-page { width: 210mm; height: 296mm; box-sizing: border-box; padding: 7mm 10mm; overflow: hidden; color: #000; font-size: 9.5pt; }

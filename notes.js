@@ -324,7 +324,7 @@ function imprimerFicheNotes(m, ev, el, sem) {
     <table class="fn-table" style="--h:${h.toFixed(2)}mm"><thead><tr><th class="fn-n">N°</th><th>Nom et prénoms</th><th class="fn-mat">Matricule</th>${ev.map(x => `<th class="fn-ev">${esc(x.libelle || x.type)}<br><small>${frCourt(x.date)} · /${nb(x.bareme)} · c${nb(x.coef)}</small></th>`).join('')}<th class="fn-moy">Moy. /20</th><th class="fn-rang">Rang</th><th class="fn-sig">Signature de l'élève</th></tr></thead>
     <tbody>${el.map((e, i) => `<tr><td class="fn-n">${i + 1}</td><td class="fn-nom"><b>${esc(e.nom)}</b> ${esc(e.prenoms)}</td><td class="fn-mat">${esc(e.matricule)}</td>${ev.map(x => `<td class="c">${esc(noteAffichee(x, e.id))}</td>`).join('')}<td class="c"><b>${n2(moys[i])}</b></td><td class="c">${rang(i)}</td><td></td></tr>`).join('')}</tbody></table>
     <div class="fn-pied"><p>Moyenne de la classe : <b>${v.length ? n2(v.reduce((a, b) => a + b, 0) / v.length) : '—'}</b> · Plus forte : <b>${v.length ? n2(Math.max(...v)) : '—'}</b> · Plus faible : <b>${v.length ? n2(Math.min(...v)) : '—'}</b> · Moyenne ≥ 10 : <b>${v.filter(x => x >= 10).length}/${v.length}</b></p>
-    <p style="text-align:right">Daoukro, le ${fr(dateLocale())}</p></div>
+    <p style="text-align:right">${lieuLe()} ${fr(dateLocale())}</p></div>
     <div class="signatures fn-signatures"><div>L'enseignant</div><div>Visa du Censeur</div></div></div>`, `Fiche de notes - ${m.classe.replace(/\//g, "-")} - ${m.matiere} - semestre ${sem}`);
 }
 
@@ -346,7 +346,7 @@ const preparerQR = () => chargerScript('lib/qrcode.js').catch(() => chargerScrip
 function enteteOfficiel(titreDroite) {
   const P = S.session.params, E = P.etab || {};
   return `<div class="off-entete"><div class="off-cadre"><img src="medias/armoiries.png" alt=""><div><b>RÉPUBLIQUE DE CÔTE D'IVOIRE</b><span>${esc(E.ministere || '')}</span><span>${esc(E.dretfpa || '')}</span></div></div>
-    <div class="off-cadre"><div><b>${esc(String(P.etablissement).toUpperCase())}</b><span>Code : ${esc(E.code || '')}</span><span>Statut : ${esc(E.statut || '')}</span></div><img src="medias/embleme-noir-petit.png" alt=""></div></div>${titreDroite || ''}`;
+    <div class="off-cadre"><div><b>${esc(String(P.etablissement).toUpperCase())}</b><span>Code : ${esc(E.code || '')}</span><span>Statut : ${esc(E.statut || '')}</span></div><img src="${logoNoir()}" alt=""></div></div>${titreDroite || ''}`;
 }
 function piedOfficiel() {
   const P = S.session.params, E = P.etab || {};
@@ -532,13 +532,13 @@ function imprimerPV(K) {
       <tr><th>Nb</th><th>%</th><th>Nb</th><th>%</th><th>Nb</th><th>%</th></tr></thead>
     <tbody>${disc.map(({ m, s }) => `<tr><td>${esc(m.matiere)}</td><td>${s ? s.nb : 0}</td><td>${s ? n2(s.moy) : ''}</td><td>${esc(m.profs)}</td>${s ? [s.t1, s.t2, s.t3].map(x => `<td>${x}</td><td>${pc(x, s.nb)}</td>`).join('') : '<td>0</td><td>0</td><td>0</td><td>0</td><td>0</td><td>0</td>'}<td></td></tr>`).join('')}</tbody></table>
     <h4>PERSONNEL D'ENCADREMENT</h4><table class="petit-print pv-emarg"><thead><tr><th style="width:50%">Nom et prénoms</th><th>Fonction</th><th>Émargement</th></tr></thead><tbody>${'<tr><td></td><td></td><td></td></tr>'.repeat(5)}</tbody></table>
-    <div class="off-sign"><div>Le Professeur principal</div><div>DAOUKRO, le ${fr(dateLocale())}<br>Le Directeur${P.directeur ? '<br><b>' + esc(P.directeur) + '</b>' : ''}</div></div>${piedOfficiel()}</div>`;
+    <div class="off-sign"><div>Le Professeur principal</div><div>${lieuLe(true)} ${fr(dateLocale())}<br>Le Directeur${P.directeur ? '<br><b>' + esc(P.directeur) + '</b>' : ''}</div></div>${piedOfficiel()}</div>`;
   const p3 = `<div class="page off">${enteteOfficiel(titre)}<h4>STATISTIQUES GÉNÉRALES PAR DISCIPLINE</h4>
     <table class="petit-print"><thead><tr><th>Matricule</th><th>Enseignant(s)</th><th>Discipline</th><th>Moyenne de la classe</th><th>Plus faible</th><th>Plus forte</th><th>Appréciation</th><th>Émargement</th></tr></thead>
     <tbody>${disc.map(({ m, s }) => `<tr><td>${esc(m.profsMat)}</td><td>${esc(m.profs)}</td><td>${esc(m.matiere)}</td><td>${s ? n2(s.moy) : ''}</td><td>${s ? n2(s.min) : ''}</td><td>${s ? n2(s.max) : ''}</td><td>${s ? apprAuto(s.moy) : ''}</td><td></td></tr>`).join('')}</tbody></table>
     <p style="text-align:center;font-size:11pt;margin:10px 0">MOYENNE GÉNÉRALE DE LA CLASSE : <b>${n2(K.stats.moy)}</b></p>
     <div class="pv-zone"><b><u>CONDUITE DE LA CLASSE :</u></b></div><div class="pv-zone"><b><u>OBSERVATIONS :</u></b></div>
-    <div class="off-sign"><div>Le Professeur principal</div><div>DAOUKRO, le ${fr(dateLocale())}<br>Le Directeur${P.directeur ? '<br><b>' + esc(P.directeur) + '</b>' : ''}</div></div>${piedOfficiel()}</div>`;
+    <div class="off-sign"><div>Le Professeur principal</div><div>${lieuLe(true)} ${fr(dateLocale())}<br>Le Directeur${P.directeur ? '<br><b>' + esc(P.directeur) + '</b>' : ''}</div></div>${piedOfficiel()}</div>`;
   imprimer(p1 + p2 + p3);
 }
 
@@ -726,7 +726,7 @@ function bulletinHtml(K, e) {
       <div><div class="bul-t2">Résultat annuel</div><div class="bul-mga">MGA : <b>${n2(e.annuelle) || '—'}</b><br>Rang : <b>${rangTxt(e.rangAn, e.rangAnEx, e.sexe) || '—'}</b></div></div>
       <div><div class="bul-t2">Décision de fin d'année</div><div class="bul-fin">${esc(e.fin || e.finPropose || '')}</div></div></div>` : ''}
     <div class="bul-bas2"><div><div class="bul-t">Appréciations du Conseil de Classe</div><div class="bul-appc">${esc(e.appG || '')}</div><div class="bul-pp">Le Professeur Principal${K.pp ? ' : ' + esc(K.pp) : ''}</div></div>
-      <div><div class="bul-t bul-t-clair">VISA DU CHEF D'ÉTABLISSEMENT</div><div class="bul-visa"><div>DAOUKRO, le ${dateVisa}<div class="bul-dir">${esc(P.directeur || '')}</div></div>${s2 ? `<div class="bul-qr">${qr}</div>` : ''}</div></div></div>
+      <div><div class="bul-t bul-t-clair">VISA DU CHEF D'ÉTABLISSEMENT</div><div class="bul-visa"><div>${lieuLe(true)} ${dateVisa}<div class="bul-dir">${esc(P.directeur || '')}</div></div>${s2 ? `<div class="bul-qr">${qr}</div>` : ''}</div></div></div>
     <p class="bul-note">Bulletin à conserver soigneusement. Il n'en sera pas délivré de duplicata.${provisoire ? ' — Document provisoire, non validé par le directeur.' : ''}</p>
     ${piedOfficiel()}</div>`;
 }

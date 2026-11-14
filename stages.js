@@ -200,9 +200,9 @@ function ongletReglagesStages(z, R) {
 }
 
 /* ===================== DOCUMENTS ===================== */
-const etabNom = () => esc(String(S.session.params.etablissement || 'Lycée Professionnel de Daoukro'));
+const etabNom = () => esc(String(S.session.params.etablissement || nomEtabTitre()));
 const dir = () => esc(S.session.params.directeur || '');
-const lieuDate = () => `<p style="text-align:right">Daoukro, le ${fr(dateLocale())}</p>`;
+const lieuDate = () => `<p style="text-align:right">${lieuLe()} ${fr(dateLocale())}</p>`;
 const eleveTxt = s => `${s.sexe === 'F' ? 'Mlle' : 'M.'} <b>${esc(s.nom)} ${esc(s.prenoms)}</b>, élève en classe de <b>${esc(s.classe)}</b>${s.libelle_classe ? ` (${esc(s.libelle_classe)})` : ''}, matricule ${esc(s.matricule || '…')}`;
 const periodeTxt = (s, P) => s.du && s.au ? `du <b>${fr(s.du)}</b> au <b>${fr(s.au)}</b>` : P.duree ? `pour une durée de <b>${P.duree} jours</b> (dates à convenir)` : 'aux dates à convenir';
 const entTxt = E => E ? `<b>${esc(E.nom)}</b>${E.ville ? ', ' + esc(E.ville) : ''}` : '…………………………………………';
@@ -230,7 +230,7 @@ function docIntroduction(s, P, E) {
 }
 function docConvention(s, P, E, enc) {
   const ex = lab => `<div class="page une-page">${entete('CONVENTION DE STAGE')}<p class="ex-lab">Exemplaire : ${lab}</p><div class="conv">
-    <p><b>Entre</b> le ${etabNom()}, BP 445 Daoukro, représenté par son Chef d'établissement, ci-après « l'établissement »,<br>
+    <p><b>Entre</b> le ${etabNom()}${S.session.params.etab && S.session.params.etab.adresse ? ', ' + esc(S.session.params.etab.adresse) : ''}, représenté par son Chef d'établissement, ci-après « l'établissement »,<br>
     <b>et</b> l'entreprise ${entTxt(E)}${E && E.adresse ? ', ' + esc(E.adresse) : ''}${E && E.telephone ? ', tél. ' + esc(E.telephone) : ''}, représentée par ${esc(E && E.responsable || '……………………………')}${E && E.fonction_responsable ? ', ' + esc(E.fonction_responsable) : ''}, ci-après « l'entreprise »,<br>
     <b>concernant</b> ${eleveTxt(s)}, ci-après « le stagiaire ».</p>
     <p><b>Article 1 — Objet.</b> La présente convention règle les rapports entre l'établissement, l'entreprise et le stagiaire pendant le stage, qui a pour but de permettre à l'élève de mettre en pratique sa formation en situation réelle de travail.</p>
@@ -241,7 +241,7 @@ function docConvention(s, P, E, enc) {
     <p><b>Article 6 — Absences et discipline.</b> Toute absence ou tout manquement grave est signalé à l'établissement, qui peut mettre fin au stage après concertation avec l'entreprise.</p>
     <p><b>Article 7 — Évaluation et attestation.</b> En fin de stage, le tuteur remplit la fiche d'appréciation fournie par l'établissement. ${P.evaluation === 'COMPLET' ? 'Le stagiaire rédige un rapport de stage qu\'il soutient devant un jury de l\'établissement.' : ''}</p>
     <p><b>Article 8 — Durée de validité.</b> La présente convention est établie en trois exemplaires : un pour l'établissement, un pour l'entreprise et un pour le stagiaire.</p></div>
-    <p style="text-align:right">Fait à Daoukro, le ${fr(dateLocale())}</p>
+    <p style="text-align:right">${faitA()} ${fr(dateLocale())}</p>
     <div class="signatures"><div>Pour l'établissement<br>Le Chef d'établissement</div><div>Pour l'entreprise<br>(cachet et signature)</div><div>Le stagiaire<br>et son parent / tuteur</div></div></div>`;
   return ex('ÉTABLISSEMENT') + ex('ENTREPRISE') + ex('STAGIAIRE');
 }
@@ -284,5 +284,5 @@ function docAttestation(s, P, E) {
     ${s.finale !== null && P.evaluation !== 'SANS_NOTE' ? `<p>Note de stage obtenue : <b>${n20(s.finale)} / 20</b>.</p>` : ''}
     ${s.appreciation ? `<p>Appréciation du tuteur : « ${esc(s.appreciation)} »</p>` : ''}
     <p>En foi de quoi, la présente attestation lui est délivrée pour servir et valoir ce que de droit.</p></div>
-    <p style="text-align:right;margin-right:20px">Fait à Daoukro, le ${fr(dateLocale())}</p>${signChef()}</div>`;
+    <p style="text-align:right;margin-right:20px">${faitA()} ${fr(dateLocale())}</p>${signChef()}</div>`;
 }

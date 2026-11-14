@@ -581,3 +581,11 @@ table.droits select { font-size: .8rem; padding: 4px; min-width: 120px; }
 .prefs-notif { display: grid; gap: 6px; margin-top: 10px; } .prefs-notif label { display: flex; gap: 8px; align-items: flex-start; font-weight: 600; margin: 0; }
 .prefs-notif input { width: auto; min-height: 0; margin-top: 3px; } .prefs-notif .aide { font-weight: 400; }
 tr.a-confirmer td { background: #FFF8E6; }
+/* v2.9 : démonstration, essai, lecture seule, établissement sans photos */
+#bandeau-special { padding: 7px 14px; font-size: .85rem; text-align: center; line-height: 1.35; }
+#bandeau-special.demo { background: #0F6E56; color: #fff; } #bandeau-special.essai { background: #FFF1DE; color: #7A4300; } #bandeau-special.bloque { background: #B3261E; color: #fff; }
+#bandeau-special a { color: inherit; font-weight: 700; text-decoration: underline; white-space: nowrap; }
+.demo-roles { background: #E9F6F1; border: 1px solid #9BD3BF; border-radius: 12px; padding: 10px 12px; margin: 10px 0; }
+.demo-roles p { margin: 0 0 8px; } .demo-roles > div { display: grid; grid-template-columns: repeat(auto-fit, minmax(130px, 1fr)); gap: 6px; } .demo-roles .btn { padding: 8px; font-size: .9rem; }
+.carrousel.sans-photo { background: linear-gradient(135deg, #1F4E79 0%, #2E6DA4 55%, #F28C00 160%); }
+.carrousel.bandeau.sans-photo { min-height: 120px; }
