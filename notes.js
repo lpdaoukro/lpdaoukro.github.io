@@ -25,6 +25,7 @@ async function synchroniserNotes(silencieux = true) {
   try {
     const lot = NT.file.slice(0, 20);
     const r = await api('enregistrerNotes', { items: lot });
+    const ren = r.resultats.filter(x => x.ok && x.message); if (ren.length) toast(ren.map(x => x.message).join(' '), 7000);
     r.resultats.forEach((res, i) => { if (!res.ok) NT.rejets.unshift(Object.assign({}, lot[i], { erreur: res.erreur, le: new Date().toLocaleString('fr-FR') })); });
     const envoyes = new Set(lot.map(x => x.ev.id + '|' + x.t));
     NT.file = NT.file.filter(x => !envoyes.has(x.ev.id + '|' + x.t));
@@ -179,7 +180,7 @@ async function pageNotes(c) {
       ${v0 ? `<div class="alerte">🔒 ${esc(v0)}</div>` : ''}${panneau}
       <form id="f-ev"><div class="carte"><div class="grille-champs">
         <div><label>Type</label><select name="type">${ref.params.types.map(t => `<option ${t === x.type ? 'selected' : ''}>${t}</option>`).join('')}</select></div>
-        <div><label>Intitulé</label><input name="libelle" value="${esc(x.libelle)}" placeholder="ex. Devoir n°1"></div>
+        <div><label>Intitulé</label><select name="titre" id="ev-titre"></select><input name="libelle_libre" id="ev-libre" value="" maxlength="60" placeholder="Tapez l'intitulé" style="display:none;margin-top:6px"><input type="hidden" name="libelle"></div>
         <div><label>Date</label><input type="date" name="date" value="${x.date}" max="${dateLocale()}" required></div>
         <div><label>Noté sur</label><input type="number" name="bareme" min="1" max="100" value="${x.bareme}" required></div>
         <div><label>Coefficient</label><input type="number" name="coef" min="0.5" max="20" step="0.5" value="${x.coef}" required></div></div>
@@ -191,6 +192,33 @@ async function pageNotes(c) {
       ${!v ? `<button class="btn vert large" id="ev-enr" style="position:sticky;bottom:10px">✔ Enregistrer les notes</button>${!nouveau ? '<button type="button" class="btn rouge petit" id="ev-sup" style="margin-top:10px">Supprimer cette évaluation</button>' : ''}` : ''}</form>`;
     appliquerPhotosEleves(); if (navigator.onLine) chargerPhotosEleves(el.map(e => e.id));
     $('#n-retour').onclick = e => { e.preventDefault(); vueMatiere(); };
+    // 2.4.2 : intitulés proposés « Devoir 1, Devoir 2… » (numéro libre suivant), saisie libre possible, doublons refusés
+    const fE = $('#f-ev'), cleT = t => String(t || '').normalize('NFD').replace(/[\u0300-\u036f]/g, '').toUpperCase().replace(/[^A-Z0-9]/g, '');
+    const numT = (t, ty) => { const r = cleT(t).match(new RegExp('^' + cleT(ty) + '(?:N?O?)?(\\d+)$')); return r ? +r[1] : 0; };
+    const canonT = (t, ty) => { const k = numT(t, ty); return cleT(k ? ty + k : t); };
+    const autresEv = () => { const sm = semDe(fE.date.value, ref.params) || st.sem; return evaluationsDe(ref).filter(y => y.m === m.id && y.id !== x.id && semDe(y.date, ref.params) === sm); };
+    const majTitres = (garder) => {
+      const ty = fE.type.value, A = autresEv(), pris = new Set(A.map(y => canonT(y.libelle || y.type, y.type)));
+      const nums = new Set(A.map(y => numT(y.libelle || y.type, ty)).filter(Boolean));
+      const ui = fE.titre.options.length ? (fE.titre.value === '__libre' ? fE.libelle_libre.value : fE.titre.value) : null;
+      const actuel = garder === 'ui' ? (ui || '') : garder ? (x.libelle || '') : '';
+      let opts = '';
+      if (ty !== 'Autre') {
+        let libre = 1; while (nums.has(libre)) libre++;
+        const max = Math.max(libre, ...nums, numT(actuel, ty)) + 2;
+        for (let i = 1; i <= max; i++) { const t = ty + ' ' + i, sel = actuel ? numT(actuel, ty) === i && canonT(actuel, ty) === cleT(ty + i) : i === libre;
+          opts += `<option value="${esc(t)}" ${nums.has(i) ? 'disabled' : ''} ${sel ? 'selected' : ''}>${esc(t)}${nums.has(i) ? ' — déjà utilisé' : i === libre ? ' (proposé)' : ''}</option>`; }
+      }
+      const estLibre = ty === 'Autre' || (actuel && !numT(actuel, ty)) || (garder === 'ui' && fE.titre.value === '__libre');
+      opts += `<option value="__libre" ${estLibre ? 'selected' : ''}>✏ Autre intitulé…</option>`;
+      fE.titre.innerHTML = opts;
+      fE.libelle_libre.value = estLibre ? actuel : ''; fE.libelle_libre.style.display = estLibre ? '' : 'none';
+      fE.dataset.pris = JSON.stringify([...pris]);
+    };
+    majTitres(!nouveau);
+    fE.type.onchange = () => majTitres(false);
+    fE.date.addEventListener('change', () => majTitres('ui'));
+    fE.titre.onchange = () => { const l = fE.titre.value === '__libre'; fE.libelle_libre.style.display = l ? '' : 'none'; if (l) fE.libelle_libre.focus(); };
     if (v) $$('#f-ev input, #f-ev select', c).forEach(i => { i.disabled = true; });
     const recharger = async () => { ref = await chargerRefNotes(st.classe); st.mat = ref.matieres.find(y => y.id === m.id) || st.mat; st.ev = evaluationsDe(ref).find(y => y.id === x.id) || st.ev; vueEval(); majActions(true); };
     const formDemande = (type, titre) => {
@@ -216,7 +244,7 @@ async function pageNotes(c) {
     const valideNote = val => { const n = normNote(val); if (!n || n === 'ABS' || n === 'NN') return true; const b = +$('[name=bareme]').value; return !isNaN(+n) && +n >= 0 && +n <= b; };
     if ($('#imp-b')) {
       $('#imp-b').onclick = () => $('#imp-f').click();
-      $('#imp-m').onclick = () => { const b = +$('[name=bareme]').value || 20; exporterExcel(`Notes ${m.classe.replace(/\//g, '-')} - ${m.matiere}.xlsx`, [{ nom: 'Notes', lignes: [[`${m.matiere} — ${m.classe} — ${$('[name=libelle]').value || $('[name=type]').value}`], [], ['N°', 'Matricule', 'Nom', 'Prénoms', `Note (/${b})`], ...el.map((e, i) => [i + 1, e.matricule || '', e.nom, e.prenoms, ''])] }]); };
+      $('#imp-m').onclick = () => { const b = +$('[name=bareme]').value || 20; exporterExcel(`Notes ${m.classe.replace(/\//g, '-')} - ${m.matiere}.xlsx`, [{ nom: 'Notes', lignes: [[`${m.matiere} — ${m.classe} — ${($('[name=titre]').value === '__libre' ? $('[name=libelle_libre]').value : $('[name=titre]').value) || $('[name=type]').value}`], [], ['N°', 'Matricule', 'Nom', 'Prénoms', `Note (/${b})`], ...el.map((e, i) => [i + 1, e.matricule || '', e.nom, e.prenoms, ''])] }]); };
       $('#imp-f').onchange = async ev => {
         const fi = ev.target.files[0]; ev.target.value = ''; if (!fi) return;
         const b = +$('[name=bareme]').value || 20;
@@ -233,6 +261,9 @@ async function pageNotes(c) {
       const fd = Object.fromEntries(new FormData(ev.target));
       const sem = semDe(fd.date, ref.params);
       if (!sem) { $('#ev-msg').innerHTML = '<div class="erreur">Cette date n\'est dans aucun semestre.</div>'; return; }
+      fd.libelle = (fd.titre === '__libre' ? fd.libelle_libre : fd.titre).trim();
+      if (fd.titre === '__libre' && !fd.libelle) { $('#ev-msg').innerHTML = '<div class="erreur">Tapez l\'intitulé de l\'évaluation.</div>'; fE.libelle_libre.focus(); return; }
+      if (JSON.parse(fE.dataset.pris || '[]').includes(canonT(fd.libelle || fd.type, fd.type))) { $('#ev-msg').innerHTML = `<div class="erreur">« ${esc(fd.libelle)} » existe déjà dans cette matière pour ce semestre : choisissez un autre intitulé.</div>`; return; }
       const notes = {}, fausses = [];
       champs.forEach(inp => { const n = normNote(inp.value); if (!n) return; if (!valideNote(n)) fausses.push(inp); notes[inp.dataset.e] = n; });
       if (fausses.length) { fausses.forEach(f => f.classList.add('note-erreur')); fausses[0].focus(); $('#ev-msg').innerHTML = `<div class="erreur">${fausses.length} note(s) impossible(s) (au-dessus du barème ou illisible).</div>`; return; }
