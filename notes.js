@@ -400,6 +400,12 @@ async function pageCalendrierConseils(c) {
       <div class="table-defil"><table><thead><tr><th>Date</th><th>Heure</th><th>Classe</th><th>Salle</th><th>Approbation automatique</th></tr></thead><tbody>
       ${L.conseils.map(x => `<tr class="${x.date < auj ? 'barre-ligne' : ''}"><td><b>${jour(x.date)}</b></td><td>${esc(x.heure)}</td><td><a href="#/conseil/${encodeURIComponent(x.classe)}">${esc(x.classe)}</a></td><td>${esc(x.salle)}</td><td class="aide">${fr(x.approbation)}${auj >= x.approbation ? ' ✓' : ''}</td></tr>`).join('') || '<tr><td colspan="5" class="vide">Aucun conseil programmé pour ce semestre.</td></tr>'}</tbody></table></div>
       ${gere ? `<h2>Programmer</h2>
+        <div class="carte" style="border-left:4px solid #F28C00"><b>✨ Proposer un calendrier</b>
+          <p class="aide" style="margin:4px 0">L'application place les classes par niveau (CAP, puis BT, puis BTS), sur les jours de cours qui suivent la fin du semestre (sans week-end, congé ni jour férié), en évitant si possible les heures de cours du professeur principal. Vous pouvez tout modifier ensuite.</p>
+          <div class="ligne"><div><label>Organisation</label><select id="pp-mode"><option value="NIVEAU">Un niveau par jour</option><option value="TOUS">Tous les niveaux le même jour</option></select></div>
+            <div><label>Premier jour</label><input type="date" id="pp-d"></div><div><label>Heure de début</label><input type="time" id="pp-h" value="14:00"></div>
+            <div><label>Durée par classe (min)</label><input type="number" id="pp-dur" value="45" min="15" max="180" step="5"></div>
+            <div style="flex:0 0 auto;align-self:flex-end"><button type="button" class="btn" id="pp-go">Proposer</button></div></div><div id="pp-msg"></div></div>
         <div class="carte"><b>Remplir plusieurs classes d'un coup</b><div class="ligne">
           <div><label>Classes commençant par</label><input id="cc-pref" placeholder="ex. 2BT/ ou 1CAP"></div><div><label>Date</label><input type="date" id="cc-d"></div>
           <div><label>1re heure</label><input type="time" id="cc-h" value="14:00"></div><div><label>Durée par classe (min)</label><input type="number" id="cc-dur" value="45" min="10" step="5"></div>
@@ -413,6 +419,16 @@ async function pageCalendrierConseils(c) {
       <table><thead><tr><th>Date</th><th>Heure</th><th>Classe</th><th>Salle</th><th>Fin de saisie des notes</th></tr></thead><tbody>${L.conseils.map(x => `<tr><td>${jour(x.date)}</td><td>${esc(x.heure)}</td><td>${esc(x.classe)}</td><td>${esc(x.salle)}</td><td>${fr(x.limite)}</td></tr>`).join('')}</tbody></table>
       <p>Les notes non approuvées par les enseignants sont approuvées automatiquement deux jours avant le conseil.</p><div class="signatures" style="grid-template-columns:1fr 1fr"><div>Le Censeur</div><div>Le Chef d'établissement</div></div></div>`, `Calendrier des conseils de classe - semestre ${sem}`);
     if (!gere) return;
+    $('#pp-mode').onchange = e => { $('#pp-h').value = e.target.value === 'TOUS' ? '08:00' : '14:00'; };
+    $('#pp-go').onclick = async () => {
+      try {
+        const P = await api('proposerConseils', { semestre: sem, mode: $('#pp-mode').value, debut: $('#pp-d').value, heure: $('#pp-h').value, duree: $('#pp-dur').value });
+        if (!$('#pp-d').value) $('#pp-d').value = P.premierJour;
+        P.items.forEach(it => { const tr = $(`#f-cc tr[data-k="${CSS.escape(it.classe)}"]`); if (!tr) return; $('[name=date]', tr).value = it.date; $('[name=heure]', tr).value = it.heure; tr.classList.add('note-importee'); });
+        $('#pp-msg').innerHTML = `<div class="info">${esc(P.message)}</div>`; toast('Proposition placée dans le tableau : vérifiez puis « Enregistrer ».', 6000);
+        $('#f-cc').scrollIntoView({ behavior: 'smooth' });
+      } catch (e) { $('#pp-msg').innerHTML = `<div class="erreur">${esc(e.message)}</div>`; }
+    };
     $('#cc-rem').onclick = () => {
       const pref = normal($('#cc-pref').value), d = $('#cc-d').value, dur = +$('#cc-dur').value || 45; let [h, m] = ($('#cc-h').value || '14:00').split(':').map(Number);
       if (!pref || !d) return toast('Indiquez le début du nom des classes et la date.');

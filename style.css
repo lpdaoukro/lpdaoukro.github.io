@@ -580,3 +580,4 @@ table.droits select { font-size: .8rem; padding: 4px; min-width: 120px; }
 #impression .fiche-notes.serre .fn-table td { font-size: 8pt; padding: 0 2px; }
 .prefs-notif { display: grid; gap: 6px; margin-top: 10px; } .prefs-notif label { display: flex; gap: 8px; align-items: flex-start; font-weight: 600; margin: 0; }
 .prefs-notif input { width: auto; min-height: 0; margin-top: 3px; } .prefs-notif .aide { font-weight: 400; }
+tr.a-confirmer td { background: #FFF8E6; }

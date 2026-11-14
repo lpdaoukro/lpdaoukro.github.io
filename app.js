@@ -245,7 +245,7 @@ function redimensionnerPhoto(fichier) {
 
 /* ================= BOÎTE À SUGGESTIONS (v2.5) ================= */
 let SUGG_PAGE = '';
-const VERSION_SITE = '2.7';
+const VERSION_SITE = '2.8';
 /* ================= NOTIFICATIONS SUR LE TÉLÉPHONE (v2.6, Firebase) ================= */
 // configuration publique du projet Firebase (faite pour être dans le site) ; la clé privée reste dans Apps Script
 const FIREBASE_CFG = { apiKey: 'AIzaSyDVRNmLz5ph73vf2a9vFhd2RVni8H9swt0', authDomain: 'lpdaoukro-notification.firebaseapp.com', projectId: 'lpdaoukro-notification',
@@ -384,6 +384,36 @@ async function pageSuggestions(c) {
   dessiner();
 }
 
+/* ================= CONGÉS ET JOURS FÉRIÉS (v2.8) ================= */
+async function pageCalendrierScolaire(c) {
+  const D = await api('feries'), auj = dateLocale();
+  const TYPES = { FIXE: 'Fête fixe', 'CHRÉTIEN': 'Fête chrétienne', MUSULMAN: 'Fête musulmane', AUTRE: 'Autre' };
+  const jl = d => ['dimanche', 'lundi', 'mardi', 'mercredi', 'jeudi', 'vendredi', 'samedi'][new Date(d + 'T12:00:00').getDay()];
+  c.innerHTML = `<h1>Congés et jours fériés</h1>
+    <p class="aide">Ces jours sont des jours sans cours : pas de pointage ni d'appel attendus, pas de message du matin. Les annonces partent toutes seules dans la bande et sur les téléphones : <b>congés</b> 7 jours avant, la veille, puis la reprise ; <b>jours fériés</b> 3 jours avant ; <b>fin de semestre</b> 14 jours avant, puis en URGENT 3 jours avant.</p>
+    <div class="carte"><b>Semestres</b> : ${D.semestres.map(x => `S${x.n} du ${fr(x.du)} au ${fr(x.au)}`).join(' · ')} <span class="aide">(se règlent dans Élèves → Absences → Paramètres)</span></div>
+    <h2>Congés (périodes)</h2>
+    <div class="table-defil"><table><thead><tr><th>Période</th><th>Du</th><th>Au</th><th></th></tr></thead><tbody>
+    ${D.conges.filter(x => x.du !== x.au).map((x, i) => `<tr class="${x.au < auj ? 'barre-ligne' : ''}"><td><input data-cl="${i}" value="${esc(x.l || '')}"></td><td><input type="date" data-cd="${i}" value="${x.du}"></td><td><input type="date" data-ca="${i}" value="${x.au}"></td>
+      <td style="white-space:nowrap"><button class="btn petit" data-cok="${i}">✔</button> <button class="btn petit rouge" data-csup="${i}">✕</button></td></tr>`).join('') || '<tr><td colspan="4" class="vide">Aucune période de congés saisie.</td></tr>'}
+    <tr><td><input id="nc-l" placeholder="ex. Congés de Noël"></td><td><input type="date" id="nc-d"></td><td><input type="date" id="nc-a"></td><td><button class="btn petit vert" id="nc-ok">Ajouter</button></td></tr></tbody></table></div>
+    <h2>Jours fériés</h2>
+    <p class="aide">Les fêtes musulmanes dépendent de la lune : elles sont marquées <b>à confirmer</b>. Corrigez la date dès l'annonce officielle, puis cochez « Confirmé ».</p>
+    <div class="table-defil"><table><thead><tr><th>Date</th><th>Jour férié</th><th>Type</th><th>Confirmé</th><th></th></tr></thead><tbody>
+    ${D.feries.map((x, i) => `<tr class="${x.date < auj ? 'barre-ligne' : ''} ${x.confirme ? '' : 'a-confirmer'}"><td><input type="date" data-fd="${i}" value="${x.date}"><div class="aide">${jl(x.date)}</div></td><td><input data-fl="${i}" value="${esc(x.libelle)}"></td>
+      <td><select data-ft="${i}">${Object.keys(TYPES).map(k => `<option value="${k}" ${k === x.type ? 'selected' : ''}>${TYPES[k]}</option>`).join('')}</select></td>
+      <td style="text-align:center"><input type="checkbox" data-fc="${i}" ${x.confirme ? 'checked' : ''} style="width:auto;min-height:0"></td>
+      <td style="white-space:nowrap"><button class="btn petit" data-fok="${i}">✔</button> <button class="btn petit rouge" data-fsup="${i}">✕</button></td></tr>`).join('')}
+    <tr><td><input type="date" id="nf-d"></td><td><input id="nf-l" placeholder="Nom du jour férié"></td><td><select id="nf-t">${Object.keys(TYPES).map(k => `<option value="${k}" ${k === 'AUTRE' ? 'selected' : ''}>${TYPES[k]}</option>`).join('')}</select></td><td></td><td><button class="btn petit vert" id="nf-ok">Ajouter</button></td></tr></tbody></table></div>`;
+  const CG = D.conges.filter(x => x.du !== x.au), go = async (q, m) => { try { toast((await api(q.action, q)).message, 5000); afficher(); } catch (e) { toast(e.message, 6000); } };
+  $$('[data-cok]', c).forEach(b => b.onclick = () => { const i = b.dataset.cok; go({ action: 'enregistrerConge', ancien: CG[i], libelle: $(`[data-cl="${i}"]`).value, du: $(`[data-cd="${i}"]`).value, au: $(`[data-ca="${i}"]`).value }); });
+  $$('[data-csup]', c).forEach(b => b.onclick = () => { const i = b.dataset.csup; if (confirm('Retirer « ' + CG[i].l + ' » ?')) go({ action: 'enregistrerConge', ancien: CG[i], supprimer: true }); });
+  $('#nc-ok').onclick = () => go({ action: 'enregistrerConge', libelle: $('#nc-l').value, du: $('#nc-d').value, au: $('#nc-a').value });
+  $$('[data-fok]', c).forEach(b => b.onclick = () => { const i = b.dataset.fok, x = D.feries[i]; go({ action: 'enregistrerFerie', ancienne: x.date, libelleAncien: x.libelle, date: $(`[data-fd="${i}"]`).value, libelle: $(`[data-fl="${i}"]`).value, type: $(`[data-ft="${i}"]`).value, confirme: $(`[data-fc="${i}"]`).checked }); });
+  $$('[data-fsup]', c).forEach(b => b.onclick = () => { const i = b.dataset.fsup, x = D.feries[i]; if (confirm('Retirer « ' + x.libelle + ' » du ' + fr(x.date) + ' ?')) go({ action: 'enregistrerFerie', ancienne: x.date, libelleAncien: x.libelle, supprimer: true }); });
+  $('#nf-ok').onclick = () => go({ action: 'enregistrerFerie', date: $('#nf-d').value, libelle: $('#nf-l').value, type: $('#nf-t').value, confirme: true });
+}
+
 /* ================= DIAPORAMA ================= */
 const PHOTOS_ACCUEIL = [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11].map(i => `medias/accueil-${i}.jpg`);      // sans visages : page publique de connexion
 const PHOTOS_ATELIERS = [1, 2, 3, 4, 5, 6].map(i => `medias/atelier-${i}.jpg`); // après connexion
@@ -519,6 +549,7 @@ const PAGES = {
   'emplois':       { titre: 'Emplois du temps', mod: ['edt', 'CONSULTE'], roles: ['admin', 'censeur'], fn: (c, a) => pageEmploisV2(c, a) },
   'suggestion':    { titre: 'Suggestion', roles: ['intervenant', 'censeur', 'admin', 'educateur', 'comptable', 'directeur'], cache: true, fn: c => pageSuggestion(c) },
   'suggestions':   { titre: 'Suggestions', roles: ['admin'], fn: c => pageSuggestions(c) },
+  'calendrier-scolaire': { titre: 'Congés et jours fériés', roles: ['admin', 'censeur'], fn: c => pageCalendrierScolaire(c) },
   'actions':       { titre: 'Mes actions', roles: ['intervenant', 'censeur', 'admin', 'educateur', 'comptable', 'directeur'], cache: true, fn: c => pageActions(c) },
   'annonces':      { titre: 'Annonces et échéances', mod: ['annonces', 'AGIT'], roles: ['admin', 'directeur', 'censeur'], fn: c => pageAnnonces(c) },
   'droits':        { titre: 'Droits et délégations', roles: ['admin'], fn: c => pageDroits(c) },
@@ -546,7 +577,7 @@ const GROUPES_MENU = [
   { id: 'eleves', titre: '🎓 Élèves', pages: ['eleves', 'effectifs', 'appel', 'absences', 'discipline', 'stages'] },
   { id: 'notes', titre: '📝 Notes', pages: ['notes', 'bulletins', 'calendrier-conseils'] },
   { id: 'finances', titre: '💰 Finances', pages: ['caisse', 'finances'] },
-  { id: 'admin', titre: '⚙ Administration', pages: ['annonces', 'emplois', 'comptes', 'droits', 'suggestions', 'journal'] }
+  { id: 'admin', titre: '⚙ Administration', pages: ['annonces', 'calendrier-scolaire', 'emplois', 'comptes', 'droits', 'suggestions', 'journal'] }
 ];
 let groupeOuvert = null;
 function menu() {
