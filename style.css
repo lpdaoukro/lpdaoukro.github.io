@@ -541,3 +541,4 @@ table.droits select { font-size: .8rem; padding: 4px; min-width: 120px; }
 .sugg-st { display: inline-block; padding: 1px 8px; border-radius: 10px; font-size: .75rem; font-weight: 600; background: #EAF2FB; color: #1D5FA8; }
 .sugg-st.st-FAIT { background: #E6F4EA; color: #1E7B3A; } .sugg-st.st-REFUS { background: #FDECEA; color: #B3261E; } .sugg-st.st-NOUVEAU { background: #FFF1DE; color: #9A5200; }
 #btn-sugg { margin-right: 6px; }
+@media (max-width: 430px) { .etab { white-space: nowrap; } .entete-droite .btn-actions { width: 32px; height: 32px; font-size: .95rem; } #btn-sugg { margin-right: 2px; } }

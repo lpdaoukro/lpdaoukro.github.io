@@ -1,5 +1,5 @@
 // Service worker : garde l'application sur le téléphone pour qu'elle s'ouvre même sans connexion.
-const VERSION = 'lpd-v28';
+const VERSION = 'lpd-v29';
 const FICHIERS = ['./', 'index.html', 'style.css', 'app.js', 'eleves.js', 'absences.js', 'notes.js', 'discipline.js', 'frais.js', 'stages.js', 'edt.js', 'config.js', 'manifest.webmanifest', 'icone-192.png', 'icone-512.png',
   'medias/embleme-blanc.png', 'medias/embleme-noir-petit.png', 'medias/logo-complet.png',
   'medias/armoiries.png', 'medias/ministere.png',
@@ -16,4 +16,21 @@ self.addEventListener('fetch', e => {
   e.respondWith(fetch(req).then(rep => {
     const copie = rep.clone(); caches.open(VERSION).then(c => c.put(req, copie)); return rep;
   }).catch(() => caches.match(req).then(r => r || caches.match('index.html'))));
+});
+
+// Notifications (v2.6) : messages envoyés par le serveur via Firebase Cloud Messaging
+self.addEventListener('push', e => {
+  let d = {}; try { d = e.data ? e.data.json() : {}; } catch (x) { d = { data: { titre: 'LP Daoukro', corps: e.data ? e.data.text() : '' } }; }
+  const x = d.data || d.notification || d;
+  e.waitUntil(self.registration.showNotification(x.titre || x.title || 'LP Daoukro', {
+    body: x.corps || x.body || '', icon: 'icone-192.png', badge: 'icone-192.png', tag: x.lien || undefined, renotify: true, data: { lien: x.lien || '#/actions' } }));
+});
+self.addEventListener('notificationclick', e => {
+  e.notification.close();
+  const url = new URL('./' + (e.notification.data && e.notification.data.lien || '#/actions'), self.registration.scope).href;
+  e.waitUntil(clients.matchAll({ type: 'window', includeUncontrolled: true }).then(L => {
+    const w = L.find(c => c.url.startsWith(self.registration.scope));
+    if (w) { w.navigate ? w.navigate(url).catch(() => {}) : null; return w.focus(); }
+    return clients.openWindow(url);
+  }));
 });

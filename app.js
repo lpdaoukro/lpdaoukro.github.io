@@ -244,7 +244,68 @@ function redimensionnerPhoto(fichier) {
 
 /* ================= BOÎTE À SUGGESTIONS (v2.5) ================= */
 let SUGG_PAGE = '';
-const VERSION_SITE = '2.5';
+const VERSION_SITE = '2.6';
+/* ================= NOTIFICATIONS SUR LE TÉLÉPHONE (v2.6, Firebase) ================= */
+// configuration publique du projet Firebase (faite pour être dans le site) ; la clé privée reste dans Apps Script
+const FIREBASE_CFG = { apiKey: 'AIzaSyDVRNmLz5ph73vf2a9vFhd2RVni8H9swt0', authDomain: 'lpdaoukro-notification.firebaseapp.com', projectId: 'lpdaoukro-notification',
+  storageBucket: 'lpdaoukro-notification.firebasestorage.app', messagingSenderId: '524288581647', appId: '1:524288581647:web:59d13a3a1be01dd520c37a' };
+const VAPID_PUBLIQUE = 'BIb770DZ2yGV4oeS1UNNghMk0yaH2WxLPHlWOSXlKlautiY3ZNr298aComnTIhTGjxtg-4CbLtywPsUMNMabSH4';
+const FB_V = '10.12.2';
+const estIOS = () => /iPhone|iPad|iPod/.test(navigator.userAgent);
+const installee = () => matchMedia('(display-mode: standalone)').matches || navigator.standalone === true;
+function etatPush() {
+  if (estIOS() && !installee()) return 'ios';
+  if (!('Notification' in window) || !('serviceWorker' in navigator) || !('PushManager' in window)) return 'non';
+  if (Notification.permission === 'denied') return 'refuse';
+  return Notification.permission === 'granted' && stock.lire('push_jeton', '') ? 'actif' : 'inactif';
+}
+async function jetonPush() {
+  await chargerScript(`https://www.gstatic.com/firebasejs/${FB_V}/firebase-app-compat.js`);
+  await chargerScript(`https://www.gstatic.com/firebasejs/${FB_V}/firebase-messaging-compat.js`);
+  if (!firebase.apps.length) firebase.initializeApp(FIREBASE_CFG);
+  const reg = await navigator.serviceWorker.ready;
+  return firebase.messaging().getToken({ vapidKey: VAPID_PUBLIQUE, serviceWorkerRegistration: reg });
+}
+const nomAppareil = () => (estIOS() ? 'iPhone' : /Android/.test(navigator.userAgent) ? 'Android' : /Windows/.test(navigator.userAgent) ? 'Ordinateur Windows' : 'Appareil') + (/Mobi/.test(navigator.userAgent) ? ' (téléphone)' : '');
+async function activerPush() {
+  const e = etatPush();
+  if (e === 'ios') throw new Error("Sur iPhone : ajoutez d'abord l'application à l'écran d'accueil (bouton Partager → « Sur l'écran d'accueil »), ouvrez-la depuis l'icône, puis activez les notifications.");
+  if (e === 'non') throw new Error("Ce navigateur ne sait pas recevoir de notifications. Sur téléphone Android, utilisez Chrome.");
+  if (e === 'refuse') throw new Error("Les notifications sont bloquées pour ce site. Dans Chrome : cadenas (à gauche de l'adresse) → Autorisations → Notifications → Autoriser, puis réessayez.");
+  const p = await Notification.requestPermission();
+  if (p !== 'granted') throw new Error("Vous n'avez pas autorisé les notifications.");
+  const t = await jetonPush(); if (!t) throw new Error("Impossible d'obtenir l'autorisation de notification. Réessayez.");
+  const r = await api('abonnerPush', { cle_push: t, ancien: stock.lire('push_jeton', ''), appareil: nomAppareil() });
+  stock.ecrire('push_jeton', t);
+  return r;
+}
+async function couperPush() {
+  const t = stock.lire('push_jeton', '');
+  if (t) { try { await api('desabonnerPush', { cle_push: t }); } catch (e) { /* rien */ } try { await jetonPush().then(() => firebase.messaging().deleteToken()); } catch (e) { /* rien */ } }
+  stock.ecrire('push_jeton', '');
+}
+/** Au démarrage : le jeton change parfois ; on le renvoie au serveur s'il a changé. */
+async function rafraichirPush() {
+  try { if (etatPush() !== 'actif' || !navigator.onLine) return; const t = await jetonPush(); const a = stock.lire('push_jeton', '');
+    if (t && t !== a) { await api('abonnerPush', { cle_push: t, ancien: a, appareil: nomAppareil() }); stock.ecrire('push_jeton', t); } } catch (e) { /* rien */ }
+}
+function blocPush(id) {
+  const e = etatPush();
+  const txt = { actif: '✅ Activées sur cet appareil.', inactif: 'Recevez sur ce téléphone les annonces, les demandes et les actions urgentes, même quand l\'application est fermée.', refuse: '⛔ Bloquées dans le navigateur.',
+    non: 'Ce navigateur ne permet pas les notifications.', ios: 'Sur iPhone : ajoutez d\'abord l\'application à l\'écran d\'accueil (Partager → « Sur l\'écran d\'accueil »), puis ouvrez-la depuis l\'icône.' }[e];
+  return `<div id="${id}"><p class="aide" style="margin-top:0">${txt}</p>${e === 'actif' ? `<button class="btn petit secondaire" data-push="tester">Envoyer un test</button> <button class="btn petit rouge" data-push="couper">Couper</button>` : e === 'inactif' || e === 'refuse' ? '<button class="btn" data-push="activer">🔔 Activer les notifications</button>' : ''}</div>`;
+}
+function brancherPush(zone, apres) {
+  $$('[data-push]', zone).forEach(b => b.onclick = async () => {
+    b.disabled = true;
+    try {
+      if (b.dataset.push === 'activer') { const r = await activerPush(); toast(r.message + (r.pret === false ? ' (envoi actif dès que l\'administrateur aura fini la configuration)' : ''), 6000); }
+      else if (b.dataset.push === 'couper') { await couperPush(); toast('Notifications coupées sur cet appareil.'); }
+      else toast((await api('testerPush')).message, 5000);
+    } catch (e) { toast(e.message, 8000); }
+    b.disabled = false; apres && apres();
+  });
+}
 function reduireCapture(fichier) {
   return new Promise((ok, ko) => {
     const img = new Image();
@@ -533,7 +594,7 @@ document.addEventListener('DOMContentLoaded', () => {
     $('#btn-actions').before(b); b.onclick = () => { if (!location.hash.startsWith('#/suggestion')) SUGG_PAGE = (location.hash.slice(2) || '').split('/')[0]; location.hash = '#/suggestion'; }; }
   $('#btn-mode').onclick = () => { stock.ecrire('mode', modeProf() ? 'admin' : 'professeur'); NT.ref = null; history.replaceState(null, '', '#/'); toast(modeProf() ? 'Mode Professeur : interface enseignant.' : 'Mode Administrateur.'); afficher(); majActions(true); };
   setInterval(() => majActions(true), 5 * 60 * 1000);
-  if ('serviceWorker' in navigator) navigator.serviceWorker.register('sw.js').catch(() => {});
+  if ('serviceWorker' in navigator) navigator.serviceWorker.register('sw.js').then(() => setTimeout(rafraichirPush, 4000)).catch(() => {});
   afficher();
   if (S.session && encadrement()) synchroniser();
   if (S.session && typeof synchroniserAppels === 'function') synchroniserAppels();
@@ -1065,7 +1126,7 @@ async function pagePaiement(c) {
 
 /* ================= EXPORT EXCEL ================= */
 function chargerScript(src) {
-  const pret = () => src.includes('xlsx') ? window.XLSX : src.includes('qrcode') ? window.qrcode : src.includes('pdf.js') || src.includes('pdf.min') ? window.pdfjsLib : src.includes('tesseract') ? window.Tesseract : window.mammoth;
+  const pret = () => src.includes('firebase-app') ? window.firebase : src.includes('firebase-messaging') ? (window.firebase && window.firebase.messaging) : src.includes('xlsx') ? window.XLSX : src.includes('qrcode') ? window.qrcode : src.includes('pdf.js') || src.includes('pdf.min') ? window.pdfjsLib : src.includes('tesseract') ? window.Tesseract : window.mammoth;
   return new Promise((ok, ko) => {
     if (pret()) return ok();
     const s = document.createElement('script'); s.src = src; s.onload = ok;
@@ -1267,10 +1328,13 @@ function pageMonCompte(c) {
       <div class="ligne"><div><label>Code actuel</label><input name="a" class="code" type="password" inputmode="numeric" maxlength="4" required></div>
       <div><label>Nouveau code</label><input name="n" class="code" type="password" inputmode="numeric" maxlength="4" required></div></div>
       <div id="msg"></div><button class="btn" style="margin-top:10px">Changer</button></form></div>
+    <div class="carte"><h2 style="margin-top:0">🔔 Notifications</h2>${blocPush('mc-push')}</div>
     <div class="carte"><h2 style="margin-top:0">💡 Mes suggestions</h2><div id="mc-sugg" class="aide">Chargement…</div><a class="btn secondaire" href="#/suggestion">Écrire une suggestion ou signaler un problème</a></div>
     ${S.file.length ? `<div class="alerte">${S.file.length} pointage(s) pas encore envoyé(s). Connectez-vous à internet avant de vous déconnecter, sinon ils seront perdus.</div>` : ''}
     <button class="btn rouge" id="dec">Se déconnecter</button>
     <p class="aide" style="margin-top:20px">Astuce : sur téléphone, utilisez « Ajouter à l'écran d'accueil » dans le menu du navigateur pour installer l'application avec son icône.</p>`;
+  const majPush = () => { const z = $('#mc-push'); if (z) { z.outerHTML = blocPush('mc-push'); brancherPush($('#mc-push'), majPush); } };
+  brancherPush($('#mc-push'), majPush);
   api('mesSuggestions').then(M => { const z = $('#mc-sugg'); if (!z) return;
     z.innerHTML = M.suggestions.length ? M.suggestions.map(x => `<div class="sugg-l"><b>${esc(x.genreLib)}</b> · ${esc(String(x.cree_le).slice(0, 10).split('-').reverse().join('/'))} · <span class="sugg-st st-${esc(x.statut).replace(/\s|É/g, '')}">${esc(x.statut)}</span>
       <div>${esc(x.message)}</div>${x.reponse ? `<div class="info" style="margin:4px 0">Réponse : ${esc(x.reponse)}</div>` : ''}</div>`).join('') : 'Vous n\'avez pas encore envoyé de suggestion.'; }).catch(() => { const z = $('#mc-sugg'); if (z) z.textContent = ''; });
@@ -1388,7 +1452,10 @@ async function pageActions(c) {
   await majActions(true);
   const D = ACT.donnees || { actions: [], annonces: [] };
   const fmtE = e => e ? `<span class="aide">échéance : ${fr(e)}</span>` : '';
+  setTimeout(() => { if ($('#ac-push')) { brancherPush($('#ac-push'), () => { if (etatPush() === 'actif') $('#ac-push').remove(); }); $('#ac-push-non').onclick = () => { stock.ecrire('push_plus_tard', true); $('#ac-push').remove(); }; } }, 0);
+  const proposerPush = etatPush() === 'inactif' && !stock.lire('push_plus_tard', false);
   c.innerHTML = `<h1>📥 Mes actions</h1>
+    ${proposerPush ? `<div class="carte" id="ac-push" style="border-left:4px solid #F28C00"><b>🔔 Recevoir les notifications sur ce téléphone ?</b>${blocPush('ac-push-b')}<button class="btn petit secondaire" id="ac-push-non">Plus tard</button></div>` : ''}
     ${D.actions.length ? D.actions.map(a => `<div class="carte action-l ${a.niveau === 'URGENT' ? 'urg' : ''}"><div><span class="bande-tag ${a.niveau === 'URGENT' ? 'urg' : 'faire'}">${esc(a.niveau)}</span> <b>${esc(a.texte)}</b>${a.detail ? `<div class="aide">${esc(a.detail)}</div>` : ''} ${fmtE(a.echeance)}</div>
       ${a.lien ? `<a class="btn petit" href="${a.lien}">Y aller →</a>` : ''}</div>`).join('') : '<div class="info">✅ Aucune action en attente. Tout est à jour.</div>'}
     ${D.annonces.length ? `<h2>Annonces</h2>${D.annonces.map(a => `<div class="carte action-l"><div><span class="bande-tag ann">ANNONCE</span> ${esc(a.texte)}</div>${a.lien ? `<a class="btn petit secondaire" href="${a.lien}">Voir →</a>` : ''}</div>`).join('')}` : ''}
