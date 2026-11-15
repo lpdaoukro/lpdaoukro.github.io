@@ -273,7 +273,7 @@ function redimensionnerPhoto(fichier) {
 
 /* ================= BOÎTE À SUGGESTIONS (v2.5) ================= */
 let SUGG_PAGE = '';
-const VERSION_SITE = '3.5.1';
+const VERSION_SITE = '3.6';
 /* ================= NOTIFICATIONS SUR LE TÉLÉPHONE (v2.6, Firebase) ================= */
 // configuration publique du projet Firebase (faite pour être dans le site) ; la clé privée reste dans Apps Script
 const FIREBASE_CFG = { apiKey: 'AIzaSyDVRNmLz5ph73vf2a9vFhd2RVni8H9swt0', authDomain: 'lpdaoukro-notification.firebaseapp.com', projectId: 'lpdaoukro-notification',
@@ -695,7 +695,8 @@ function formConnexion() {
       S.session = { jeton: r.jeton, profil: r.profil, params: r.params }; stock.ecrire('session', S.session);
       api('photos', { matricules: [r.profil.matricule] }).then(p => { Object.assign(S.photos, p.photos); stock.ecrire('photos', S.photos); appliquerPhotos(); }).catch(() => {});
       location.hash = '#/'; stock.ecrire('bienvenue', 1); stock.ecrire('mode', 'admin');
-      const entrer = () => { const pq = stock.lire('pointage_en_attente', ''); if (pq) { stock.effacer('pointage_en_attente'); location.hash = '#/pointer/' + pq; return afficher(); } afficher(); setTimeout(carteBienvenue, 600); majActions(true); setTimeout(() => preparerHorsLigne(true), 2500); };
+      const entrer = () => { const pq = stock.lire('pointage_en_attente', ''); if (pq) { stock.effacer('pointage_en_attente'); location.hash = '#/pointer/' + pq; return afficher(); }
+      const ha = stock.lire('hash_en_attente', ''); if (ha) { stock.effacer('hash_en_attente'); location.hash = ha; } afficher(); setTimeout(carteBienvenue, 600); majActions(true); setTimeout(() => preparerHorsLigne(true), 2500); };
       if (r.profil.double) choisirMode(entrer); else entrer();
     } catch (err) { $('#msg').innerHTML = `<div class="erreur">${esc(err.message)}</div>`; b.disabled = false; }
   };
@@ -768,6 +769,14 @@ const PAGES = {
   'paiement':      { titre: 'État de paiement', mod: ['pointage', 'CONSULTE'], roles: ['censeur', 'admin', 'directeur'], fn: pagePaiement },
   'personnel':     { titre: 'Personnel', mod: ['pointage', 'CONSULTE'], roles: ['censeur', 'admin', 'directeur'], fn: pagePersonnel },
   'emplois':       { titre: 'Emplois du temps', mod: ['edt', 'CONSULTE'], roles: ['admin', 'censeur'], fn: (c, a) => pageEmploisV2(c, a) },
+  'atelier':       { titre: 'Tableau de bord', roles: ['admin', 'directeur', 'censeur', 'educateur', 'comptable', 'intervenant'], fn: c => pageAtelier(c) },
+  'inventaire':    { titre: 'Inventaire', roles: ['admin', 'directeur', 'censeur', 'educateur', 'comptable', 'intervenant'], fn: c => pageInventaire(c) },
+  'equipement':    { titre: 'Équipement', roles: ['admin', 'directeur', 'censeur', 'educateur', 'comptable', 'intervenant'], fn: (c, a) => pageEquipement(c, a) },
+  'demandes-mo':   { titre: 'Matière d\'œuvre', roles: ['admin', 'directeur', 'censeur', 'educateur', 'comptable', 'intervenant'], fn: c => pageDemandesMo(c) },
+  'stock-mo':      { titre: 'Stock', roles: ['admin', 'directeur', 'censeur', 'educateur', 'comptable', 'intervenant'], si: () => stock.lire('atelier_lecteur', false), fn: c => pageStockMo(c) },
+  'prets':         { titre: 'Prêts d\'outillage', roles: ['admin', 'directeur', 'censeur', 'educateur', 'comptable', 'intervenant'], fn: c => pagePrets(c) },
+  'securite':      { titre: 'Sécurité', roles: ['admin', 'directeur', 'censeur', 'educateur', 'comptable', 'intervenant'], fn: c => pageSecurite(c) },
+  'rapports-atelier': { titre: 'Besoins et coûts', roles: ['admin', 'directeur', 'censeur', 'educateur', 'comptable', 'intervenant'], si: () => stock.lire('atelier_lecteur', false), fn: c => pageRapportsAtelier(c) },
   'arrivees':      { titre: 'Arrivées et départs', roles: ['admin', 'censeur', 'directeur'], fn: c => pageArrivees(c) },
   'vie':           { titre: 'Vie du lycée', roles: ['admin', 'directeur', 'censeur', 'educateur', 'comptable', 'intervenant'], fn: c => pageVie(c) },
   'sondages':      { titre: 'Sondages', roles: ['admin', 'directeur', 'censeur', 'educateur', 'comptable', 'intervenant'], fn: c => pageSondages(c) },
@@ -805,6 +814,7 @@ const PAGES = {
 let pastilles = stock.lire('pastilles', {});
 const GROUPES_MENU = [
   { id: 'accueil', titre: '🏠 Accueil', pages: ['direction', 'ma-fiche', 'vie', 'agent-mois', 'honneur', 'sondages', 'signalements'] },
+  { id: 'atelier', titre: '🔧 Atelier', pages: ['atelier', 'inventaire', 'demandes-mo', 'stock-mo', 'prets', 'securite', 'rapports-atelier'] },
   { id: 'personnel', titre: '👨‍🏫 Personnel', pages: ['pointage', 'arrivees', 'tableau', 'intervenants', 'rattrapages', 'reclamations', 'paiement', 'personnel'] },
   { id: 'eleves', titre: '🎓 Élèves', pages: ['eleves', 'effectifs', 'appel', 'absences', 'discipline', 'stages', 'familles', 'archives'] },
   { id: 'notes', titre: '📝 Notes', pages: ['notes', 'bulletins', 'calendrier-conseils'] },
@@ -836,6 +846,7 @@ function menu() {
 function afficher() {
   const pg0 = (location.hash.slice(2) || '').split('/');
   if (pg0[0] === 'signaler' || pg0[0] === 'suivi') return pageSignalPublic(pg0[0], decodeURIComponent(pg0[1] || ''));
+  if (pg0[0] === 'equipement' && !S.session) stock.ecrire('hash_en_attente', location.hash);
   if (pg0[0] === 'pointer') {
     if (!S.session) { stock.ecrire('pointage_en_attente', pg0[1] || ''); return ecranConnexion(); }
     if (!S.session.parent) return pagePointerQr(decodeURIComponent(pg0[1] || ''));
@@ -2013,7 +2024,7 @@ async function accueilVivant(z) {
     catch (e) { const c = cacheVue('av'); if (!c) return; AV.data = c.v; }
   }
   if (!z.isConnected) return;
-  const D = AV.data, J = D.journee; stock.ecrire('resp_signal', !!J.responsableSignal);
+  const D = AV.data, J = D.journee; stock.ecrire('resp_signal', !!J.responsableSignal); stock.ecrire('atelier_lecteur', !!J.atelierLecteur);
   const vit = D.vitrine || [];
   let h = '';
   if (vit.length) h += `<div class="vitrine" id="vitrine">${vit.map((v, i) => `<div class="vitrine-carte ${v.eleve ? 'eleve' : 'agent'} ${i ? '' : 'active'}">
@@ -2425,4 +2436,244 @@ async function bilanArrivees(c) {
   $('#arv-m', c).onchange = e => { ARV.mois = e.target.value; pageArrivees(c); };
   $('#arv-imp', c).onclick = () => imprimer(`<div class="page">${entete('BILAN DES PRÉSENCES DU PERSONNEL — ' + B.moisTexte.toUpperCase())}<h3>Administration et services</h3>${tab(adm)}<h3>Enseignants</h3>${tab(ens)}
     <div class="signatures"><div>Le Censeur</div><div>Le Chef d'établissement</div></div></div>`, 'Bilan presences ' + B.mois);
+}
+
+
+/* ================= MODULE ATELIER (v3.6) ================= */
+const urlEquipement = code => location.origin + location.pathname + '#/equipement/' + code;
+const ETAT_COUL = { BON: 'P', 'À RÉPARER': 'attente', 'HORS SERVICE': 'A' };
+const jma = d => d ? String(d).slice(0, 10).split('-').reverse().join('/') : '';
+async function appelAt(action, q, apres, conf) { if (conf && !confirm(conf)) return; try { const r = await api(action, q); toast(r.message || 'Enregistré.', 5000); if (apres) apres(r); return r; } catch (e) { toast(e.message, 7000); } }
+/* --- tableau de bord --- */
+async function pageAtelier(c) {
+  c.innerHTML = '<div class="chargement">Chargement…</div>';
+  const T = await api('atelier'), K = T.k; stock.ecrire('atelier_lecteur', !!T.lecteur);
+  const tuile = (ico, lib, val, lien, coul) => `<a class="at-tuile ${coul || ''}" href="${lien}"><span>${ico}</span><b>${val}</b><small>${lib}</small></a>`;
+  c.innerHTML = `<h1>🔧 Atelier</h1>
+    <p class="aide">${T.chef ? 'Vous êtes <b>chef de travaux</b> : vous validez les demandes, gérez le stock, les prêts et le registre de sécurité.' : 'Signalez une panne en scannant le QR d\'un équipement, demandez votre matière d\'œuvre pour vos TP et déclarez un incident.'}
+      ${T.chefs.length ? 'Chefs de travaux : ' + T.chefs.map(x => esc(x.nom)).join(', ') + '.' : '<b>Aucun chef de travaux désigné.</b>'}</p>
+    <div class="at-tuiles">
+      ${tuile('🧰', T.chef ? 'demandes à valider' : 'mes demandes en cours', T.chef ? K.demandesAttente : K.mesDemandes, '#/demandes-mo', (T.chef ? K.demandesAttente : 0) ? 'orange' : '')}
+      ${T.chef ? tuile('📦', 'demandes à servir', K.aServir, '#/demandes-mo', K.aServir ? 'orange' : '') : ''}
+      ${tuile('🛠', 'équipements (' + K.aReparer + ' à réparer, ' + K.hs + ' HS)', K.equipements, '#/inventaire', K.aReparer + K.hs ? 'orange' : '')}
+      ${tuile('⚠', 'pannes ouvertes', K.pannes, '#/inventaire', K.pannes ? 'rouge' : '')}
+      ${T.lecteur ? tuile('📉', 'articles sous le seuil', K.sousSeuil, '#/stock-mo', K.sousSeuil ? 'rouge' : '') : ''}
+      ${tuile('🔁', 'prêts en cours' + (K.pretsRetard ? ' (' + K.pretsRetard + ' en retard)' : ''), K.prets, '#/prets', K.pretsRetard ? 'rouge' : '')}
+      ${tuile('🛡', 'contrôles à faire' + (K.controlesRetard ? ' (' + K.controlesRetard + ' en retard)' : ''), K.controlesDus, '#/securite', K.controlesRetard ? 'rouge' : K.controlesDus ? 'orange' : '')}
+      ${tuile('🩹', 'incidents ouverts', K.incidents, '#/securite', '')}
+    </div>
+    ${T.chef ? `<div class="carte"><h2 style="margin-top:0">Ateliers</h2>${T.ateliers.map(a => `<div class="par-note"><span><b>${esc(a.nom)}</b> <span class="aide">${esc(a.filiere || '')}</span></span><button class="btn petit secondaire" data-atm="${a.id}">Renommer</button></div>`).join('') || '<p class="aide">Aucun atelier.</p>'}
+      <div class="ligne"><div><input id="at-nom" placeholder="Nouvel atelier (ex. Atelier électricité)"></div><div><input id="at-fil" placeholder="Filière"></div><div style="flex:0 0 auto"><button class="btn" id="at-ok">➕ Ajouter</button></div></div></div>` : ''}
+    ${T.admin ? `<div class="carte"><h2 style="margin-top:0">Chefs de travaux</h2><p class="aide">Ils ont tous les mêmes droits sur l'atelier.</p>
+      <div class="at-chefs">${T.personnel.map(p => `<label class="case"><input type="checkbox" value="${p.matricule}" ${T.chefs.some(x => x.matricule === p.matricule) ? 'checked' : ''}> ${esc(p.nom)}</label>`).join('')}</div>
+      <button class="btn secondaire" id="ch-ok">Enregistrer</button></div>` : ''}`;
+  if ($('#at-ok', c)) $('#at-ok', c).onclick = () => appelAt('enregistrerAtelier', { nom: $('#at-nom', c).value, filiere: $('#at-fil', c).value }, () => pageAtelier(c));
+  $$('[data-atm]', c).forEach(b => b.onclick = () => { const a = T.ateliers.find(x => x.id === b.dataset.atm), n = prompt('Nom de l\'atelier :', a.nom); if (n) appelAt('enregistrerAtelier', { id: a.id, nom: n, filiere: a.filiere }, () => pageAtelier(c)); });
+  if ($('#ch-ok', c)) $('#ch-ok', c).onclick = () => appelAt('chefsTravaux', { chefs: $$('.at-chefs input:checked', c).map(i => i.value) }, () => pageAtelier(c));
+}
+/* --- inventaire --- */
+const INV = { atelier: '', etat: '', q: '' };
+async function pageInventaire(c) {
+  c.innerHTML = '<div class="chargement">Chargement…</div>';
+  const [I, T] = await Promise.all([api('inventaire'), api('atelier')]), AT = T.ateliers;
+  const L = I.equipements.filter(e => (!INV.atelier || e.atelier === INV.atelier) && (!INV.etat || e.etat === INV.etat) && (!INV.q || (e.designation + ' ' + e.categorie + ' ' + e.id).toUpperCase().includes(INV.q.toUpperCase())));
+  c.innerHTML = `<h1>🛠 Inventaire</h1>
+    ${I.pannes.length ? `<div class="carte"><b>⚠ Pannes signalées (${I.pannes.length})</b>${I.pannes.map(p => `<div class="par-note"><span><b>${esc(p.designation)}</b> — ${esc(p.description)} <i>${esc(p.par)}, ${jma(p.le)}</i> <span class="badge attente">${esc(p.statut)}</span>${p.note ? ' <span class="aide">' + esc(p.note) + '</span>' : ''}</span>
+      ${I.chef ? `<span style="white-space:nowrap"><button class="btn petit secondaire" data-pn="${p.id}|EN RÉPARATION">En réparation</button> <button class="btn petit vert" data-pn="${p.id}|RÉPARÉE">Réparée</button></span>` : ''}</div>`).join('')}</div>` : ''}
+    <div class="ligne"><div><select id="iv-a"><option value="">Tous les ateliers</option>${AT.map(a => `<option value="${a.id}" ${a.id === INV.atelier ? 'selected' : ''}>${esc(a.nom)}</option>`).join('')}</select></div>
+      <div><select id="iv-e"><option value="">Tous les états</option>${I.etats.map(e => `<option ${e === INV.etat ? 'selected' : ''}>${e}</option>`).join('')}</select></div><div><input id="iv-q" placeholder="Rechercher" value="${esc(INV.q)}"></div></div>
+    <div class="actions">${I.chef ? '<button class="btn" id="iv-aj">➕ Ajouter un équipement</button>' : ''}<button class="btn secondaire" id="iv-qr">🏷 Imprimer les étiquettes QR (${L.length})</button><button class="btn secondaire" id="iv-imp">🖨 Imprimer l'inventaire</button></div>
+    <div id="iv-form"></div>
+    <div class="table-defil"><table><thead><tr><th>Équipement</th><th>Atelier</th><th class="n">Qté</th><th>État</th><th></th></tr></thead><tbody>
+    ${L.map(e => `<tr><td><b>${esc(e.designation)}</b><div class="aide">${esc(e.id)}${e.categorie ? ' · ' + esc(e.categorie) : ''}${e.marque ? ' · ' + esc(e.marque) : ''}${e.pretable ? ' · prêtable' : ''}${e.pretes ? ' · ' + e.pretes + ' prêté(s)' : ''}</div></td><td>${esc(e.atelierNom)}</td><td class="n">${e.quantite}</td>
+      <td><span class="badge ${ETAT_COUL[e.etat]}">${esc(e.etat)}</span>${e.pannes ? ' ⚠' : ''}</td><td style="white-space:nowrap"><a class="btn petit secondaire" href="#/equipement/${esc(e.jeton)}">Fiche</a>${I.chef ? ` <button class="btn petit secondaire" data-ed="${e.id}">✏</button>` : ''}</td></tr>`).join('') || '<tr><td colspan="5" class="vide">Aucun équipement.</td></tr>'}</tbody></table></div>`;
+  $('#iv-a', c).onchange = e => { INV.atelier = e.target.value; pageInventaire(c); }; $('#iv-e', c).onchange = e => { INV.etat = e.target.value; pageInventaire(c); };
+  $('#iv-q', c).onkeydown = e => { if (e.key === 'Enter') { INV.q = e.target.value; pageInventaire(c); } };
+  $$('[data-pn]', c).forEach(b => b.onclick = () => { const [id, st] = b.dataset.pn.split('|'); const note = st === 'RÉPARÉE' ? prompt('Ce qui a été fait (facultatif) :', '') : ''; if (note === null) return; appelAt('traiterPanne', { id, statut: st, note }, () => pageInventaire(c)); });
+  const form = e => { e = e || { quantite: 1, etat: 'BON', atelier: INV.atelier };
+    $('#iv-form', c).innerHTML = `<div class="carte"><h2 style="margin-top:0">${e.id ? 'Modifier' : 'Nouvel équipement'}</h2>
+      <div class="ligne"><div><label>Désignation</label><input id="f-des" value="${esc(e.designation || '')}"></div><div><label>Atelier</label><select id="f-at">${AT.map(a => `<option value="${a.id}" ${a.id === e.atelier ? 'selected' : ''}>${esc(a.nom)}</option>`).join('')}</select></div></div>
+      <div class="ligne"><div><label>Catégorie</label><input id="f-cat" value="${esc(e.categorie || '')}" placeholder="Machine, Mesure, Outillage…"></div><div><label>Marque / modèle</label><input id="f-mq" value="${esc(e.marque || '')}"></div><div><label>N° de série</label><input id="f-ns" value="${esc(e.numero_serie || '')}"></div></div>
+      <div class="ligne"><div><label>Quantité</label><input id="f-q" type="number" min="1" value="${e.quantite}"></div><div><label>État</label><select id="f-et">${I.etats.map(x => `<option ${x === e.etat ? 'selected' : ''}>${x}</option>`).join('')}</select></div>
+        <div><label>Acquis le</label><input id="f-da" type="date" value="${esc(e.date_acquisition || '')}"></div><div><label>Valeur (F)</label><input id="f-v" type="number" min="0" value="${e.valeur || ''}"></div></div>
+      <label class="case"><input type="checkbox" id="f-p" ${e.pretable ? 'checked' : ''}> Peut être prêté (outillage)</label><label>Observations</label><input id="f-o" value="${esc(e.observations || '')}">
+      <div class="actions"><button class="btn" id="f-ok">Enregistrer</button><button class="btn secondaire" id="f-x">Annuler</button></div></div>`;
+    $('#f-x', c).onclick = () => { $('#iv-form', c).innerHTML = ''; };
+    $('#f-ok', c).onclick = () => appelAt('enregistrerEquipement', { id: e.id, equipement: { designation: $('#f-des').value, atelier: $('#f-at').value, categorie: $('#f-cat').value, marque: $('#f-mq').value, numero_serie: $('#f-ns').value, quantite: $('#f-q').value, etat: $('#f-et').value, date_acquisition: $('#f-da').value, valeur: $('#f-v').value, pretable: $('#f-p').checked, observations: $('#f-o').value } }, () => pageInventaire(c));
+    $('#iv-form', c).scrollIntoView({ behavior: 'smooth' }); };
+  if ($('#iv-aj', c)) $('#iv-aj', c).onclick = () => form();
+  $$('[data-ed]', c).forEach(b => b.onclick = () => form(I.equipements.find(e => e.id === b.dataset.ed)));
+  $('#iv-qr', c).onclick = async () => { await preparerQR(); const etab = S.session.params.etablissement;
+    imprimer(`<div class="page etiquettes">${L.map(e => `<div class="etiq">${qrSvg(urlEquipement(e.jeton))}<div><b>${esc(e.designation)}</b><span>${esc(e.id)} · ${esc(e.atelierNom)}</span><small>${esc(etab)} — scannez pour voir la fiche ou signaler une panne</small></div></div>`).join('')}</div>`, 'Etiquettes QR atelier'); };
+  $('#iv-imp', c).onclick = () => imprimer(`<div class="page">${entete('INVENTAIRE DES ÉQUIPEMENTS' + (INV.atelier ? ' — ' + (AT.find(a => a.id === INV.atelier) || {}).nom : ''))}
+    <table><thead><tr><th>N°</th><th>Désignation</th><th>Atelier</th><th>Catégorie</th><th>Qté</th><th>État</th><th>Acquis le</th><th>Valeur</th></tr></thead><tbody>${L.map(e => `<tr><td>${esc(e.id)}</td><td>${esc(e.designation)}</td><td>${esc(e.atelierNom)}</td><td>${esc(e.categorie || '')}</td><td>${e.quantite}</td><td>${esc(e.etat)}</td><td>${jma(e.date_acquisition)}</td><td>${e.valeur ? fcfa(e.valeur) : ''}</td></tr>`).join('')}</tbody></table>
+    <div class="signatures"><div>Le Chef de travaux</div><div>Le Chef d'établissement</div></div></div>`, 'Inventaire atelier');
+}
+/* --- fiche équipement (scan du QR) --- */
+async function pageEquipement(c, code) {
+  c.innerHTML = '<div class="chargement">Chargement…</div>';
+  let F; try { F = await api('equipementQr', { code }); } catch (e) { c.innerHTML = `<h1>🛠 Équipement</h1><div class="erreur">${esc(e.message)}</div>`; return; }
+  const e = F.equipement;
+  c.innerHTML = `<h1>🛠 ${esc(e.designation)}</h1>
+    <div class="carte"><p><span class="badge ${ETAT_COUL[e.etat]}">${esc(e.etat)}</span> <b>${esc(e.atelierNom)}</b> · ${esc(e.id)}</p>
+      <p class="aide">${[e.categorie, e.marque, e.numero_serie && 'N° ' + e.numero_serie, 'Quantité : ' + e.quantite, e.date_acquisition && 'acquis le ' + jma(e.date_acquisition), e.pretable && 'prêtable'].filter(Boolean).map(esc).join(' · ')}</p>
+      ${e.observations ? `<p>${esc(e.observations)}</p>` : ''}${e.pretes ? `<p>🔁 ${e.pretes} exemplaire(s) actuellement prêté(s).</p>` : ''}</div>
+    <div class="carte"><h2 style="margin-top:0">⚠ Signaler une panne</h2><textarea id="eq-p" rows="2" maxlength="400" placeholder="Que se passe-t-il ?"></textarea><button class="btn" id="eq-ok" style="margin-top:6px">Envoyer aux chefs de travaux</button></div>
+    ${F.chef ? `<div class="carte"><h2 style="margin-top:0">État</h2><div class="actions">${F.etats.map(x => `<button class="btn petit ${x === e.etat ? '' : 'secondaire'}" data-et="${x}">${x}</button>`).join('')}</div></div>` : ''}
+    <h2>Historique des pannes</h2>${F.pannes.map(p => `<div class="par-note"><span>${jma(p.le)} — ${esc(p.description)} <i>${esc(p.par)}</i>${p.note ? ' · ' + esc(p.note) : ''}</span><span class="badge ${p.statut === 'RÉPARÉE' ? 'P' : 'attente'}">${esc(p.statut)}</span></div>`).join('') || '<p class="aide">Aucune panne enregistrée.</p>'}
+    ${F.prets.length ? `<h2>Derniers prêts</h2>${F.prets.map(p => `<div class="par-note"><span>${esc(p.nom)} · ${p.quantite} · du ${jma(p.du)}${p.rendu_le ? ' au ' + jma(p.rendu_le) : ' (retour prévu ' + jma(p.retour_prevu) + ')'}</span></div>`).join('')}` : ''}
+    <p><a class="btn secondaire" href="#/inventaire">← Inventaire</a></p>`;
+  $('#eq-ok', c).onclick = () => appelAt('signalerPanne', { id: e.id, description: $('#eq-p', c).value }, () => pageEquipement(c, code));
+  $$('[data-et]', c).forEach(b => b.onclick = () => appelAt('enregistrerEquipement', { id: e.id, equipement: Object.assign({}, e, { etat: b.dataset.et }) }, () => pageEquipement(c, code)));
+}
+/* --- demandes de matière d'œuvre --- */
+const DMO = { lignes: [], filtre: 'À TRAITER' };
+async function pageDemandesMo(c) {
+  c.innerHTML = '<div class="chargement">Chargement…</div>';
+  const D = await api('demandesMo'), chef = D.chef, moi = S.session.profil.matricule;
+  const coul = { 'EN ATTENTE': 'attente', 'VALIDÉE': 'bleu', 'SERVIE': 'P', 'SERVIE (PARTIEL)': 'P', 'REFUSÉE': 'A' };
+  const L = D.demandes.filter(d => DMO.filtre === 'TOUTES' || (DMO.filtre === 'MES' ? d.matricule === moi : (d.statut === 'EN ATTENTE' || d.statut === 'VALIDÉE')));
+  const classes = D.mesClasses.length ? D.mesClasses : D.toutesClasses;
+  c.innerHTML = `<h1>🧰 Matière d'œuvre</h1>
+    <details class="carte" ${DMO.lignes.length ? 'open' : ''}><summary><b>➕ Nouvelle demande pour un TP</b></summary>
+      <div class="ligne"><div><label>Classe</label><select id="dm-c">${classes.map(k => `<option>${esc(k)}</option>`).join('')}</select></div><div><label>Matière</label><input id="dm-m" placeholder="Ex. Électrotechnique"></div><div><label>Date du TP</label><input id="dm-d" type="date"></div></div>
+      <label>TP prévu</label><input id="dm-t" placeholder="Ex. Câblage d'un va-et-vient">
+      <label>Articles</label><div id="dm-l"></div>
+      <div class="ligne"><div><select id="dm-a"><option value="">— Article du magasin —</option>${D.articles.map(a => `<option value="${a.id}">${esc(a.designation)} (${a.stock} ${esc(a.unite)})</option>`).join('')}<option value="__libre">Autre article (pas au magasin)…</option></select></div>
+        <div style="flex:0 0 90px"><input id="dm-q" type="number" min="0" step="any" placeholder="Qté"></div><div style="flex:0 0 auto"><button class="btn secondaire" id="dm-add">Ajouter</button></div></div>
+      <div class="actions"><button class="btn" id="dm-ok">📨 Envoyer la demande</button></div></details>
+    <div class="onglets">${[['À TRAITER', chef ? 'À traiter' : 'En cours'], ['MES', 'Mes demandes'], ['TOUTES', 'Toutes']].map(([k, l]) => `<button data-f="${k}" class="${DMO.filtre === k ? 'actif' : ''}">${l}</button>`).join('')}</div>
+    ${L.map(d => `<div class="carte dm"><div class="sig-tete"><b>${esc(d.tp)}</b> <span class="badge ${coul[d.statut] || ''}">${esc(d.statut)}</span><span class="aide" style="margin-left:auto">${esc(d.id)} · ${jma(d.le)}</span></div>
+      <p class="aide">${esc(d.demandeur)} · <b>${esc(d.classe)}</b>${d.matiere ? ' · ' + esc(d.matiere) : ''}${d.date_tp ? ' · TP le ' + jma(d.date_tp) : ''}${d.valide_par ? ' · validée par ' + esc(d.valide_par) : ''}${d.cout ? ' · coût ' + fcfa(d.cout) : ''}</p>
+      <table class="dm-t"><thead><tr><th>Article</th><th class="n">Demandé</th>${d.statut !== 'EN ATTENTE' ? '<th class="n">Validé</th>' : ''}${/^SERVIE/.test(d.statut) ? '<th class="n">Remis</th>' : ''}${chef && ['EN ATTENTE', 'VALIDÉE'].includes(d.statut) ? '<th class="n">' + (d.statut === 'EN ATTENTE' ? 'À valider' : 'À remettre') + '</th>' : ''}</tr></thead><tbody>
+      ${d.lignes.map((l, i) => `<tr><td>${esc(l.designation)} <span class="aide">${esc(l.unite || '')}${l.stock !== null ? ' · stock ' + l.stock : ' · hors stock'}</span></td><td class="n">${l.quantite}</td>${d.statut !== 'EN ATTENTE' ? `<td class="n">${l.validee !== undefined ? l.validee : ''}</td>` : ''}${/^SERVIE/.test(d.statut) ? `<td class="n">${l.servie !== undefined ? l.servie : ''}</td>` : ''}
+        ${chef && ['EN ATTENTE', 'VALIDÉE'].includes(d.statut) ? `<td class="n"><input class="dm-in" type="number" min="0" step="any" data-dq="${d.id}|${i}" value="${d.statut === 'EN ATTENTE' ? l.quantite : (l.validee !== undefined ? l.validee : l.quantite)}"></td>` : ''}</tr>`).join('')}</tbody></table>
+      ${d.motif_refus ? `<p class="erreur">Refusée : ${esc(d.motif_refus)}</p>` : ''}
+      ${chef && d.statut === 'EN ATTENTE' ? `<div class="actions"><button class="btn petit vert" data-dv="${d.id}">✔ Valider</button><button class="btn petit rouge" data-dr="${d.id}">✖ Refuser</button></div>` : ''}
+      ${chef && d.statut === 'VALIDÉE' ? `<div class="actions"><button class="btn petit vert" data-ds="${d.id}">📦 Remettre la matière (sortie du stock)</button><button class="btn petit secondaire" data-dbon="${d.id}">🖨 Bon de sortie</button></div>` : ''}</div>`).join('') || '<div class="info">Aucune demande dans cette liste.</div>'}`;
+  const majL = () => { $('#dm-l', c).innerHTML = DMO.lignes.map((l, i) => `<div class="par-note"><span>${esc(l.label)} — <b>${l.quantite}</b> ${esc(l.unite || '')}</span><button class="btn-lien" data-rm="${i}">✕</button></div>`).join('') || '<p class="aide">Aucun article ajouté.</p>';
+    $$('[data-rm]', c).forEach(b => b.onclick = () => { DMO.lignes.splice(+b.dataset.rm, 1); majL(); }); };
+  majL();
+  $('#dm-add', c).onclick = () => { const v = $('#dm-a', c).value, q = $('#dm-q', c).value; if (!v || !(+q > 0)) return toast('Choisissez un article et une quantité.');
+    if (v === '__libre') { const des = prompt('Désignation de l\'article :'); if (!des) return; const un = prompt('Unité (pièce, mètre, rouleau…) :', 'pièce') || 'pièce'; DMO.lignes.push({ designation: des, unite: un, quantite: +q, label: des + ' (hors stock)' }); }
+    else { const a = D.articles.find(x => x.id === v); DMO.lignes.push({ article: v, quantite: +q, unite: a.unite, label: a.designation }); }
+    $('#dm-q', c).value = ''; majL(); };
+  $('#dm-ok', c).onclick = () => appelAt('creerDemandeMo', { classe: $('#dm-c', c).value, matiere: $('#dm-m', c).value, date_tp: $('#dm-d', c).value, tp: $('#dm-t', c).value, lignes: DMO.lignes.map(l => ({ article: l.article, designation: l.designation, unite: l.unite, quantite: l.quantite })) }, () => { DMO.lignes = []; DMO.filtre = 'MES'; pageDemandesMo(c); });
+  $$('[data-f]', c).forEach(b => b.onclick = () => { DMO.filtre = b.dataset.f; pageDemandesMo(c); });
+  const qte = id => { const o = {}; $$(`[data-dq^="${id}|"]`, c).forEach(i => o[i.dataset.dq.split('|')[1]] = i.value); return o; };
+  $$('[data-dv]', c).forEach(b => b.onclick = () => appelAt('deciderDemandeMo', { id: b.dataset.dv, decision: 'VALIDER', quantites: qte(b.dataset.dv) }, () => pageDemandesMo(c)));
+  $$('[data-dr]', c).forEach(b => b.onclick = () => { const m = prompt('Motif du refus :'); if (m) appelAt('deciderDemandeMo', { id: b.dataset.dr, decision: 'REFUSER', motif: m }, () => pageDemandesMo(c)); });
+  $$('[data-ds]', c).forEach(b => b.onclick = () => appelAt('servirDemandeMo', { id: b.dataset.ds, quantites: qte(b.dataset.ds) }, () => pageDemandesMo(c), 'Enregistrer la remise de la matière et la sortie du stock ?'));
+  $$('[data-dbon]', c).forEach(b => b.onclick = () => { const d = D.demandes.find(x => x.id === b.dataset.dbon), q = qte(d.id);
+    imprimer(`<div class="page">${entete('BON DE SORTIE DE MATIÈRE D\'ŒUVRE N° ' + d.id)}<p>Demandeur : <b>${esc(d.demandeur)}</b> · Classe : <b>${esc(d.classe)}</b>${d.matiere ? ' · ' + esc(d.matiere) : ''}<br>TP : <b>${esc(d.tp)}</b>${d.date_tp ? ' · prévu le ' + jma(d.date_tp) : ''}</p>
+      <table><thead><tr><th>Article</th><th>Unité</th><th>Quantité remise</th></tr></thead><tbody>${d.lignes.map((l, i) => `<tr><td>${esc(l.designation)}</td><td>${esc(l.unite || '')}</td><td>${esc(q[i] !== undefined ? q[i] : l.quantite)}</td></tr>`).join('')}</tbody></table>
+      <div class="signatures"><div>Le Chef de travaux</div><div>Le demandeur (reçu le …… / …… / ……)</div></div></div>`, 'Bon de sortie ' + d.id); });
+}
+/* --- stock --- */
+const STK = { cat: '', alerte: false };
+async function pageStockMo(c) {
+  c.innerHTML = '<div class="chargement">Chargement…</div>';
+  const [S2, T] = await Promise.all([api('stockMo', { mouvements: true }), api('atelier')]);
+  const cats = [...new Set(S2.articles.map(a => a.categorie).filter(Boolean))].sort();
+  const L = S2.articles.filter(a => (!STK.cat || a.categorie === STK.cat) && (!STK.alerte || a.alerte));
+  const valeur = S2.articles.reduce((t, a) => t + a.stock * a.prix, 0);
+  c.innerHTML = `<h1>📦 Stock de matière d'œuvre</h1>
+    <div class="kpis"><div class="kpi"><div class="lib">Articles</div><div class="val">${S2.articles.length}</div></div><div class="kpi rouge"><div class="lib">Sous le seuil</div><div class="val">${S2.articles.filter(a => a.alerte).length}</div></div><div class="kpi vert"><div class="lib">Valeur du stock</div><div class="val">${fcfa(valeur)}</div></div></div>
+    <div class="ligne"><div><select id="sk-c"><option value="">Toutes les catégories</option>${cats.map(k => `<option ${k === STK.cat ? 'selected' : ''}>${esc(k)}</option>`).join('')}</select></div><div><label class="case" style="margin:8px 0 0"><input type="checkbox" id="sk-a" ${STK.alerte ? 'checked' : ''}> Seulement les articles sous le seuil</label></div></div>
+    <div class="actions">${S2.chef ? '<button class="btn" id="sk-aj">➕ Nouvel article</button>' : ''}<button class="btn secondaire" id="sk-imp">🖨 Imprimer l'état du stock</button></div><div id="sk-form"></div>
+    <div class="table-defil"><table><thead><tr><th>Article</th><th class="n">Stock</th><th class="n">Seuil</th><th class="n">Prix unit.</th></tr></thead><tbody>
+    ${L.map(a => `<tr class="${a.alerte ? 'stk-bas' : ''}"><td><b>${esc(a.designation)}</b><div class="aide">${esc(a.categorie || '')}${a.atelierNom ? ' · ' + esc(a.atelierNom) : ''}</div>
+      ${S2.chef ? `<div class="stk-act"><button class="btn petit vert" data-mv="${a.id}|ENTRÉE">+ Entrée</button><button class="btn petit secondaire" data-mv="${a.id}|SORTIE">− Sortie</button><button class="btn petit secondaire" data-mv="${a.id}|AJUSTEMENT" title="Inventaire physique">= Inventaire</button><button class="btn-lien" data-ea="${a.id}">✏</button></div>` : ''}</td>
+      <td class="n"><b>${nb(a.stock)}</b> ${esc(a.unite)}${a.alerte ? ' ⚠' : ''}</td><td class="n">${a.seuil || ''}</td><td class="n">${a.prix ? fcfa(a.prix) : ''}</td></tr>`).join('') || '<tr><td colspan="4" class="vide">Aucun article.</td></tr>'}</tbody></table></div>
+    <details class="carte"><summary><b>Derniers mouvements</b></summary><div class="table-defil"><table><thead><tr><th>Date</th><th>Article</th><th>Mouvement</th><th>Classe / motif</th><th>Par</th></tr></thead><tbody>
+    ${(S2.mouvements || []).map(m => `<tr><td>${jma(m.le)}</td><td>${esc(m.article)}</td><td><b class="${m.type === 'ENTRÉE' ? 'txt-vert' : m.type === 'SORTIE' ? 'txt-rouge' : ''}">${m.type === 'ENTRÉE' ? '+' : m.type === 'SORTIE' ? '−' : '±'}${nb(Math.abs(m.quantite))}</b> ${esc(m.unite)}</td><td>${esc(m.classe || '')} ${esc(m.motif || '')}</td><td>${esc(m.par)}</td></tr>`).join('')}</tbody></table></div></details>`;
+  $('#sk-c', c).onchange = e => { STK.cat = e.target.value; pageStockMo(c); }; $('#sk-a', c).onchange = e => { STK.alerte = e.target.checked; pageStockMo(c); };
+  const form = a => { a = a || { unite: 'pièce', seuil: 0, prix: 0 };
+    $('#sk-form', c).innerHTML = `<div class="carte"><h2 style="margin-top:0">${a.id ? 'Modifier l\'article' : 'Nouvel article'}</h2>
+      <div class="ligne"><div><label>Désignation</label><input id="a-d" value="${esc(a.designation || '')}"></div><div><label>Unité</label><input id="a-u" value="${esc(a.unite)}"></div><div><label>Catégorie</label><input id="a-c" value="${esc(a.categorie || '')}" list="a-cl"><datalist id="a-cl">${cats.map(k => `<option>${esc(k)}</option>`).join('')}</datalist></div></div>
+      <div class="ligne"><div><label>Seuil d'alerte</label><input id="a-s" type="number" min="0" value="${a.seuil}"></div><div><label>Prix unitaire (F)</label><input id="a-p" type="number" min="0" value="${a.prix}"></div>${a.id ? '' : '<div><label>Stock initial</label><input id="a-st" type="number" min="0" value="0"></div>'}
+        <div><label>Atelier</label><select id="a-at"><option value="">—</option>${T.ateliers.map(x => `<option value="${x.id}" ${x.id === a.atelier ? 'selected' : ''}>${esc(x.nom)}</option>`).join('')}</select></div></div>
+      <div class="actions"><button class="btn" id="a-ok">Enregistrer</button><button class="btn secondaire" id="a-x">Annuler</button></div></div>`;
+    $('#a-x', c).onclick = () => { $('#sk-form', c).innerHTML = ''; };
+    $('#a-ok', c).onclick = () => appelAt('enregistrerArticle', { id: a.id, article: { designation: $('#a-d').value, unite: $('#a-u').value, categorie: $('#a-c').value, seuil: $('#a-s').value, prix: $('#a-p').value, stock: $('#a-st') ? $('#a-st').value : 0, atelier: $('#a-at').value } }, () => pageStockMo(c)); };
+  if ($('#sk-aj', c)) $('#sk-aj', c).onclick = () => form();
+  $$('[data-ea]', c).forEach(b => b.onclick = () => form(S2.articles.find(a => a.id === b.dataset.ea)));
+  $$('[data-mv]', c).forEach(b => b.onclick = () => { const [id, t] = b.dataset.mv.split('|'), a = S2.articles.find(x => x.id === id);
+    const q = prompt(t === 'ENTRÉE' ? `Quantité reçue de « ${a.designation} » (${a.unite}) :` : t === 'SORTIE' ? `Quantité sortie (${a.unite}) :` : `Quantité réellement comptée en magasin (${a.unite}) :`, ''); if (q === null || q === '') return;
+    const prix = t === 'ENTRÉE' ? prompt('Prix unitaire d\'achat (F) — laisser vide pour garder ' + a.prix + ' F :', '') : ''; if (prix === null) return;
+    const motif = prompt(t === 'ENTRÉE' ? 'Fournisseur ou référence (facultatif) :' : 'Motif :', t === 'AJUSTEMENT' ? 'Inventaire physique' : ''); if (motif === null) return;
+    appelAt('mouvementStock', { id, type: t, quantite: q, prix: prix || 0, motif }, () => pageStockMo(c)); });
+  $('#sk-imp', c).onclick = () => imprimer(`<div class="page">${entete('ÉTAT DU STOCK DE MATIÈRE D\'ŒUVRE')}<table><thead><tr><th>Article</th><th>Catégorie</th><th>Stock</th><th>Seuil</th><th>Prix unit.</th><th>Valeur</th></tr></thead><tbody>
+    ${L.map(a => `<tr><td>${esc(a.designation)}${a.alerte ? ' ⚠' : ''}</td><td>${esc(a.categorie || '')}</td><td>${nb(a.stock)} ${esc(a.unite)}</td><td>${a.seuil || ''}</td><td>${a.prix ? fcfa(a.prix) : ''}</td><td>${fcfa(a.stock * a.prix)}</td></tr>`).join('')}</tbody></table><p style="text-align:right"><b>Valeur totale : ${fcfa(L.reduce((t, a) => t + a.stock * a.prix, 0))}</b></p></div>`, 'Etat du stock');
+}
+/* --- prêts --- */
+async function pagePrets(c) {
+  c.innerHTML = '<div class="chargement">Chargement…</div>';
+  const P = await api('prets', { tous: !!pagePrets.tous });
+  c.innerHTML = `<h1>🔁 Prêts d'outillage</h1>
+    ${P.chef ? `<details class="carte"><summary><b>➕ Nouveau prêt</b></summary>
+      <div class="ligne"><div><label>Outil</label><select id="pr-e">${P.pretables.filter(e => e.dispo > 0).map(e => `<option value="${e.id}">${esc(e.designation)} (${e.dispo} dispo.)</option>`).join('')}</select></div><div style="flex:0 0 90px"><label>Qté</label><input id="pr-q" type="number" min="1" value="1"></div></div>
+      <div class="ligne"><div><label>Emprunteur (personnel)</label><select id="pr-m"><option value="">— autre (élève…) —</option>${P.personnel.map(p => `<option value="${p.matricule}">${esc(p.nom)}</option>`).join('')}</select></div><div><label>ou nom (élève, classe)</label><input id="pr-n" placeholder="Ex. KONAN Paul, 2CAP/ELECT-A"></div></div>
+      <div class="ligne"><div><label>Retour prévu le</label><input id="pr-r" type="date" value="${dateLocale()}"></div><div><label>Note</label><input id="pr-o" placeholder="Ex. TP de mesures"></div></div>
+      <button class="btn" id="pr-ok">Enregistrer le prêt</button></details>` : ''}
+    <label class="case"><input type="checkbox" id="pr-t" ${pagePrets.tous ? 'checked' : ''}> Afficher aussi les prêts rendus</label>
+    ${P.prets.map(x => `<div class="carte ${x.retard ? 'sig-item urgent' : ''}"><div class="sig-tete"><b>${esc(x.designation)}</b> × ${x.quantite} ${x.rendu_le ? `<span class="badge P">rendu le ${jma(x.rendu_le)}${x.etat_retour && x.etat_retour !== 'BON' ? ' (' + esc(x.etat_retour.toLowerCase()) + ')' : ''}</span>` : x.retard ? '<span class="badge A">en retard</span>' : '<span class="badge attente">en cours</span>'}</div>
+      <p class="aide">${esc(x.nom)} · prêté le ${jma(x.du)} · retour prévu le ${jma(x.retour_prevu)}${x.note ? ' · ' + esc(x.note) : ''}</p>
+      ${P.chef && !x.rendu_le ? `<div class="actions"><button class="btn petit vert" data-rd="${x.id}|BON">✔ Rendu en bon état</button><button class="btn petit secondaire" data-rd="${x.id}|À RÉPARER">Rendu abîmé</button></div>` : ''}</div>`).join('') || '<div class="info">Aucun prêt en cours.</div>'}`;
+  $('#pr-t', c).onchange = e => { pagePrets.tous = e.target.checked; pagePrets(c); };
+  if ($('#pr-ok', c)) $('#pr-ok', c).onclick = () => appelAt('preter', { id_equipement: $('#pr-e').value, quantite: $('#pr-q').value, emprunteur: $('#pr-m').value, nom: $('#pr-n').value, retour_prevu: $('#pr-r').value, note: $('#pr-o').value }, () => pagePrets(c));
+  $$('[data-rd]', c).forEach(b => b.onclick = () => { const [id, et] = b.dataset.rd.split('|'); const note = et === 'BON' ? '' : prompt('Qu\'est-ce qui est abîmé ?', ''); if (note === null) return; appelAt('rendre', { id, etat: et, note }, () => pagePrets(c)); });
+}
+/* --- registre de sécurité --- */
+async function pageSecurite(c) {
+  c.innerHTML = '<div class="chargement">Chargement…</div>';
+  const R = await api('securite'), ech = { RETARD: ['A', 'en retard'], JAMAIS: ['A', 'jamais contrôlé'], BIENTÔT: ['attente', 'bientôt'], OK: ['P', 'à jour'] };
+  c.innerHTML = `<h1>🛡 Registre de sécurité</h1>
+    <div class="onglets"><button data-sg="ctl" class="${pageSecurite.o !== 'inc' ? 'actif' : ''}">Contrôles périodiques</button><button data-sg="inc" class="${pageSecurite.o === 'inc' ? 'actif' : ''}">Incidents</button></div>
+    ${pageSecurite.o !== 'inc' ? `
+      ${R.points.map(p => `<div class="carte"><div class="sig-tete"><b>${esc(p.libelle)}</b> <span class="badge ${ech[p.echeance][0]}">${ech[p.echeance][1]}</span><span class="aide" style="margin-left:auto">${esc(p.atelierNom)} · tous les ${p.periodicite} j</span></div>
+        <p class="aide">Dernier contrôle : ${p.dernier ? jma(p.dernier) + ' (' + esc(p.resultat.toLowerCase()) + ')' : '—'} · prochain : <b>${jma(p.prochain) || 'à faire'}</b></p>
+        ${p.historique.length ? `<details><summary class="aide">Historique</summary>${p.historique.map(h => `<div class="aide">${jma(h.date)} — ${esc(h.resultat)} — ${esc(h.par)}${h.observations ? ' : ' + esc(h.observations) : ''}</div>`).join('')}</details>` : ''}
+        ${R.chef ? `<div class="actions"><button class="btn petit vert" data-ct="${p.id}|CONFORME">✔ Contrôlé : conforme</button><button class="btn petit rouge" data-ct="${p.id}|NON CONFORME">✖ Non conforme</button></div>` : ''}</div>`).join('') || '<div class="info">Aucun point de contrôle.</div>'}
+      ${R.chef ? `<details class="carte"><summary><b>➕ Nouveau point de contrôle</b></summary><div class="ligne"><div><label>À contrôler</label><input id="pc-l" placeholder="Ex. Extincteurs, disjoncteurs différentiels, trousse de secours…"></div>
+        <div><label>Atelier</label><select id="pc-a"><option value="">Tout l'établissement</option>${R.ateliers.map(a => `<option value="${a.id}">${esc(a.nom)}</option>`).join('')}</select></div><div style="flex:0 0 130px"><label>Tous les (jours)</label><input id="pc-p" type="number" min="1" value="30"></div></div>
+        <button class="btn" id="pc-ok">Ajouter</button></details>` : ''}
+      <button class="btn secondaire" id="sg-imp">🖨 Imprimer le registre</button>` : `
+      <details class="carte" open><summary><b>➕ Déclarer un incident</b></summary>
+        <div class="ligne"><div><label>Date</label><input id="in-d" type="date" value="${dateLocale()}"></div><div><label>Type</label><select id="in-t">${R.types.map(t => `<option>${t}</option>`).join('')}</select></div><div><label>Gravité</label><select id="in-g"><option>LÉGER</option><option>MOYEN</option><option>GRAVE</option></select></div></div>
+        <div class="ligne"><div><label>Atelier</label><select id="in-a"><option value="">—</option>${R.ateliers.map(a => `<option value="${a.id}">${esc(a.nom)}</option>`).join('')}</select></div><div><label>Classe</label><select id="in-c"><option value="">—</option>${R.classes.map(k => `<option>${esc(k)}</option>`).join('')}</select></div></div>
+        <label>Ce qui s'est passé</label><textarea id="in-x" rows="2"></textarea><label>Mesures prises</label><textarea id="in-m" rows="2"></textarea>
+        <button class="btn" id="in-ok">Enregistrer</button><p class="aide">Un incident grave prévient aussi le directeur et le censeur.</p></details>
+      ${R.incidents.map(x => `<div class="carte ${x.gravite === 'GRAVE' ? 'sig-item urgent' : ''}"><div class="sig-tete"><b>${esc(x.type)}</b> <span class="badge ${x.gravite === 'GRAVE' ? 'A' : x.gravite === 'MOYEN' ? 'attente' : ''}">${esc(x.gravite)}</span> <span class="badge ${x.statut === 'CLOS' ? 'P' : 'attente'}">${esc(x.statut)}</span><span class="aide" style="margin-left:auto">${jma(x.date)} · ${esc(x.atelier)} ${esc(x.classe)}</span></div>
+        <p>${esc(x.description)}</p>${x.mesures ? `<p class="aide">Mesures : ${esc(x.mesures)}</p>` : ''}<p class="aide">Déclaré par ${esc(x.par)}</p>
+        ${R.chef && x.statut !== 'CLOS' ? `<button class="btn petit secondaire" data-ic="${x.id}">Compléter et clore</button>` : ''}</div>`).join('') || '<div class="info">Aucun incident enregistré.</div>'}`}`;
+  $$('[data-sg]', c).forEach(b => b.onclick = () => { pageSecurite.o = b.dataset.sg; pageSecurite(c); });
+  $$('[data-ct]', c).forEach(b => b.onclick = () => { const [id, r] = b.dataset.ct.split('|'); const obs = prompt(r === 'CONFORME' ? 'Observations (facultatif) :' : 'Qu\'est-ce qui n\'est pas conforme ?', ''); if (obs === null) return; appelAt('enregistrerControle', { id, resultat: r, observations: obs }, () => pageSecurite(c)); });
+  if ($('#pc-ok', c)) $('#pc-ok', c).onclick = () => appelAt('enregistrerPointControle', { libelle: $('#pc-l').value, atelier: $('#pc-a').value, periodicite: $('#pc-p').value }, () => pageSecurite(c));
+  if ($('#in-ok', c)) $('#in-ok', c).onclick = () => appelAt('declarerIncidentAtelier', { date: $('#in-d').value, type: $('#in-t').value, gravite: $('#in-g').value, atelier: $('#in-a').value, classe: $('#in-c').value, description: $('#in-x').value, mesures: $('#in-m').value }, () => pageSecurite(c));
+  $$('[data-ic]', c).forEach(b => b.onclick = () => { const x = R.incidents.find(i => i.id === b.dataset.ic), m = prompt('Mesures prises :', x.mesures || ''); if (m === null) return; appelAt('traiterIncidentAtelier', { id: x.id, mesures: m, statut: 'CLOS' }, () => pageSecurite(c)); });
+  if ($('#sg-imp', c)) $('#sg-imp', c).onclick = () => imprimer(`<div class="page">${entete('REGISTRE DE SÉCURITÉ DES ATELIERS')}<h3>Contrôles périodiques</h3><table><thead><tr><th>Point de contrôle</th><th>Atelier</th><th>Périodicité</th><th>Dernier contrôle</th><th>Résultat</th><th>Prochain</th></tr></thead><tbody>
+    ${R.points.map(p => `<tr><td>${esc(p.libelle)}</td><td>${esc(p.atelierNom)}</td><td>${p.periodicite} j</td><td>${jma(p.dernier)}</td><td>${esc(p.resultat || '')}</td><td>${jma(p.prochain)}</td></tr>`).join('')}</tbody></table>
+    <h3>Incidents</h3><table><thead><tr><th>Date</th><th>Type</th><th>Gravité</th><th>Lieu / classe</th><th>Description</th><th>Mesures</th></tr></thead><tbody>${R.incidents.map(x => `<tr><td>${jma(x.date)}</td><td>${esc(x.type)}</td><td>${esc(x.gravite)}</td><td>${esc(x.atelier)} ${esc(x.classe)}</td><td>${esc(x.description)}</td><td>${esc(x.mesures || '')}</td></tr>`).join('')}</tbody></table>
+    <div class="signatures"><div>Le Chef de travaux</div><div>Le Chef d'établissement</div></div></div>`, 'Registre de securite');
+}
+/* --- besoin annuel et coûts --- */
+async function pageRapportsAtelier(c) {
+  c.innerHTML = '<div class="chargement">Chargement…</div>';
+  const R = await api('rapportsAtelier', pageRapportsAtelier.p || {});
+  const cats = [...new Set(R.besoin.map(b => b.categorie))];
+  const tabBesoin = () => `<table><thead><tr><th>Article</th><th>Unité</th><th class="n">Demandé</th><th class="n">Remis</th><th class="n">En stock</th><th class="n">Prix unit.</th><th class="n">Montant</th></tr></thead><tbody>
+    ${cats.map(k => `<tr class="grp"><td colspan="7"><b>${esc(k || 'Sans catégorie')}</b></td></tr>` + R.besoin.filter(b => b.categorie === k).map(b => `<tr><td>${esc(b.designation)}</td><td>${esc(b.unite || '')}</td><td class="n">${nb(b.demande)}</td><td class="n">${nb(b.servi)}</td><td class="n">${nb(b.stock)}</td><td class="n">${b.prix ? fcfa(b.prix) : ''}</td><td class="n">${b.montant ? fcfa(b.montant) : ''}</td></tr>`).join('')).join('')}
+    <tr><td colspan="6"><b>Total estimé</b></td><td class="n"><b>${fcfa(R.totalBesoin)}</b></td></tr></tbody></table>`;
+  c.innerHTML = `<h1>📊 Besoins et coûts de l'atelier</h1>
+    <div class="ligne"><div><label>Du</label><input type="date" id="ra-du" value="${R.du}"></div><div><label>Au</label><input type="date" id="ra-au" value="${R.au}"></div><div style="flex:0 0 auto;align-self:end"><button class="btn secondaire" id="ra-ok">Afficher</button></div></div>
+    <div class="carte"><h2 style="margin-top:0">Besoin en matière d'œuvre (${esc(R.annee)})</h2><p class="aide">Somme des demandes des enseignants sur la période (hors demandes refusées). C'est la base de la liste du besoin de l'année suivante.</p>
+      <div class="table-defil">${tabBesoin()}</div><button class="btn secondaire" id="ra-imp1">🖨 Imprimer la liste du besoin</button></div>
+    <div class="carte"><h2 style="margin-top:0">Coût par classe</h2><div class="table-defil"><table><thead><tr><th>Classe</th><th class="n">Sorties</th><th class="n">Coût</th></tr></thead><tbody>${R.parClasse.map(k => `<tr><td>${esc(k.classe)}</td><td class="n">${k.sorties}</td><td class="n">${fcfa(k.montant)}</td></tr>`).join('') || '<tr><td colspan="3" class="vide">Aucune sortie.</td></tr>'}</tbody></table></div>
+      <h2>Coût par TP</h2><div class="table-defil"><table><thead><tr><th>Date</th><th>Classe</th><th>TP</th><th>Enseignant</th><th class="n">Coût</th></tr></thead><tbody>${R.parTp.map(t => `<tr><td>${jma(t.date)}</td><td>${esc(t.classe)}</td><td>${esc(t.tp)}</td><td>${esc(t.demandeur)}</td><td class="n">${fcfa(t.cout)}</td></tr>`).join('') || '<tr><td colspan="5" class="vide">Aucun TP servi.</td></tr>'}
+      <tr><td colspan="4"><b>Total</b></td><td class="n"><b>${fcfa(R.totalCout)}</b></td></tr></tbody></table></div><button class="btn secondaire" id="ra-imp2">🖨 Imprimer les coûts</button></div>`;
+  $('#ra-ok', c).onclick = () => { pageRapportsAtelier.p = { du: $('#ra-du').value, au: $('#ra-au').value }; pageRapportsAtelier(c); };
+  $('#ra-imp1', c).onclick = () => imprimer(`<div class="page">${entete('LISTE DU BESOIN EN MATIÈRE D\'ŒUVRE — ' + R.annee)}<p class="aide">Période du ${jma(R.du)} au ${jma(R.au)}</p>${tabBesoin()}<div class="signatures"><div>Le Chef de travaux</div><div>Le Chef d'établissement</div></div></div>`, 'Besoin matiere oeuvre ' + R.annee);
+  $('#ra-imp2', c).onclick = () => imprimer(`<div class="page">${entete('COÛT DES TRAVAUX PRATIQUES — ' + R.annee)}<h3>Par classe</h3><table><thead><tr><th>Classe</th><th>Sorties</th><th>Coût</th></tr></thead><tbody>${R.parClasse.map(k => `<tr><td>${esc(k.classe)}</td><td>${k.sorties}</td><td>${fcfa(k.montant)}</td></tr>`).join('')}</tbody></table>
+    <h3>Par TP</h3><table><thead><tr><th>Date</th><th>Classe</th><th>TP</th><th>Enseignant</th><th>Coût</th></tr></thead><tbody>${R.parTp.map(t => `<tr><td>${jma(t.date)}</td><td>${esc(t.classe)}</td><td>${esc(t.tp)}</td><td>${esc(t.demandeur)}</td><td>${fcfa(t.cout)}</td></tr>`).join('')}</tbody></table><p style="text-align:right"><b>Total : ${fcfa(R.totalCout)}</b></p></div>`, 'Couts TP ' + R.annee);
 }
