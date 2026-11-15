@@ -271,7 +271,7 @@ function redimensionnerPhoto(fichier) {
 
 /* ================= BOÎTE À SUGGESTIONS (v2.5) ================= */
 let SUGG_PAGE = '';
-const VERSION_SITE = '3.4';
+const VERSION_SITE = '3.5';
 /* ================= NOTIFICATIONS SUR LE TÉLÉPHONE (v2.6, Firebase) ================= */
 // configuration publique du projet Firebase (faite pour être dans le site) ; la clé privée reste dans Apps Script
 const FIREBASE_CFG = { apiKey: 'AIzaSyDVRNmLz5ph73vf2a9vFhd2RVni8H9swt0', authDomain: 'lpdaoukro-notification.firebaseapp.com', projectId: 'lpdaoukro-notification',
@@ -693,7 +693,7 @@ function formConnexion() {
       S.session = { jeton: r.jeton, profil: r.profil, params: r.params }; stock.ecrire('session', S.session);
       api('photos', { matricules: [r.profil.matricule] }).then(p => { Object.assign(S.photos, p.photos); stock.ecrire('photos', S.photos); appliquerPhotos(); }).catch(() => {});
       location.hash = '#/'; stock.ecrire('bienvenue', 1); stock.ecrire('mode', 'admin');
-      const entrer = () => { afficher(); setTimeout(carteBienvenue, 600); majActions(true); setTimeout(() => preparerHorsLigne(true), 2500); };
+      const entrer = () => { const pq = stock.lire('pointage_en_attente', ''); if (pq) { stock.effacer('pointage_en_attente'); location.hash = '#/pointer/' + pq; return afficher(); } afficher(); setTimeout(carteBienvenue, 600); majActions(true); setTimeout(() => preparerHorsLigne(true), 2500); };
       if (r.profil.double) choisirMode(entrer); else entrer();
     } catch (err) { $('#msg').innerHTML = `<div class="erreur">${esc(err.message)}</div>`; b.disabled = false; }
   };
@@ -766,6 +766,7 @@ const PAGES = {
   'paiement':      { titre: 'État de paiement', mod: ['pointage', 'CONSULTE'], roles: ['censeur', 'admin', 'directeur'], fn: pagePaiement },
   'personnel':     { titre: 'Personnel', mod: ['pointage', 'CONSULTE'], roles: ['censeur', 'admin', 'directeur'], fn: pagePersonnel },
   'emplois':       { titre: 'Emplois du temps', mod: ['edt', 'CONSULTE'], roles: ['admin', 'censeur'], fn: (c, a) => pageEmploisV2(c, a) },
+  'arrivees':      { titre: 'Arrivées et départs', roles: ['admin', 'censeur', 'directeur'], fn: c => pageArrivees(c) },
   'vie':           { titre: 'Vie du lycée', roles: ['admin', 'directeur', 'censeur', 'educateur', 'comptable', 'intervenant'], fn: c => pageVie(c) },
   'sondages':      { titre: 'Sondages', roles: ['admin', 'directeur', 'censeur', 'educateur', 'comptable', 'intervenant'], fn: c => pageSondages(c) },
   'agent-mois':    { titre: 'Agent du mois', roles: ['admin', 'directeur', 'censeur', 'educateur', 'comptable', 'intervenant'], fn: c => pageAgentMois(c) },
@@ -802,7 +803,7 @@ const PAGES = {
 let pastilles = stock.lire('pastilles', {});
 const GROUPES_MENU = [
   { id: 'accueil', titre: '🏠 Accueil', pages: ['direction', 'ma-fiche', 'vie', 'agent-mois', 'honneur', 'sondages', 'signalements'] },
-  { id: 'personnel', titre: '👨‍🏫 Personnel', pages: ['pointage', 'tableau', 'intervenants', 'rattrapages', 'reclamations', 'paiement', 'personnel'] },
+  { id: 'personnel', titre: '👨‍🏫 Personnel', pages: ['pointage', 'arrivees', 'tableau', 'intervenants', 'rattrapages', 'reclamations', 'paiement', 'personnel'] },
   { id: 'eleves', titre: '🎓 Élèves', pages: ['eleves', 'effectifs', 'appel', 'absences', 'discipline', 'stages', 'familles', 'archives'] },
   { id: 'notes', titre: '📝 Notes', pages: ['notes', 'bulletins', 'calendrier-conseils'] },
   { id: 'finances', titre: '💰 Finances', pages: ['caisse', 'finances'] },
@@ -833,6 +834,10 @@ function menu() {
 function afficher() {
   const pg0 = (location.hash.slice(2) || '').split('/');
   if (pg0[0] === 'signaler' || pg0[0] === 'suivi') return pageSignalPublic(pg0[0], decodeURIComponent(pg0[1] || ''));
+  if (pg0[0] === 'pointer') {
+    if (!S.session) { stock.ecrire('pointage_en_attente', pg0[1] || ''); return ecranConnexion(); }
+    if (!S.session.parent) return pagePointerQr(decodeURIComponent(pg0[1] || ''));
+  }
   if (!S.session) return ecranConnexion();
   if (S.session.parent) return afficherParent();
   // nouveau conteneur à chaque page : une page encore en chargement ne peut plus écrire dans la suivante
@@ -926,10 +931,20 @@ async function pagePointage(c) {
     const personnes = {}; ref.personnes.forEach(p => personnes[p.id] = p);
     const qr = new Set(ref.qr.filter(q => q.d === date).map(q => q.m));
     const qrH = {}; ref.qr.filter(q => q.d === date).forEach(q => qrH[q.m] = q.h);
+    const presQ = {}; (ref.pres || []).filter(q => q.d === date).forEach(q => presQ[q.m] = q);
+    const finMin = hor => { const m = String(hor || '').split('-')[1]; return m ? debutMin(m) : 9999; };
+    /** Proposition « Présent (QR) » : arrivée avant le début et pas de départ avant la fin (tolérance 15 min) ou départ accepté. */
+    const propQR = (p, sx) => { const q = presQ[p.matricule]; if (!q || !q.a) return null; const a = debutMin(q.a.replace(':', 'h')), dp = q.dp ? debutMin(q.dp.replace(':', 'h')) : null;
+      const deb = debutMin(sx.horaire), fin = finMin(sx.horaire);
+      if (a > deb) return { ok: false, txt: 'arrivé à ' + q.a + ' (QR)' };
+      if (dp !== null && dp < fin - 15 && q.sd !== 'ACCEPTÉ') return { ok: false, txt: 'parti à ' + q.dp + ' (QR)' };
+      return { ok: true }; };
     const parP = {};
     if (js <= 4) ref.seances.filter(s => s.jour === jour && seanceActive(s, date)).forEach(s => (parP[s.p] = parP[s.p] || []).push(s));
     let ids = Object.keys(parP).filter(id => personnes[id]);
     ids.sort((a, b) => cmp(personnes[a].filiere, personnes[b].filiere) || cmp(personnes[a].nom, personnes[b].nom));
+    const aValiderQR = [];
+    if (date <= auj) ids.forEach(id => parP[id].forEach(sx => { const pq = propQR(personnes[id], sx); if (pq && pq.ok && !etatPointage(ref, date, sx.id).st) aValiderQR.push(sx.id); }));
     // listes déroulantes : filière → classe → intervenant
     const filieres = [...new Set(ids.map(id => personnes[id].filiere))].sort(cmp);
     if (filtre.fil && !filieres.includes(filtre.fil)) filtre.fil = '';
@@ -959,6 +974,7 @@ async function pagePointage(c) {
         <div class="compteur" style="margin-top:6px"><b>${jourLong(date)}</b> · ${faits}/${total} séances pointées
           ${S.file.length ? ` · <span class="en-attente-sync">${S.file.length} en attente d'envoi</span>` : ''}</div>
       </div>
+      ${aValiderQR.length && modifiable ? `<div class="succes qr-valid"><span>📲 <b>${aValiderQR.length} séance(s)</b> peuvent être validées d'après le pointage QR (arrivée avant le cours, pas de départ avant la fin).</span> <button class="btn petit vert" id="qr-ok">✔ Valider les présences QR</button></div>` : ''}
       ${rappel && rappel.d !== date ? `<div class="alerte rappel"><span>⏰ ${rappel.d === ajouterJours(auj, -1) ? 'Hier' : 'Le ' + jourLong(rappel.d)}, <b>${rappel.n} séance(s)</b> n'ont pas été pointées.</span> <button class="btn petit orange" id="aller-rappel">Pointer ce jour</button></div>` : ''}
       ${!S.enLigne ? '<div class="alerte">Vous êtes hors connexion. Continuez à pointer : tout sera envoyé automatiquement dès le retour du réseau.</div>' : ''}
       ${conge ? `<div class="info">Jour de congé : <b>${esc(conge)}</b>. Les séances ne sont pas dues ; vous pouvez les marquer C.</div>` : ''}
@@ -975,10 +991,10 @@ async function pagePointage(c) {
             <div class="droite">${modifiable ? `<button class="btn petit vert" data-tous="${id}" title="Tout présent">Tous P</button>` : ''}</div>
           </div>
           ${ss.map(s => {
-            const e = etatPointage(ref, date, s.id);
-            return `<div class="seance" data-s="${s.id}">
+            const e = etatPointage(ref, date, s.id), pq = !e.st ? propQR(p, s) : null;
+            return `<div class="seance ${pq && pq.ok ? 'sugg-qr' : ''}" data-s="${s.id}">
               <div class="quoi"><b>${esc(s.horaire)}</b> · ${esc(s.matiere)} · ${esc(s.classe)} <span class="badge ${esc(s.niveau)}">${esc(s.niveau)}</span> · ${nb(s.heures)} h
-                ${e.attente ? '<span class="en-attente-sync"> · en attente d\'envoi</span>' : ''}</div>
+                ${e.attente ? '<span class="en-attente-sync"> · en attente d\'envoi</span>' : ''}${pq ? (pq.ok ? ' <span class="badge qr">Présent (QR) proposé</span>' : ` <span class="badge attente">⚠ ${esc(pq.txt)}</span>`) : ''}</div>
               <div class="choix">${['P', 'A', 'C'].map(k => `<button class="${k} ${e.st === k ? 'on' : ''}" data-st="${k}" ${modifiable ? '' : 'disabled'} title="${{ P: 'Présent', A: 'Absent', C: 'Congé / pas de cours' }[k]}">${k}</button>`).join('')}</div>
               ${e.st === 'A' ? `<div class="motif"><select data-motif ${modifiable ? '' : 'disabled'}>${MOTIFS.map(m => `<option ${m === (e.m || 'Sans motif') ? 'selected' : ''}>${m}</option>`).join('')}</select></div>` : ''}
             </div>`;
@@ -997,6 +1013,7 @@ async function pagePointage(c) {
       dessiner();
     });
     $$('select[data-motif]', c).forEach(sel => sel.onchange = () => { pointer(date, sel.closest('.seance').dataset.s, 'A', sel.value); dessiner(); });
+    if ($('#qr-ok')) $('#qr-ok').onclick = () => { aValiderQR.forEach(sid => pointer(date, sid, 'P', '')); toast(aValiderQR.length + ' séance(s) validée(s) d\'après le QR.'); dessiner(); };
     $$('[data-tous]', c).forEach(b => b.onclick = () => { seancesVisibles(b.dataset.tous).forEach(s => pointer(date, s.id, 'P', '')); dessiner(); });
   };
   redessinerPointage = () => { if (location.hash.startsWith('#/pointage') && !document.activeElement.matches('input,select')) dessiner(); };
@@ -2006,7 +2023,9 @@ async function accueilVivant(z) {
   h += blocsVie(D);
   const cours = J.cours || [];
   h += `<div class="ma-journee"><div class="mj-titre">☀ Ma journée</div><div class="mj-lignes">
-    <div class="mj-l">${J.arrivee ? `✅ Arrivée pointée à <b>${esc(J.arrivee)}</b>` : J.jourDeCours ? '⏱ Arrivée pas encore pointée aujourd\'hui' : '🌴 Pas de cours aujourd\'hui'}</div>
+    <div class="mj-l">${J.arrivee ? `✅ Arrivée pointée à <b>${esc(J.arrivee)}</b>${J.depart ? ` · 🚪 départ à <b>${esc(J.depart)}</b>` : ''}` : J.jourDeCours ? '⏱ Arrivée pas encore pointée aujourd\'hui' : '🌴 Pas de cours aujourd\'hui'}</div>
+    ${J.departOublie ? `<div class="mj-l mj-oubli">⚠ Départ du <b>${fr(J.departOublie.date)}</b> non pointé (arrivé à ${esc(J.departOublie.arrivee)}).
+      <div class="ligne" style="margin-top:6px"><div style="flex:0 0 110px"><input type="time" id="do-h" value="17:40"></div><div><input id="do-m" maxlength="150" placeholder="Pourquoi le départ n'a pas été pointé ?"></div><div style="flex:0 0 auto"><button class="btn petit" id="do-ok">Déclarer</button></div></div></div>` : ''}
     ${cours.map(c => `<div class="mj-l">${c.appel ? '✅' : '📋'} <b>${esc(c.horaire)}</b> ${esc(c.matiere || '')} · ${esc(c.classe)}${c.salle ? ' · ' + esc(c.salle) : ''} ${c.appel ? '<span class="aide">appel fait</span>' : '<a href="#/appel">faire l\'appel</a>'}</div>`).join('')}
     ${J.signalements ? `<div class="mj-l">📍 <a href="#/signalements">${J.signalements} signalement(s) à traiter</a></div>` : ''}
     ${ACT.donnees && ACT.donnees.actions.length ? `<div class="mj-l">🔔 <a href="#/actions">${ACT.donnees.actions.length} action(s) en attente</a></div>` : ''}</div></div>`;
@@ -2020,6 +2039,7 @@ async function accueilVivant(z) {
   }
   if (vz && !stock.lire('confettis_' + D.date, false)) { stock.ecrire('confettis_' + D.date, true); confettis(vz); }
   brancherVie(z, D);
+  if ($('#do-ok', z)) $('#do-ok', z).onclick = async () => { try { toast((await api('declarerDepart', { date: J.departOublie.date, heure: $('#do-h', z).value, motif: $('#do-m', z).value })).message); AV.data = null; accueilVivant(z); } catch (e) { toast(e.message, 6000); } };
 }
 function confettis(el) {
   const c = ['#F28C28', '#1E7B3A', '#F5C518', '#2C6FB7', '#C62828'];
@@ -2300,4 +2320,107 @@ async function pageSondages(c) {
   $$('[data-sd]', c).forEach(b => b.onclick = async () => { const [id, k] = b.dataset.sd.split('|'); try { toast((await api('voter', { id, choix: +k })).message); AV.data = null; pageSondages(c); } catch (e) { toast(e.message); } });
   $$('[data-clore]', c).forEach(b => b.onclick = async () => { if (!confirm('Clore ce sondage ?')) return; try { toast((await api('cloreSondage', { id: b.dataset.clore })).message); pageSondages(c); } catch (e) { toast(e.message); } });
   if ($('#sd-ok', c)) $('#sd-ok', c).onclick = async () => { try { toast((await api('creerSondage', { question: $('#sd-q').value, options: $('#sd-o').value.split('\n'), au: $('#sd-au').value, anonyme: $('#sd-an').checked })).message, 5000); pageSondages(c); } catch (e) { toast(e.message, 6000); } };
+}
+
+
+/* ================= POINTAGE QR DU PERSONNEL (v3.5) ================= */
+function positionGPS() {
+  return new Promise((ok, ko) => {
+    if (!navigator.geolocation) return ko(new Error('Ce téléphone ne donne pas sa position : pointez au censorat.'));
+    navigator.geolocation.getCurrentPosition(p => ok({ lat: p.coords.latitude, lng: p.coords.longitude, precision: p.coords.accuracy }),
+      e => ko(new Error(e.code === 1 ? 'La localisation est refusée. Autorisez-la pour ce site (icône 🔒 à côté de l\'adresse), puis réessayez. Sinon, pointez au censorat.' : 'Position introuvable. Activez la localisation (GPS) du téléphone puis réessayez.')),
+      { enableHighAccuracy: true, timeout: 20000, maximumAge: 0 });
+  });
+}
+async function pagePointerQr(cle) {
+  const c0 = $('#contenu'), c = c0.cloneNode(false); c0.replaceWith(c); c.style.maxWidth = '520px';
+  $('#entete').hidden = false; $('#menu').hidden = true;
+  const ecran = (icone, titre, texte, boutons = '') => { c.innerHTML = `<div class="pq"><div class="pq-icone">${icone}</div><h1>${titre}</h1><div class="pq-texte">${texte}</div>${boutons}
+    <p style="margin-top:22px"><a class="btn secondaire" href="#/">🏠 Aller à l'accueil</a></p></div>`; };
+  const essayer = async (extra = {}) => {
+    ecran('📍', 'Pointage en cours…', 'Vérification de votre position…');
+    let pos; try { pos = await positionGPS(); } catch (e) { return ecran('📵', 'Position nécessaire', esc(e.message), '<button class="btn large" id="pq-re">Réessayer</button>'), $('#pq-re').onclick = () => essayer(extra); }
+    let r; try { r = await api('pointerQr', Object.assign({ cle }, pos, extra)); }
+    catch (e) { return ecran('❌', 'Pointage non enregistré', esc(e instanceof HorsLigne ? 'Pas de connexion internet : réessayez dans un instant, ou pointez au censorat.' : e.message), '<button class="btn large" id="pq-re">Réessayer</button>'), $('#pq-re').onclick = () => essayer(extra); }
+    if (r.type === 'ARRIVEE') { ecran(r.retard ? '⏰' : '✅', 'Bonjour !', `${esc(r.message)}${r.serie ? `<div class="pq-serie">🔥 ${r.serie} jour(s) à l'heure</div>` : ''}`); if (!r.retard) confettis($('.pq', c)); AV.data = null; return; }
+    if (r.type === 'DEPART') { ecran('👋', 'À demain !', esc(r.message)); AV.data = null; return; }
+    if (r.type === 'CONFIRMER_DEPART') {
+      ecran('🚪', 'Enregistrer votre départ ?', `Arrivée à <b>${esc(r.arrivee)}</b> · départ à <b>${esc(r.heure)}</b>.${r.anticipe ? `<div class="alerte" style="margin-top:12px;text-align:left">${r.cours ? `Votre cours avec <b>${esc(r.cours)}</b>` : 'Votre service'} se termine à <b>${esc(r.finAttendue)}</b>. Pourquoi partez-vous plus tôt ?
+        <div class="pq-motifs">${['Travail terminé plus tôt (TP fini, évaluation rendue…)', 'Autorisé par le censeur', 'Urgence ou santé', 'Autre'].map((m, i) => `<label class="case"><input type="radio" name="pq-m" value="${esc(m)}" ${i ? '' : ''}> ${esc(m)}</label>`).join('')}
+        <input id="pq-autre" maxlength="120" placeholder="Précisez (facultatif)"></div></div>` : ''}`,
+        '<button class="btn vert large" id="pq-oui">✔ Oui, enregistrer mon départ</button>');
+      $('#pq-oui').onclick = () => { let motif = ''; if (r.anticipe) { const k = $('input[name="pq-m"]:checked', c); if (!k) return toast('Choisissez le motif.'); motif = k.value + ($('#pq-autre').value.trim() ? ' : ' + $('#pq-autre').value.trim() : ''); }
+        essayer({ confirmerDepart: true, motif }); };
+    }
+  };
+  essayer();
+}
+const ARV = { date: '', onglet: 'jour', mois: '' };
+async function pageArrivees(c) {
+  c.innerHTML = '<div class="chargement">Chargement…</div>';
+  if (ARV.onglet === 'bilan') return bilanArrivees(c);
+  const V = await api('arriveesJour', ARV.date ? { date: ARV.date } : {}), auj = V.date === V.aujourdhui, R = V.reglages;
+  const etiq = { 'À L\'HEURE': ['P', 'à l\'heure'], RETARD: ['attente', 'en retard'], 'PAS ARRIVÉ': ['A', 'pas arrivé'], ATTENDU: ['', 'attendu'], 'SANS COURS': ['', 'pas de cours'] };
+  const ligne = x => `<tr class="arv-${x.etat === 'RETARD' ? 'retard' : x.etat === 'PAS ARRIVÉ' ? 'abs' : x.arrivee ? 'ok' : ''}"><td>${avatar(x.matricule, x.nom, 'petit')} <b>${esc(x.nom)}</b><div class="aide">${esc(x.fonction)}${x.compte ? '' : ' · sans compte'}</div></td>
+    <td class="aide">${esc(x.attendu)}</td>
+    <td>${x.arrivee ? `<b>${esc(x.arrivee)}</b> ${x.srcA === 'CENSORAT' ? `<span class="aide">au censorat${x.parA ? ' (' + esc(x.parA) + ')' : ''}</span>` : '<span class="badge qr">QR</span>'}` : ''} <span class="badge ${etiq[x.etat][0]}">${etiq[x.etat][1]}</span>
+      ${!x.arrivee && V.peutPointer && auj ? `<button class="btn petit" data-pm="${x.matricule}|ARRIVEE">Pointer l'arrivée</button>` : ''}</td>
+    <td>${x.depart ? `<b>${esc(x.depart)}</b> ${x.srcD === 'CENSORAT' ? '<span class="aide">au censorat</span>' : x.srcD === 'DÉCLARÉ' ? '<span class="aide">déclaré</span>' : '<span class="badge qr">QR</span>'}` : ''}
+      ${x.etatDep === 'À EXAMINER' ? `<div class="alerte arv-motif">Départ avant la fin : « ${esc(x.motif)} »${V.peutPointer ? `<br><button class="btn petit vert" data-dd="${x.matricule}|ACCEPTÉ">Accepter</button> <button class="btn petit secondaire" data-dd="${x.matricule}|SIGNALÉ">Garder signalé</button>` : ''}</div>` : ''}
+      ${x.etatDep === 'ANTICIPÉ' ? `<span class="badge A">départ anticipé</span>` : ''}${x.etatDep === 'NON POINTÉ' ? '<span class="badge attente">non pointé</span>' : ''}
+      ${x.arrivee && !x.depart && V.peutPointer && auj ? `<button class="btn petit secondaire" data-pm="${x.matricule}|DEPART">Pointer le départ</button>` : ''}
+      ${V.admin ? ` <button class="btn-lien" data-corr="${x.matricule}" title="Corriger">✏</button>` : ''}</td></tr>`;
+  const adm = V.liste.filter(x => !x.ens), ens = V.liste.filter(x => x.ens);
+  c.innerHTML = `<h1>🚪 Arrivées et départs du personnel</h1>
+    <div class="onglets"><button class="actif">Jour</button><button id="arv-bilan">Bilan du mois</button></div>
+    <div class="ligne"><div style="flex:0 0 auto"><input type="date" id="arv-d" value="${V.date}" max="${V.aujourdhui}"></div><div class="aide" style="align-self:center">${jourLong(V.date)}</div></div>
+    <div class="kpis"><div class="kpi vert"><div class="lib">Arrivés</div><div class="val">${V.compteurs.arrives}</div></div><div class="kpi"><div class="lib">En retard</div><div class="val">${V.compteurs.retards}</div></div>
+      <div class="kpi rouge"><div class="lib">Pas arrivés</div><div class="val">${V.compteurs.absents}</div></div><div class="kpi"><div class="lib">Départs à examiner</div><div class="val">${V.compteurs.examiner}</div></div>
+      <div class="kpi"><div class="lib">Départs non pointés</div><div class="val">${V.compteurs.nonPointes}</div></div></div>
+    ${V.declarations.length ? `<div class="carte"><b>📝 Départs déclarés à valider</b>${V.declarations.map(d => `<div class="par-note"><span><b>${esc(d.nom)}</b> — ${fr(d.date)} : arrivé à ${esc(d.arrivee)}, parti à <b>${esc(d.heure)}</b> <i>« ${esc(d.motif)} »</i></span>
+      ${V.peutPointer ? `<span style="white-space:nowrap"><button class="btn petit vert" data-dv="${d.matricule}|${d.date}|VALIDÉ">Valider</button> <button class="btn petit secondaire" data-dv="${d.matricule}|${d.date}|REFUSÉ">Refuser</button></span>` : ''}</div>`).join('')}</div>` : ''}
+    <h2>Administration et services <span class="aide">(horaires ${esc(R.debut)} – ${esc(R.fin)})</span></h2>
+    <div class="table-defil"><table class="arv"><thead><tr><th>Agent</th><th>Horaires</th><th>Arrivée</th><th>Départ</th></tr></thead><tbody>${adm.map(ligne).join('') || '<tr><td colspan="4" class="vide">—</td></tr>'}</tbody></table></div>
+    <h2>Enseignants <span class="aide">(selon l'emploi du temps)</span></h2>
+    <div class="table-defil"><table class="arv"><thead><tr><th>Enseignant</th><th>Cours</th><th>Arrivée</th><th>Départ</th></tr></thead><tbody>${ens.map(ligne).join('') || '<tr><td colspan="4" class="vide">—</td></tr>'}</tbody></table></div>
+    ${V.admin ? `<div class="carte"><h2 style="margin-top:0">⚙ QR de pointage et réglages</h2>
+      <p class="aide">Imprimez l'affiche et collez-la à l'entrée (portail, salle des professeurs, administration). Le pointage n'est accepté qu'à moins de ${R.rayon} m de l'établissement.</p>
+      <div class="actions"><button class="btn" id="arv-aff">🖨 Imprimer l'affiche de pointage</button><button class="btn secondaire" id="arv-pos">📍 Enregistrer la position de l'établissement</button></div>
+      <p class="aide">${R.lat ? `Position enregistrée : ${R.lat.toFixed(5)}, ${R.lng.toFixed(5)}.` : '<b>Position pas encore enregistrée</b> : faites-le une fois, debout au milieu de l\'établissement, avec un téléphone dont le GPS est activé.'}</p>
+      <div class="ligne"><div><label>Prise de service</label><input type="time" id="rp-deb" value="${esc(R.debut)}"></div><div><label>Fin de service</label><input type="time" id="rp-fin" value="${esc(R.fin)}"></div>
+        <div><label>Rayon autorisé (m)</label><input type="number" id="rp-ray" min="50" max="2000" value="${R.rayon}"></div><div><label>Tolérance départ (min)</label><input type="number" id="rp-tol" min="0" max="120" value="${R.tolerance}"></div></div>
+      <div class="ligne"><div><label>Arrivées de</label><input type="time" id="rp-ad" value="${esc(R.arrDu)}"></div><div><label>à</label><input type="time" id="rp-aa" value="${esc(R.arrAu)}"></div>
+        <div><label>Départs de</label><input type="time" id="rp-dd" value="${esc(R.depDu)}"></div><div><label>à</label><input type="time" id="rp-da" value="${esc(R.depAu)}"></div></div>
+      <button class="btn secondaire" id="rp-ok">Enregistrer les réglages</button></div>` : ''}`;
+  $('#arv-d', c).onchange = e => { ARV.date = e.target.value; pageArrivees(c); };
+  $('#arv-bilan', c).onclick = () => { ARV.onglet = 'bilan'; pageArrivees(c); };
+  const appel = async (a, q, conf) => { if (conf && !confirm(conf)) return; try { toast((await api(a, q)).message); pageArrivees(c); } catch (e) { toast(e.message, 7000); } };
+  $$('[data-pm]', c).forEach(b => b.onclick = () => { const [m, t] = b.dataset.pm.split('|'), x = V.liste.find(y => y.matricule === m); appel('pointerManuel', { matricule: m, type: t }, `${t === 'ARRIVEE' ? 'Arrivée' : 'Départ'} de ${x.nom} maintenant ?`); });
+  $$('[data-dd]', c).forEach(b => b.onclick = () => { const [m, d] = b.dataset.dd.split('|'); appel('decisionDepart', { date: V.date, matricule: m, decision: d }); });
+  $$('[data-dv]', c).forEach(b => b.onclick = () => { const [m, d, k] = b.dataset.dv.split('|'); appel('decisionDepart', { date: d, matricule: m, decision: k }); });
+  $$('[data-corr]', c).forEach(b => b.onclick = () => { const x = V.liste.find(y => y.matricule === b.dataset.corr);
+    const t = prompt(`Correction pour ${x.nom} le ${fr(V.date)}.\nTapez A pour l'arrivée ou D pour le départ :`, x.arrivee ? 'D' : 'A'); if (!t) return;
+    const hh = prompt('Heure (ex. 07:20) :', ''); if (!hh) return; const mo = prompt('Motif de la correction :', ''); if (!mo) return;
+    appel('pointerManuel', { matricule: x.matricule, type: /^d/i.test(t) ? 'DEPART' : 'ARRIVEE', date: V.date, heure: hh, motif: mo }); });
+  if (!V.admin) return;
+  $('#arv-aff', c).onclick = async () => { await preparerQR(); const url = location.origin + location.pathname + '#/pointer/' + V.cle;
+    imprimer(`<div class="page affiche-qr"><div class="aq-haut"><img src="${logoCouleur()}" alt=""><b>${esc(S.session.params.etablissement)}</b></div><div class="aq-titre">Pointage du personnel</div>
+      <div class="aq-sous">Arrivée le matin · départ le soir<br><b>Scannez avec l'appareil photo de votre téléphone</b></div><div class="aq-qr">${qrSvg(url)}</div>
+      <div class="aq-bas">Votre téléphone doit être connecté à l'application et la localisation activée.<br>Sans smartphone : pointez au censorat.</div></div>`, 'Affiche pointage du personnel'); };
+  $('#arv-pos', c).onclick = async () => { if (!confirm('Êtes-vous dans l\'établissement, au milieu de la cour ? La position de ce téléphone deviendra la position de référence.')) return;
+    try { const p = await positionGPS(); if (p.precision > 100 && !confirm('La position est imprécise (± ' + Math.round(p.precision) + ' m). L\'enregistrer quand même ?')) return; appel('reglagesPointage', { position: p }); } catch (e) { toast(e.message, 7000); } };
+  $('#rp-ok', c).onclick = () => appel('reglagesPointage', { reglages: { debut: $('#rp-deb').value, fin: $('#rp-fin').value, rayon: $('#rp-ray').value, tolerance: $('#rp-tol').value, arrDu: $('#rp-ad').value, arrAu: $('#rp-aa').value, depDu: $('#rp-dd').value, depAu: $('#rp-da').value } });
+}
+async function bilanArrivees(c) {
+  const B = await api('bilanPresences', ARV.mois ? { mois: ARV.mois } : {}); ARV.mois = B.mois;
+  const tab = L => `<table><thead><tr><th>Nom</th><th class="n">Jours présents</th><th class="n">Retards</th><th class="n">Départs anticipés</th><th class="n">Départs non pointés</th>${L[0] && !L[0].ens ? '<th class="n">Heures de présence</th>' : ''}</tr></thead>
+    <tbody>${L.map(x => `<tr><td>${esc(x.nom)} <span class="aide">${esc(x.fonction)}</span></td><td class="n">${x.jours}/${x.joursDus}</td><td class="n">${x.retards || ''}</td><td class="n">${x.anticipes || ''}</td><td class="n">${x.nonPointes || ''}</td>${!x.ens ? `<td class="n">${x.heures ? nb(x.heures) + ' h' : ''}</td>` : ''}</tr>`).join('')}</tbody></table>`;
+  const adm = B.liste.filter(x => !x.ens), ens = B.liste.filter(x => x.ens);
+  c.innerHTML = `<h1>🚪 Arrivées et départs du personnel</h1><div class="onglets"><button id="arv-jour">Jour</button><button class="actif">Bilan du mois</button></div>
+    <div class="ligne"><div style="flex:0 0 auto"><input type="month" id="arv-m" value="${B.mois}"></div><div style="flex:0 0 auto"><button class="btn secondaire" id="arv-imp">🖨 Imprimer</button></div><div class="aide" style="align-self:center">${B.joursOuvres} jour(s) ouvré(s) à ce jour</div></div>
+    <h2>Administration et services</h2><div class="table-defil">${tab(adm)}</div><h2>Enseignants</h2><div class="table-defil">${tab(ens)}</div>`;
+  $('#arv-jour', c).onclick = () => { ARV.onglet = 'jour'; pageArrivees(c); };
+  $('#arv-m', c).onchange = e => { ARV.mois = e.target.value; pageArrivees(c); };
+  $('#arv-imp', c).onclick = () => imprimer(`<div class="page">${entete('BILAN DES PRÉSENCES DU PERSONNEL — ' + B.moisTexte.toUpperCase())}<h3>Administration et services</h3>${tab(adm)}<h3>Enseignants</h3>${tab(ens)}
+    <div class="signatures"><div>Le Censeur</div><div>Le Chef d'établissement</div></div></div>`, 'Bilan presences ' + B.mois);
 }

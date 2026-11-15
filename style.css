@@ -784,3 +784,30 @@ html[data-theme=sombre] .salut { color: var(--texte); }
 html[data-theme=sombre] .bande { border-bottom-color: #26303c; } html[data-theme=sombre] .bande-msg { color: var(--texte); }
 html[data-theme=sombre] .bande.urgente { background: #3E1D1D; }
 }
+
+/* ===== Pointage QR du personnel (v3.5) ===== */
+.pq { text-align: center; padding: 30px 10px; position: relative; overflow: hidden; }
+.pq-icone { font-size: 4rem; } .pq-texte { font-size: 1.1rem; margin-top: 8px; }
+.pq-serie { display: inline-block; margin-top: 14px; background: #FFE9D6; color: #8A3B00; border-radius: 999px; padding: 6px 14px; font-weight: 700; }
+.pq-motifs { margin-top: 8px; } .pq-motifs label.case { margin-top: 6px; } .pq-motifs input[type=radio] { width: 20px; height: 20px; flex: 0 0 auto; }
+.pq-motifs input#pq-autre { margin-top: 8px; }
+table.arv td { vertical-align: top; } table.arv .avatar { vertical-align: middle; }
+tr.arv-retard td:first-child { border-left: 4px solid #F28C28; } tr.arv-abs td:first-child { border-left: 4px solid #C62828; } tr.arv-ok td:first-child { border-left: 4px solid #1E7B3A; }
+.arv-motif { margin: 6px 0 0; padding: 6px 8px; font-size: .85rem; }
+.btn-lien { border: 0; background: none; cursor: pointer; font-size: 1rem; }
+.seance.sugg-qr { background: rgba(30,123,58,.07); border-radius: 8px; }
+.qr-valid { display: flex; gap: 10px; align-items: center; justify-content: space-between; flex-wrap: wrap; }
+.mj-oubli { background: #FFF4E5; border-radius: 8px; padding: 8px; margin-top: 4px; }
+html[data-theme=sombre] .mj-oubli { background: #3A2E10; } html[data-theme=sombre] .pq-serie { background: #3E2A16; color: #FFC894; }
+@media (max-width: 640px) {
+  table.arv thead { display: none; }
+  table.arv, table.arv tbody, table.arv tr, table.arv td { display: block; width: 100%; }
+  table.arv tr { border-bottom: 1px solid var(--bord); padding: 8px 0; }
+  table.arv td { border: 0 !important; padding: 3px 10px; }
+  table.arv td:nth-child(2):not(:empty)::before { content: '🕘 '; }
+  table.arv td:nth-child(3)::before { content: 'Arrivée : '; color: var(--gris); font-size: .85rem; }
+  table.arv td:nth-child(4)::before { content: 'Départ : '; color: var(--gris); font-size: .85rem; }
+  table.arv tr.arv-retard, table.arv tr.arv-abs, table.arv tr.arv-ok { border-left: 4px solid transparent; }
+  table.arv tr.arv-retard { border-left-color: #F28C28; } table.arv tr.arv-abs { border-left-color: #C62828; } table.arv tr.arv-ok { border-left-color: #1E7B3A; }
+  table.arv tr td:first-child { border-left: 0 !important; }
+}
