@@ -687,3 +687,100 @@ label.case { display: flex; gap: 8px; align-items: center; font-weight: normal; 
 .ag-cand label, .ag-cand span { font-weight: normal; }
 label.case input[type=checkbox] { width: 22px; height: 22px; flex: 0 0 auto; margin: 0; }
 label.case { justify-content: flex-start; text-align: left; }
+
+
+/* ===== Mode sombre (v3.4) — écran seulement, jamais à l'impression ===== */
+@media screen {
+html[data-theme=sombre] { color-scheme: dark; --bleu: #8DB8E8; --bleu2: #7FB2F0; --bleu-clair: #1C2B3D; --vert-clair: #12342A; --rouge-clair: #3E1D1D; --gris: #A0A8B5; --gris-clair: #1E242D; --bord: #2E3642; --texte: #E5E9F0; --fond: #11151B; --carte: #1A2029; }
+html[data-theme=sombre] body { background: var(--fond); color: var(--texte); }
+html[data-theme=sombre] header { background: #0F2A44; }
+html[data-theme=sombre] input, html[data-theme=sombre] select, html[data-theme=sombre] textarea { background: #11161D; color: var(--texte); border-color: var(--bord); }
+html[data-theme=sombre] table, html[data-theme=sombre] th, html[data-theme=sombre] td { border-color: var(--bord); }
+html[data-theme=sombre] th { background: #1F2833; color: var(--texte); }
+html[data-theme=sombre] tr:nth-child(even) td { background: rgba(255,255,255,.02); }
+html[data-theme=sombre] .vitrine { background: radial-gradient(circle at 15% 20%, #4a3b10 0, #3a2d08 50%, #2a2006 100%); color: #FBE7A3; }
+html[data-theme=sombre] .vitrine-titre, html[data-theme=sombre] .honneur-rang { color: #F2C94C; }
+html[data-theme=sombre] .agent-carte.grand, html[data-theme=sombre] .par-distinction { background: linear-gradient(135deg, #2b2410, #3a2f10); }
+html[data-theme=sombre] .honneur-carte, html[data-theme=sombre] .agent-carte { border-color: #4a3d14; }
+html[data-theme=sombre] .info { background: #16283B; color: #CFE3FA; }
+html[data-theme=sombre] .alerte { background: #3A2E10; color: #F8E3A3; }
+html[data-theme=sombre] .erreur { background: #3E1D1D; color: #F6C4C4; }
+html[data-theme=sombre] .sig-item.confid { background: #251B30; }
+html[data-theme=sombre] .sig-code { background: #11161D; }
+html[data-theme=sombre] img.logo, html[data-theme=sombre] .logo { background: #fff; }
+html[data-theme=sombre] /* --- menu --- */
+nav { background: var(--carte); }
+html[data-theme=sombre] /* --- cartes,html[data-theme=sombre] boutons,html[data-theme=sombre] formulaires --- */
+.carte { background: var(--carte); }
+html[data-theme=sombre] input,html[data-theme=sombre] select,html[data-theme=sombre] textarea { background: var(--carte); }
+html[data-theme=sombre] .boite-connexion { background: var(--carte); }
+html[data-theme=sombre] .drapeau i:nth-child(2) { background: var(--carte); }
+html[data-theme=sombre] .onglets button.actif { background: var(--carte); }
+html[data-theme=sombre] .kpi { background: var(--carte); }
+html[data-theme=sombre] /* --- tableaux --- */
+.table-defil { background: var(--carte); }
+html[data-theme=sombre] .interv { background: var(--carte); }
+html[data-theme=sombre] .choix button { background: var(--carte); }
+html[data-theme=sombre] body { background: var(--carte); }
+html[data-theme=sombre] .recadrage canvas { background: var(--carte); }
+html[data-theme=sombre] .onglets a.actif { background: var(--carte); }
+html[data-theme=sombre] .barre-appel { background: var(--carte); }
+html[data-theme=sombre] .ligne-appel { background: var(--carte); }
+html[data-theme=sombre] .choix-appel button { background: var(--carte); }
+html[data-theme=sombre] .apercu-bulletin { background: var(--carte); }
+html[data-theme=sombre] .menu-pages a { background: var(--carte); }
+html[data-theme=sombre] .onglets a.actif { background: var(--carte); }
+html[data-theme=sombre] .bv-carte { background: var(--carte); }
+html[data-theme=sombre] .cf-seance { background: var(--carte); }
+}
+
+/* ===== Vie du lycée (v3.4) ===== */
+.bravo { border: 1px solid #E0B12E; background: #FFF8E1; color: #6b4e00; border-radius: 999px; padding: 4px 12px; font-weight: 700; cursor: pointer; margin-top: 6px; transition: transform .15s; }
+.bravo.bravo-moi { background: #F2C94C; color: #3b2a00; }
+.bravo.pop { transform: scale(1.25); }
+html[data-theme=sombre] .bravo { background: #3a2f10; color: #F8E3A3; } html[data-theme=sombre] .bravo.bravo-moi { background: #8a6d1d; color: #fff; }
+.anniv { background: linear-gradient(135deg, #fde7f3, #fff3e0); border-radius: 14px; padding: 12px; margin-bottom: 12px; }
+.anniv-moi { font-size: 1.02rem; }
+.anniv-l { display: flex; gap: 12px; align-items: center; padding: 4px 0; }
+.anniv-bientot { margin: -6px 0 12px; }
+.voeu { font-size: .88rem; padding: 3px 0; }
+html[data-theme=sombre] .anniv { background: linear-gradient(135deg, #3a1f30, #3a2b18); }
+.badges-ligne { display: flex; gap: 6px; flex-wrap: wrap; margin-bottom: 12px; }
+.serie { background: #FFE9D6; color: #8A3B00; border-radius: 999px; padding: 5px 12px; font-size: .88rem; }
+.badge-perso { background: var(--vert-clair); color: #075E3A; border-radius: 999px; padding: 5px 12px; font-size: .85rem; font-weight: 600; }
+html[data-theme=sombre] .serie { background: #3E2A16; color: #FFC894; } html[data-theme=sombre] .badge-perso { color: #9BE3BF; }
+.vie-lien { display: block; background: var(--carte, #fff); border: 1px solid var(--bord); border-radius: 12px; padding: 10px 12px; margin-bottom: 10px; text-decoration: none; color: var(--texte); }
+.vie-tete { display: flex; gap: 10px; align-items: center; }
+.vie-x { margin-left: auto; border: 0; background: none; color: var(--gris); cursor: pointer; font-size: 1rem; }
+.vie-texte { white-space: pre-wrap; margin: 10px 0; }
+.vie-photos { display: grid; gap: 4px; border-radius: 10px; overflow: hidden; margin: 8px 0; }
+.vie-photos.n1 { grid-template-columns: 1fr; } .vie-photos.n2, .vie-photos.n4 { grid-template-columns: 1fr 1fr; } .vie-photos.n3 { grid-template-columns: 1fr 1fr 1fr; }
+.vie-photos > div { aspect-ratio: 4/3; background: var(--gris-clair) center/cover; cursor: zoom-in; }
+.vie-photos.n1 > div { aspect-ratio: 16/10; }
+.vie-actions { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
+.vie-coms { border-top: 1px solid var(--bord); margin-top: 8px; padding-top: 6px; }
+.vie-com { font-size: .9rem; padding: 3px 0; }
+.vie-com-f { display: flex; gap: 6px; margin-top: 6px; } .vie-com-f input { flex: 1; }
+.vie-miniatures { display: flex; gap: 6px; flex-wrap: wrap; margin-top: 6px; }
+.vie-miniatures > div { width: 70px; height: 70px; border-radius: 8px; background: center/cover; position: relative; }
+.vie-miniatures button { position: absolute; top: 2px; right: 2px; border: 0; border-radius: 50%; width: 20px; height: 20px; background: rgba(0,0,0,.6); color: #fff; font-size: 11px; cursor: pointer; }
+.zoom-photo { position: fixed; inset: 0; background: rgba(0,0,0,.9); z-index: 1000; display: flex; align-items: center; justify-content: center; cursor: zoom-out; }
+.zoom-photo img { max-width: 96vw; max-height: 92vh; border-radius: 6px; }
+.sd-opt { position: relative; display: flex; justify-content: space-between; width: 100%; text-align: left; border: 2px solid var(--bord); background: var(--carte, #fff); color: var(--texte); border-radius: 10px; padding: 10px 12px; margin: 6px 0 2px; cursor: pointer; overflow: hidden; font: inherit; }
+.sd-opt.choisi { border-color: #1E7B3A; font-weight: 700; }
+.sd-barre { position: absolute; left: 0; top: 0; bottom: 0; background: rgba(30,123,58,.13); z-index: 0; transition: width .5s; }
+.sd-txt, .sd-n { position: relative; z-index: 1; }
+.sd-qui { margin: 0 0 4px 12px; }
+.sondage.clos { opacity: .85; }
+@media screen {
+html[data-theme=sombre] .btn:not(.secondaire):not(.vert):not(.rouge) { background: #2D6AA3; color: #fff; }
+html[data-theme=sombre] .btn.secondaire { background: #232B36; color: var(--texte); border-color: var(--bord); }
+html[data-theme=sombre] nav a.actif { background: #2D6AA3; color: #fff; }
+html[data-theme=sombre] .salut, html[data-theme=sombre] .bande, html[data-theme=sombre] #bande { background: #17202B; color: var(--texte); }
+html[data-theme=sombre] .badge { filter: brightness(.9); }
+}
+@media screen {
+html[data-theme=sombre] .salut { color: var(--texte); }
+html[data-theme=sombre] .bande { border-bottom-color: #26303c; } html[data-theme=sombre] .bande-msg { color: var(--texte); }
+html[data-theme=sombre] .bande.urgente { background: #3E1D1D; }
+}

@@ -271,7 +271,7 @@ function redimensionnerPhoto(fichier) {
 
 /* ================= BOÎTE À SUGGESTIONS (v2.5) ================= */
 let SUGG_PAGE = '';
-const VERSION_SITE = '3.3';
+const VERSION_SITE = '3.4';
 /* ================= NOTIFICATIONS SUR LE TÉLÉPHONE (v2.6, Firebase) ================= */
 // configuration publique du projet Firebase (faite pour être dans le site) ; la clé privée reste dans Apps Script
 const FIREBASE_CFG = { apiKey: 'AIzaSyDVRNmLz5ph73vf2a9vFhd2RVni8H9swt0', authDomain: 'lpdaoukro-notification.firebaseapp.com', projectId: 'lpdaoukro-notification',
@@ -766,6 +766,8 @@ const PAGES = {
   'paiement':      { titre: 'État de paiement', mod: ['pointage', 'CONSULTE'], roles: ['censeur', 'admin', 'directeur'], fn: pagePaiement },
   'personnel':     { titre: 'Personnel', mod: ['pointage', 'CONSULTE'], roles: ['censeur', 'admin', 'directeur'], fn: pagePersonnel },
   'emplois':       { titre: 'Emplois du temps', mod: ['edt', 'CONSULTE'], roles: ['admin', 'censeur'], fn: (c, a) => pageEmploisV2(c, a) },
+  'vie':           { titre: 'Vie du lycée', roles: ['admin', 'directeur', 'censeur', 'educateur', 'comptable', 'intervenant'], fn: c => pageVie(c) },
+  'sondages':      { titre: 'Sondages', roles: ['admin', 'directeur', 'censeur', 'educateur', 'comptable', 'intervenant'], fn: c => pageSondages(c) },
   'agent-mois':    { titre: 'Agent du mois', roles: ['admin', 'directeur', 'censeur', 'educateur', 'comptable', 'intervenant'], fn: c => pageAgentMois(c) },
   'honneur':       { titre: 'Tableau d\'honneur', roles: ['admin', 'directeur', 'censeur', 'educateur', 'comptable', 'intervenant'], fn: c => pageHonneur(c) },
   'signalements':  { titre: 'Signalements', roles: ['admin', 'directeur', 'censeur', 'educateur', 'comptable', 'intervenant'], si: () => role() !== 'intervenant' || stock.lire('resp_signal', false), fn: c => pageSignalements(c) },
@@ -799,7 +801,7 @@ const PAGES = {
 };
 let pastilles = stock.lire('pastilles', {});
 const GROUPES_MENU = [
-  { id: 'accueil', titre: '🏠 Accueil', pages: ['direction', 'ma-fiche', 'agent-mois', 'honneur', 'signalements'] },
+  { id: 'accueil', titre: '🏠 Accueil', pages: ['direction', 'ma-fiche', 'vie', 'agent-mois', 'honneur', 'sondages', 'signalements'] },
   { id: 'personnel', titre: '👨‍🏫 Personnel', pages: ['pointage', 'tableau', 'intervenants', 'rattrapages', 'reclamations', 'paiement', 'personnel'] },
   { id: 'eleves', titre: '🎓 Élèves', pages: ['eleves', 'effectifs', 'appel', 'absences', 'discipline', 'stages', 'familles', 'archives'] },
   { id: 'notes', titre: '📝 Notes', pages: ['notes', 'bulletins', 'calendrier-conseils'] },
@@ -1626,12 +1628,21 @@ function pageMonCompte(c) {
       <div><label>Nouveau code</label><input name="n" class="code" type="password" inputmode="numeric" maxlength="4" required></div></div>
       <div id="msg"></div><button class="btn" style="margin-top:10px">Changer</button></form></div>
     <div class="carte"><h2 style="margin-top:0">🔔 Notifications</h2>${blocPush('mc-push')}</div>
+    <div class="carte" id="mc-perso"><h2 style="margin-top:0">🎂 Anniversaire et apparence</h2><div class="aide">Chargement…</div></div>
     <div class="carte"><h2 style="margin-top:0">💡 Mes suggestions</h2><div id="mc-sugg" class="aide">Chargement…</div><a class="btn secondaire" href="#/suggestion">Écrire une suggestion ou signaler un problème</a></div>
     ${S.file.length ? `<div class="alerte">${S.file.length} pointage(s) pas encore envoyé(s). Connectez-vous à internet avant de vous déconnecter, sinon ils seront perdus.</div>` : ''}
     <button class="btn rouge" id="dec">Se déconnecter</button>
     <p class="aide" style="margin-top:20px">Astuce : sur téléphone, utilisez « Ajouter à l'écran d'accueil » dans le menu du navigateur pour installer l'application avec son icône.</p>`;
   const majPush = () => { const z = $('#mc-push'); if (z) { z.outerHTML = blocPush('mc-push'); brancherPush($('#mc-push'), majPush); } };
   brancherPush($('#mc-push'), majPush);
+  api('monProfil').then(M => { const z = $('#mc-perso'); if (!z) return;
+    z.innerHTML = `<h2 style="margin-top:0">🎂 Anniversaire et apparence</h2><div class="ligne"><div><label>Date de naissance</label><input type="date" id="mp-n" value="${esc(M.naissance)}"></div>
+      <div><label>Apparence</label><select id="mp-t"><option value="">Automatique (comme le téléphone)</option><option value="clair" ${M.theme === 'clair' ? 'selected' : ''}>☀ Clair</option><option value="sombre" ${M.theme === 'sombre' ? 'selected' : ''}>🌙 Sombre</option></select></div></div>
+      <label class="case"><input type="checkbox" id="mp-a" ${M.afficher ? 'checked' : ''}> Afficher mon anniversaire à mes collègues (seuls le jour et le mois sont montrés, jamais l'année)</label>
+      <button class="btn" id="mp-ok" style="margin-top:10px">Enregistrer</button>`;
+    $('#mp-t').onchange = e => { appliquerTheme(e.target.value); stock.ecrire('theme_sync', true); };
+    $('#mp-ok').onclick = async () => { try { toast((await api('monProfil', { enregistrer: true, naissance: $('#mp-n').value, afficher: $('#mp-a').checked, theme: $('#mp-t').value })).message); AV.data = null; } catch (e) { toast(e.message, 6000); } };
+  }).catch(() => {});
   api('mesSuggestions').then(M => { const z = $('#mc-sugg'); if (!z) return;
     z.innerHTML = M.suggestions.length ? M.suggestions.map(x => `<div class="sugg-l"><b>${esc(x.genreLib)}</b> · ${esc(String(x.cree_le).slice(0, 10).split('-').reverse().join('/'))} · <span class="sugg-st st-${esc(x.statut).replace(/\s|É/g, '')}">${esc(x.statut)}</span>
       <div>${esc(x.message)}</div>${x.reponse ? `<div class="info" style="margin:4px 0">Réponse : ${esc(x.reponse)}</div>` : ''}</div>`).join('') : 'Vous n\'avez pas encore envoyé de suggestion.'; }).catch(() => { const z = $('#mc-sugg'); if (z) z.textContent = ''; });
@@ -1988,10 +1999,11 @@ async function accueilVivant(z) {
   let h = '';
   if (vit.length) h += `<div class="vitrine" id="vitrine">${vit.map((v, i) => `<div class="vitrine-carte ${v.eleve ? 'eleve' : 'agent'} ${i ? '' : 'active'}">
       ${cadreHonneur(v.photo, v.nom, true)}<div class="vitrine-txt"><div class="vitrine-titre">${v.eleve ? '🏆' : '🏅'} ${esc(v.titre)}${v.rang ? ` · ${v.rang === 1 ? '1er' : v.rang + 'e'}` : ''}</div>
-      <div class="vitrine-nom">${esc(v.nom)}</div><div class="vitrine-sous">${esc(v.sous || '')}</div>${v.motivation ? `<div class="vitrine-mot">« ${esc(v.motivation)} »</div>` : ''}</div></div>`).join('')}
+      <div class="vitrine-nom">${esc(v.nom)}</div><div class="vitrine-sous">${esc(v.sous || '')}</div>${v.motivation ? `<div class="vitrine-mot">« ${esc(v.motivation)} »</div>` : ''}${boutonBravo(v.cible, v.bravo, v.moi)}</div></div>`).join('')}
       ${vit.length > 1 ? `<div class="vitrine-points">${vit.map((_, i) => `<i class="${i ? '' : 'on'}"></i>`).join('')}</div>` : ''}</div>`;
   const reb = D.rebours || [];
   if (reb.length) h += `<div class="rebours">${reb.map(r => `<div class="rebours-item"><span>${r.icone}</span><b>${r.jours === 0 ? 'Aujourd\'hui' : r.jours === 1 ? 'Demain' : 'J-' + r.jours}</b><small>${esc(r.libelle)}</small></div>`).join('')}</div>`;
+  h += blocsVie(D);
   const cours = J.cours || [];
   h += `<div class="ma-journee"><div class="mj-titre">☀ Ma journée</div><div class="mj-lignes">
     <div class="mj-l">${J.arrivee ? `✅ Arrivée pointée à <b>${esc(J.arrivee)}</b>` : J.jourDeCours ? '⏱ Arrivée pas encore pointée aujourd\'hui' : '🌴 Pas de cours aujourd\'hui'}</div>
@@ -2007,6 +2019,7 @@ async function accueilVivant(z) {
     const t = setInterval(() => { if (tour !== AV.tour || !vz.isConnected) return clearInterval(t); montrer(k + 1); }, 5000);
   }
   if (vz && !stock.lire('confettis_' + D.date, false)) { stock.ecrire('confettis_' + D.date, true); confettis(vz); }
+  brancherVie(z, D);
 }
 function confettis(el) {
   const c = ['#F28C28', '#1E7B3A', '#F5C518', '#2C6FB7', '#C62828'];
@@ -2074,7 +2087,7 @@ async function pageAgentMois(c) {
   const P = G.publies, dernier = P.length ? P[0].mois : '', actuels = P.filter(x => x.mois === dernier), anciens = P.filter(x => x.mois !== dernier);
   const lib = t => t === 'AGENT_ENS' ? 'Enseignant du mois' : 'Agent administratif du mois';
   const carte = (x, grand) => `<div class="agent-carte${grand ? ' grand' : ''}">${cadreHonneur(x.photo, x.nom, grand)}<div><div class="vitrine-titre">🏅 ${lib(x.type)} — ${esc(x.moisTexte)}</div><div class="vitrine-nom">${esc(x.nom)}</div><div class="aide">${esc(x.fonction || '')}</div>
-    ${x.motivation ? `<div class="vitrine-mot">« ${esc(x.motivation)} »</div>` : ''}<button class="btn petit secondaire" data-certa="${esc(x.type + '|' + x.mois)}">🏅 Certificat</button></div></div>`;
+    ${x.motivation ? `<div class="vitrine-mot">« ${esc(x.motivation)} »</div>` : ''}<div class="actions" style="margin:6px 0 0">${boutonBravo('RECO:' + x.id, x.bravo, x.moi)}<button class="btn petit secondaire" data-certa="${esc(x.type + '|' + x.mois)}">🏅 Certificat</button></div></div></div>`;
   c.innerHTML = `<h1>🏅 Agent du mois</h1>
     ${actuels.length ? `<div class="agents-actuels">${actuels.map(x => carte(x, true)).join('')}</div>` : '<div class="info">Aucun agent du mois publié pour l\'instant.</div>'}
     ${anciens.length ? `<h2>Mois précédents</h2>${[...new Set(anciens.map(x => x.mois))].map(m => `<div class="agents-mois"><b>${esc(anciens.find(x => x.mois === m).moisTexte.replace(/^./, x => x.toUpperCase()))}</b>${anciens.filter(x => x.mois === m).map(x => carte(x)).join('')}</div>`).join('')}` : ''}
@@ -2086,6 +2099,7 @@ async function pageAgentMois(c) {
         <label class="ag-cand"><input type="radio" name="ag-${k}" value="__autre"><span>Autre : <select id="ag-${k}-autre"><option value="">— choisir —</option>${G.agents.filter(a => a.ens === ens).map(a => `<option value="${esc(a.matricule)}">${esc(a.nom)}${a.fonction ? ' — ' + esc(a.fonction) : ''}</option>`).join('')}</select></span></label>
         <textarea id="ag-${k}-mot" rows="2" maxlength="300" placeholder="Mot de motivation (affiché avec la photo)"></textarea>`).join('')}
       <div class="actions"><button class="btn vert" id="ag-pub">🏅 Publier</button></div><p class="aide">Vous pouvez publier une seule des deux distinctions. La photo décorée s'affiche à l'accueil, une annonce part à tout le personnel et le lauréat reçoit une notification.</p></div>` : ''}`;
+  brancherBravo(c);
   $$('[data-certa]', c).forEach(b => b.onclick = () => { const [t, m] = b.dataset.certa.split('|'), x = P.find(y => y.type === t && y.mois === m);
     certificat('CERTIFICAT DE RECONNAISSANCE', x.nom, `${esc(x.fonction || '')}, est distingué(e) <b>${lib(x.type)}</b> pour le mois de <b>${esc(x.moisTexte)}</b>.${x.motivation ? '<br><i>« ' + esc(x.motivation) + ' »</i>' : ''}<br>Avec nos félicitations et nos remerciements pour son engagement.`, x.photo); });
   if (!G.peutChoisir) return;
@@ -2182,4 +2196,108 @@ async function pageSignalements(c) {
   $$('[data-nj]', c).forEach(b => b.onclick = async () => { if (!confirm('Créer un nouveau QR code ? L\'ancienne affiche ne fonctionnera plus : il faudra imprimer la nouvelle.')) return; try { toast((await api('enregistrerLieu', { id: b.dataset.nj, nouveauJeton: true })).message); re(); } catch (e) { toast(e.message); } });
   $('#li-aj', c).onclick = async () => { try { toast((await api('enregistrerLieu', { nom: $('#li-nom', c).value })).message); re(); } catch (e) { toast(e.message, 6000); } };
   $('#rc-ok', c).onclick = async () => { const R = {}; $$('[data-rc]', c).forEach(s => { if (s.value) R[s.dataset.rc] = [s.value]; }); try { toast((await api('responsablesSignal', { responsables: R })).message); } catch (e) { toast(e.message, 6000); } };
+}
+
+
+/* ================= VIE DU LYCÉE (v3.4) ================= */
+/* --- thème clair / sombre --- */
+function appliquerTheme(t) {
+  const sombre = t === 'sombre' || (!t && window.matchMedia && matchMedia('(prefers-color-scheme: dark)').matches);
+  document.documentElement.dataset.theme = sombre ? 'sombre' : 'clair'; stock.ecrire('theme', t || '');
+}
+appliquerTheme(stock.lire('theme', ''));
+try { matchMedia('(prefers-color-scheme: dark)').addEventListener('change', () => { if (!stock.lire('theme', '')) appliquerTheme(''); }); } catch (e) { /* rien */ }
+
+/* --- féliciter (👏) --- */
+const boutonBravo = (cible, n, moi) => cible ? `<button class="bravo ${moi ? 'bravo-moi' : ''}" data-bravo="${esc(cible)}" title="Féliciter">👏 <span>${n ? n : 'Féliciter'}</span></button>` : '';
+function brancherBravo(z) {
+  $$('[data-bravo]', z).forEach(b => b.onclick = async ev => { ev.stopPropagation(); b.disabled = true;
+    try { const r = await api('feliciter', { cible: b.dataset.bravo }); b.classList.toggle('bravo-moi', r.moi); $('span', b).textContent = r.bravo || 'Féliciter'; if (r.moi) { b.classList.add('pop'); setTimeout(() => b.classList.remove('pop'), 600); } AV.data = null; }
+    catch (e) { toast(e.message); } b.disabled = false; });
+}
+
+/* --- blocs de l'accueil : anniversaires, badges, sondage, vie du lycée --- */
+function blocsVie(D) {
+  let h = '';
+  const A = D.anniversaires || [], moi = A.find(a => a.soi && a.jours === 0), auj = A.filter(a => a.jours === 0 && !a.soi), bientot = A.filter(a => a.jours > 0);
+  if (moi) h += `<div class="anniv anniv-moi">🎉 <b>Joyeux anniversaire !</b> ${moi.voeux ? `${moi.voeux} collègue(s) vous ont déjà souhaité une belle journée. <a href="#" data-voeux="${moi.matricule}">Lire les vœux</a>` : 'Toute l\'équipe vous souhaite une excellente journée.'}<div id="vx-${moi.matricule}"></div></div>`;
+  if (auj.length) h += `<div class="anniv">${auj.map(a => `<div class="anniv-l">${cadreHonneur(a.photo, a.nom).replace('🏅', '🎂')}<div><div class="vitrine-titre">🎂 Anniversaire aujourd'hui</div><b>${esc(a.nom)}</b><div class="aide">${esc(a.fonction)}</div>
+      <div class="actions" style="margin:6px 0 0">${a.moi ? '<span class="badge P">✔ Vœux envoyés</span>' : `<button class="btn petit" data-souh="${a.matricule}">🎉 Souhaiter</button>`}${a.voeux ? ` <a href="#" data-voeux="${a.matricule}">${a.voeux} vœu(x)</a>` : ''}</div><div id="vx-${a.matricule}"></div></div></div>`).join('')}</div>`;
+  if (bientot.length) h += `<div class="aide anniv-bientot">🎈 Bientôt : ${bientot.map(a => `${esc(a.nom)} (${a.jours === 1 ? 'demain' : 'dans ' + a.jours + ' jours'})`).join(' · ')}</div>`;
+  const B = D.badges || { liste: [], serie: 0 };
+  if (B.serie || B.liste.length) h += `<div class="badges-ligne">${B.serie ? `<span class="serie">🔥 <b>${B.serie}</b> jour(s) à l'heure</span>` : ''}${B.liste.map(b => `<span class="badge-perso" title="${esc(b.texte)}">${b.icone} ${esc(b.titre)}</span>`).join('')}</div>`;
+  if (D.sondages) h += `<a class="vie-lien" href="#/sondages">🗳 <b>${D.sondages} sondage(s)</b> attend(ent) votre réponse →</a>`;
+  if (D.derniere) h += `<a class="vie-lien" href="#/vie">📸 <b>Vie du lycée</b> · ${esc(D.derniere.auteur)} : ${esc(D.derniere.texte)}${D.derniere.photos ? ' 🖼' : ''} →</a>`;
+  if (D.naissanceManquante && !stock.lire('anniv_ignore', false)) h += `<div class="aide vie-lien">🎂 Ajoutez votre date de naissance dans <a href="#/mon-compte">Mon compte</a> pour que vos collègues vous souhaitent votre anniversaire. <a href="#" id="an-ign">Plus tard</a></div>`;
+  return h;
+}
+function brancherVie(z, D) {
+  brancherBravo(z);
+  if (D.theme && !stock.lire('theme_sync', false)) { appliquerTheme(D.theme); stock.ecrire('theme_sync', true); }
+  $$('[data-souh]', z).forEach(b => b.onclick = async () => { const t = prompt('Votre message (facultatif) :', 'Joyeux anniversaire ! 🎂'); if (t === null) return;
+    try { toast((await api('souhaiter', { matricule: b.dataset.souh, texte: t })).message); b.outerHTML = '<span class="badge P">✔ Vœux envoyés</span>'; AV.data = null; } catch (e) { toast(e.message); } });
+  $$('[data-voeux]', z).forEach(a => a.onclick = async ev => { ev.preventDefault(); const k = $('#vx-' + a.dataset.voeux, z); if (k.innerHTML) { k.innerHTML = ''; return; }
+    try { const V = await api('voeux', { matricule: a.dataset.voeux }); k.innerHTML = V.voeux.map(v => `<div class="voeu"><b>${esc(v.auteur)}</b> : ${esc(v.texte)}</div>`).join(''); } catch (e) { toast(e.message); } });
+  if ($('#an-ign', z)) $('#an-ign', z).onclick = e => { e.preventDefault(); stock.ecrire('anniv_ignore', true); e.target.parentElement.remove(); };
+  const N = (D.badges || {}).nouveaux || [];
+  if (N.length) { confettis(z); setTimeout(() => toast(N.map(b => b.icone + ' Nouveau badge : ' + b.titre).join(' · '), 7000), 400); }
+  if ((D.anniversaires || []).some(a => a.soi && a.jours === 0) && !stock.lire('anniv_' + D.date, false)) { stock.ecrire('anniv_' + D.date, true); confettis(z); }
+}
+
+/* --- page Vie du lycée --- */
+async function pageVie(c) {
+  c.innerHTML = '<div class="chargement">Chargement…</div>';
+  let photos = [], P = await api('publications');
+  const dessiner = () => {
+    c.innerHTML = `<h1>📸 Vie du lycée</h1>
+      <div class="carte vie-nouveau"><textarea id="vn-t" rows="2" maxlength="1000" placeholder="Partagez un moment : activité, TP réussi, cérémonie, sortie…"></textarea>
+        <div id="vn-ph" class="vie-miniatures"></div>
+        <div class="actions" style="margin:6px 0 0"><input type="file" id="vn-f" accept="image/*" multiple hidden><button class="btn secondaire petit" id="vn-b">🖼 Ajouter des photos (4 max.)</button><button class="btn petit" id="vn-ok">Publier</button></div>
+        <p class="aide" style="margin:6px 0 0">Ne publiez que des photos prises dans le cadre de l'établissement. Évitez les gros plans d'élèves sans l'accord de leurs parents.</p></div>
+      ${P.publications.map(x => `<div class="carte vie-pub" data-pub="${x.id}"><div class="vie-tete">${avatar(x.matricule, x.auteur, 'petit')}<div><b>${esc(x.auteur)}</b><div class="aide">${esc(String(x.le).slice(0, 16).replace(/(\d+)-(\d+)-(\d+)/, '$3/$2/$1'))}</div></div>
+        ${x.peutSupprimer ? `<button class="vie-x" data-supp="${x.id}" title="Supprimer">✕</button>` : ''}</div>
+        ${x.texte ? `<p class="vie-texte">${esc(x.texte)}</p>` : ''}${x.photos ? `<div class="vie-photos n${x.photos}" id="ph-${x.id}">${'<div class="vie-ph-attente"></div>'.repeat(x.photos)}</div>` : ''}
+        <div class="vie-actions">${boutonBravo('PUB:' + x.id, x.bravo, x.moi)}${x.qui.length ? `<span class="aide">${esc(x.qui.join(', '))}${x.bravo > x.qui.length ? ' et ' + (x.bravo - x.qui.length) + ' autre(s)' : ''}</span>` : ''}</div>
+        <div class="vie-coms">${x.commentaires.map(k => `<div class="vie-com"><b>${esc(k.auteur)}</b> ${esc(k.texte)}${k.peutSupprimer ? ` <a href="#" data-scom="${k.id}" class="aide">supprimer</a>` : ''}</div>`).join('')}
+          <div class="vie-com-f"><input placeholder="Écrire un commentaire…" maxlength="300" data-com="${x.id}"><button class="btn petit secondaire" data-comok="${x.id}">➤</button></div></div></div>`).join('') || '<div class="info">Aucune publication pour l\'instant. Soyez le premier à partager un moment de la vie du lycée !</div>'}
+      ${P.suite !== null ? '<button class="btn secondaire" id="vie-plus">Voir plus</button>' : ''}`;
+    brancherBravo(c);
+    const majMini = () => { $('#vn-ph', c).innerHTML = photos.map((p, i) => `<div style="background-image:url('${p}')"><button data-rm="${i}">✕</button></div>`).join(''); $$('[data-rm]', c).forEach(b => b.onclick = () => { photos.splice(+b.dataset.rm, 1); majMini(); }); };
+    $('#vn-b', c).onclick = () => $('#vn-f', c).click();
+    $('#vn-f', c).onchange = async e => { for (const f of [...e.target.files].slice(0, 4 - photos.length)) { try { photos.push(await reduireDocument(f)); } catch (er) { toast(er.message); } } majMini(); e.target.value = ''; };
+    $('#vn-ok', c).onclick = async () => { const b = $('#vn-ok', c); b.disabled = true; try { toast((await api('publier', { texte: $('#vn-t', c).value, photos })).message); photos = []; P = await api('publications'); AV.data = null; dessiner(); } catch (e) { toast(e.message, 6000); b.disabled = false; } };
+    $$('[data-supp]', c).forEach(b => b.onclick = async () => { if (!confirm('Supprimer cette publication ?')) return; try { toast((await api('supprimerPublication', { id: b.dataset.supp })).message); P = await api('publications'); dessiner(); } catch (e) { toast(e.message); } });
+    $$('[data-scom]', c).forEach(a => a.onclick = async ev => { ev.preventDefault(); try { await api('supprimerPublication', { commentaire: a.dataset.scom }); P = await api('publications'); dessiner(); } catch (e) { toast(e.message); } });
+    const envoyerCom = async id => { const i = $(`[data-com="${id}"]`, c); if (!i.value.trim()) return; try { await api('commenter', { cible: 'PUB:' + id, texte: i.value }); P = await api('publications'); dessiner(); } catch (e) { toast(e.message); } };
+    $$('[data-comok]', c).forEach(b => b.onclick = () => envoyerCom(b.dataset.comok));
+    $$('[data-com]', c).forEach(i => i.onkeydown = e => { if (e.key === 'Enter') envoyerCom(i.dataset.com); });
+    if ($('#vie-plus', c)) $('#vie-plus', c).onclick = async () => { const S2 = await api('publications', { depuis: P.suite }); P.publications = P.publications.concat(S2.publications); P.suite = S2.suite; dessiner(); };
+    P.publications.filter(x => x.photos).forEach(async x => { if (!VIE_PH[x.id]) { try { VIE_PH[x.id] = (await api('photosPublication', { id: x.id })).photos; } catch (e) { return; } }
+      const z = $('#ph-' + x.id, c); if (z) { z.innerHTML = VIE_PH[x.id].map(p => `<div style="background-image:url('${p}')" data-zoom></div>`).join(''); $$('[data-zoom]', z).forEach(d => d.onclick = () => zoomPhoto(d.style.backgroundImage.slice(5, -2))); } });
+  };
+  dessiner();
+}
+const VIE_PH = {};
+function zoomPhoto(src) { const d = document.createElement('div'); d.className = 'zoom-photo'; d.innerHTML = `<img src="${src}" alt="">`; d.onclick = () => d.remove(); document.body.appendChild(d); }
+
+/* --- page Sondages --- */
+async function pageSondages(c) {
+  c.innerHTML = '<div class="chargement">Chargement…</div>';
+  const D = await api('sondages');
+  c.innerHTML = `<h1>🗳 Sondages</h1>
+    ${D.peutCreer ? `<details class="carte"><summary><b>➕ Nouveau sondage</b></summary>
+      <label>Question</label><input id="sd-q" maxlength="200" placeholder="Ex. : Quel jour pour la réunion de fin de mois ?">
+      <label>Réponses possibles (une par ligne, 2 à 6)</label><textarea id="sd-o" rows="4" placeholder="Mercredi 15 h&#10;Jeudi 15 h&#10;Samedi 9 h"></textarea>
+      <div class="ligne"><div><label>Clôture (facultatif)</label><input type="date" id="sd-au"></div><div><label class="case" style="margin-top:28px"><input type="checkbox" id="sd-an"> Anonyme (on ne voit pas qui a voté quoi)</label></div></div>
+      <button class="btn" id="sd-ok" style="margin-top:8px">Publier le sondage</button><p class="aide">Tout le personnel reçoit une notification.</p></details>` : ''}
+    ${D.sondages.map(s => { const max = Math.max(1, ...s.resultats.map(r => r.n || 0));
+      return `<div class="carte sondage ${s.ouvert ? '' : 'clos'}"><div class="aide">${esc(s.auteur)}${s.au ? ' · jusqu\'au ' + fr(s.au) : ''}${s.anonyme ? ' · anonyme' : ''}${s.ouvert ? '' : ' · <b>clos</b>'}</div><h2 style="margin:4px 0 10px">${esc(s.question)}</h2>
+      ${s.resultats.map((r, i) => `<button class="sd-opt ${s.monVote === i ? 'choisi' : ''}" data-sd="${s.id}|${i}" ${s.ouvert ? '' : 'disabled'}>
+        ${r.n !== null ? `<span class="sd-barre" style="width:${Math.round(100 * r.n / max)}%"></span>` : ''}<span class="sd-txt">${s.monVote === i ? '✔ ' : ''}${esc(r.option)}</span>${r.n !== null ? `<b class="sd-n">${r.n}</b>` : ''}</button>
+        ${r.qui && r.qui.length ? `<div class="aide sd-qui">${esc(r.qui.join(', '))}</div>` : ''}`).join('')}
+      <div class="aide">${s.total !== null ? s.total + ' réponse(s)' : 'Votez pour voir les résultats.'}${s.ouvert && s.monVote !== null ? ' · vous pouvez changer votre réponse' : ''}</div>
+      ${s.peutClore ? `<div class="actions" style="margin-top:6px"><button class="btn petit secondaire" data-clore="${s.id}">Clore</button></div>` : ''}</div>`; }).join('') || '<div class="info">Aucun sondage pour l\'instant.</div>'}`;
+  $$('[data-sd]', c).forEach(b => b.onclick = async () => { const [id, k] = b.dataset.sd.split('|'); try { toast((await api('voter', { id, choix: +k })).message); AV.data = null; pageSondages(c); } catch (e) { toast(e.message); } });
+  $$('[data-clore]', c).forEach(b => b.onclick = async () => { if (!confirm('Clore ce sondage ?')) return; try { toast((await api('cloreSondage', { id: b.dataset.clore })).message); pageSondages(c); } catch (e) { toast(e.message); } });
+  if ($('#sd-ok', c)) $('#sd-ok', c).onclick = async () => { try { toast((await api('creerSondage', { question: $('#sd-q').value, options: $('#sd-o').value.split('\n'), au: $('#sd-au').value, anonyme: $('#sd-an').checked })).message, 5000); pageSondages(c); } catch (e) { toast(e.message, 6000); } };
 }
