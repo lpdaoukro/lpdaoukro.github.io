@@ -35,10 +35,12 @@ const lundiDeW = w => ajouterJours(S.session.params.debut, 7 * (w - 1));
 const numSem = w => w ? isoSem(lundiDeW(w)).n : '';
 const libSem = lundi => { const i = isoSem(lundi); return `Semaine ${i.n} — ${i.an} (${frCourt(lundi)} au ${frCourt(ajouterJours(lundi, 4))})`; };
 const initiales = nom => String(nom || '?').split(/\s+/).slice(0, 2).map(x => x[0] || '').join('');
+/* Préfixe du stockage : distinct pour chaque site du même domaine (ex. /demo/), pour que la démo et l'application réelle ne se mélangent jamais. */
+const PREFIXE = 'lpd_' + location.pathname.split('/').filter(x => x && !/\.html?$/.test(x)).map(x => x.replace(/\W+/g, '')).map(x => x + '_').join('');
 const stock = {
-  lire(k, def) { try { const v = localStorage.getItem('lpd_' + k); return v ? JSON.parse(v) : def; } catch (e) { return def; } },
-  ecrire(k, v) { try { localStorage.setItem('lpd_' + k, JSON.stringify(v)); return true; } catch (e) { return false; } },
-  effacer(k) { try { localStorage.removeItem('lpd_' + k); } catch (e) { /* rien */ } }
+  lire(k, def) { try { const v = localStorage.getItem(PREFIXE + k); return v ? JSON.parse(v) : def; } catch (e) { return def; } },
+  ecrire(k, v) { try { localStorage.setItem(PREFIXE + k, JSON.stringify(v)); return true; } catch (e) { return false; } },
+  effacer(k) { try { localStorage.removeItem(PREFIXE + k); } catch (e) { /* rien */ } }
 };
 function toast(msg, ms = 3200) {
   const t = $('#toast'); t.textContent = msg; t.hidden = false;
@@ -271,7 +273,7 @@ function redimensionnerPhoto(fichier) {
 
 /* ================= BOÎTE À SUGGESTIONS (v2.5) ================= */
 let SUGG_PAGE = '';
-const VERSION_SITE = '3.5';
+const VERSION_SITE = '3.5.1';
 /* ================= NOTIFICATIONS SUR LE TÉLÉPHONE (v2.6, Firebase) ================= */
 // configuration publique du projet Firebase (faite pour être dans le site) ; la clé privée reste dans Apps Script
 const FIREBASE_CFG = { apiKey: 'AIzaSyDVRNmLz5ph73vf2a9vFhd2RVni8H9swt0', authDomain: 'lpdaoukro-notification.firebaseapp.com', projectId: 'lpdaoukro-notification',
@@ -649,7 +651,7 @@ function lancerCarrousels() {
 /* ================= CONNEXION / INSCRIPTION ================= */
 function deconnecterLocal() {
   S.session = null; stock.effacer('session'); stock.effacer('ref'); S.ref = null; stock.effacer('mode'); ACT.donnees = null;
-  Object.keys(localStorage).filter(k => k.startsWith('lpd_vue_')).forEach(k => localStorage.removeItem(k));
+  Object.keys(localStorage).filter(k => k.startsWith(PREFIXE + 'vue_')).forEach(k => localStorage.removeItem(k));
   afficher();
 }
 

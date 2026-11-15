@@ -1,5 +1,6 @@
 // Service worker : garde l'application sur le téléphone pour qu'elle s'ouvre même sans connexion.
-const VERSION = 'lpd-v41';
+const PORTEE = new URL(self.registration.scope).pathname.replace(/\W+/g, '_');   // '_' pour le site principal, '_demo_' pour la démo
+const VERSION = 'lpd-v42' + PORTEE;
 const FICHIERS = ['./', 'index.html', 'style.css', 'app.js', 'eleves.js', 'absences.js', 'notes.js', 'discipline.js', 'frais.js', 'stages.js', 'edt.js', 'config.js', 'manifest.webmanifest', 'icone-192.png', 'icone-512.png',
   'medias/embleme-blanc.png', 'medias/embleme-noir-petit.png', 'medias/logo-complet.png',
   'medias/armoiries.png', 'medias/ministere.png', 'medias/embleme-generique.svg', 'medias/embleme-generique-blanc.svg',
@@ -7,11 +8,13 @@ const FICHIERS = ['./', 'index.html', 'style.css', 'app.js', 'eleves.js', 'absen
   'medias/atelier-1.jpg', 'medias/atelier-2.jpg', 'medias/atelier-3.jpg', 'medias/atelier-4.jpg', 'medias/atelier-5.jpg', 'medias/atelier-6.jpg'];
 self.addEventListener('install', e => { e.waitUntil(caches.open(VERSION).then(c => c.addAll(FICHIERS)).then(() => self.skipWaiting())); });
 self.addEventListener('activate', e => {
-  e.waitUntil(caches.keys().then(k => Promise.all(k.filter(x => x !== VERSION).map(x => caches.delete(x)))).then(() => self.clients.claim()));
+  const aMoi = x => x.startsWith('lpd-') && (PORTEE === '_' ? !/_demo_$/.test(x) : x.endsWith(PORTEE));
+  e.waitUntil(caches.keys().then(k => Promise.all(k.filter(x => x !== VERSION && aMoi(x)).map(x => caches.delete(x)))).then(() => self.clients.claim()));
 });
 self.addEventListener('fetch', e => {
   const req = e.request;
   if (req.method !== 'GET' || new URL(req.url).origin !== location.origin) return; // les appels au serveur Google ne passent pas par ici
+  if (PORTEE === '_' && new URL(req.url).pathname.startsWith('/demo/')) return;   // la démo a son propre service worker
   // réseau d'abord (pour avoir la dernière version), sinon la copie gardée
   e.respondWith(fetch(req).then(rep => {
     const copie = rep.clone(); caches.open(VERSION).then(c => c.put(req, copie)); return rep;
