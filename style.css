@@ -605,3 +605,10 @@ tr.a-confirmer td { background: #FFF8E6; }
 .par-moy.bas { color: #C62828; }
 .par-note { display: flex; justify-content: space-between; align-items: center; gap: 8px; padding: 6px 0; border-top: 1px solid var(--bord, #eef0f3); font-size: .92rem; }
 .par-note i { opacity: .6; font-style: normal; font-size: .8rem; margin-left: 4px; }
+
+/* ===== Horloge permanente (v3.1) ===== */
+.horloge { background: rgba(255,255,255,.12); border: 1px solid rgba(255,255,255,.25); color: #fff; border-radius: 8px; padding: 5px 10px; font: 600 .85rem/1.2 inherit; font-variant-numeric: tabular-nums; white-space: nowrap; cursor: default; }
+.horloge .h-court { display: none; }
+@media (max-width: 760px) { .horloge { padding: 5px 7px; } .horloge .h-long { display: none; } .horloge .h-court { display: inline; cursor: pointer; } }
+.horloge-cnx { text-align: center; font-size: .88rem; font-weight: 600; opacity: .75; margin: 6px 0 10px; font-variant-numeric: tabular-nums; }
+@media print { .horloge, .horloge-cnx { display: none !important; } }

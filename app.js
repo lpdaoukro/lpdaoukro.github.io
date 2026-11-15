@@ -271,7 +271,7 @@ function redimensionnerPhoto(fichier) {
 
 /* ================= BOÎTE À SUGGESTIONS (v2.5) ================= */
 let SUGG_PAGE = '';
-const VERSION_SITE = '3.0';
+const VERSION_SITE = '3.1';
 /* ================= NOTIFICATIONS SUR LE TÉLÉPHONE (v2.6, Firebase) ================= */
 // configuration publique du projet Firebase (faite pour être dans le site) ; la clé privée reste dans Apps Script
 const FIREBASE_CFG = { apiKey: 'AIzaSyDVRNmLz5ph73vf2a9vFhd2RVni8H9swt0', authDomain: 'lpdaoukro-notification.firebaseapp.com', projectId: 'lpdaoukro-notification',
@@ -480,6 +480,27 @@ async function pageLicence(c) {
     try { const r = await api('enregistrerLicence', { cle: e.target.cle.value }); toast(r.message, 6000); await chargerMarque(); afficher(); } catch (er) { $('#lic-msg').innerHTML = `<div class="erreur">${esc(er.message)}</div>`; } };
 }
 
+/* ================= HORLOGE PERMANENTE (v3.1) ================= */
+function texteHorloge(court) {
+  const d = new Date(), h = d.toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit' });
+  if (court) return h;
+  const j = d.toLocaleDateString('fr-FR', { weekday: 'short', day: 'numeric', month: 'short', year: 'numeric' });
+  return j.charAt(0).toUpperCase() + j.slice(1) + ' · ' + h;
+}
+function majHorloge() {
+  let b = $('#horloge');
+  if (!b && $('.entete-droite')) {
+    b = document.createElement('button'); b.id = 'horloge'; b.className = 'horloge'; b.type = 'button';
+    b.innerHTML = '<span class="h-long"></span><span class="h-court"></span>';
+    b.onclick = () => toast(new Date().toLocaleDateString('fr-FR', { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' }).replace(/^./, x => x.toUpperCase()) + ' — ' + texteHorloge(true));
+    $('.entete-droite').prepend(b);
+  }
+  if (b) { $('.h-long', b).textContent = texteHorloge(false); $('.h-court', b).textContent = texteHorloge(true); b.title = new Date().toLocaleDateString('fr-FR', { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' }); }
+  $$('[data-horloge]').forEach(e => { e.textContent = '🕒 ' + texteHorloge(false); });
+}
+majHorloge(); setTimeout(() => { majHorloge(); setInterval(majHorloge, 60000); }, 60000 - (Date.now() % 60000) + 50);
+document.addEventListener('visibilitychange', () => { if (!document.hidden) majHorloge(); });
+
 /* ================= ESPACE PARENTS (v3.0) ================= */
 function formParent() {
   $('#zone').innerHTML = `<p class="aide">Suivez les notes, les absences et les frais de vos enfants. Utilisez le <b>numéro de téléphone</b> inscrit sur la fiche de votre enfant.</p>
@@ -644,6 +665,7 @@ function ecranConnexion(onglet = 'connexion') {
     ${MQ().demo ? `<div class="demo-roles"><p><b>Essayez l'application en un clic</b> : choisissez un rôle.</p><div>${(MQ().comptesDemo || []).map((x, i) => `<button class="btn" data-demo="${i}">${x.icone} ${esc(x.role)}</button>`).join('')}</div>
       ${MQ().parentDemo ? `<div style="margin-top:6px"><button class="btn secondaire" data-demo-parent style="width:100%">👨‍👩‍👧 Parent d'élève (3 enfants)</button></div>` : ''}
       <p class="aide">Données fictives, remises à zéro chaque nuit. <a href="https://wa.me/${String(MQ().contact || '').replace(/\D/g, '')}" target="_blank" rel="noopener">💬 WhatsApp ${esc(MQ().contact || '')}</a></p></div>` : ''}
+    <div class="horloge-cnx" data-horloge="long"></div>
     <div class="onglets"><button data-o="connexion">Personnel</button><button data-o="inscription">Première connexion</button><button data-o="parent">👨‍👩‍👧 Parents</button></div>
     <div id="zone"></div>
   </div></div>`;
@@ -652,6 +674,7 @@ function ecranConnexion(onglet = 'connexion') {
     b.onclick = () => ecranConnexion(b.dataset.o);
   });
   if (onglet === 'connexion') formConnexion(); else if (onglet === 'parent') formParent(); else formInscription();
+  majHorloge();
   if ($('[data-demo-parent]', c)) $('[data-demo-parent]', c).onclick = () => { ecranConnexion('parent'); const f = $('#fp'); f.t.value = MQ().parentDemo.telephone; f.c.value = MQ().parentDemo.code; f.requestSubmit(); };
   $$('[data-demo]', c).forEach(b => b.onclick = () => { const x = MQ().comptesDemo[b.dataset.demo]; const f = $('#f'); if (!f) return; f.m.value = x.matricule; f.c.value = x.code; f.requestSubmit(); });
   lancerCarrousels();
