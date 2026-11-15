@@ -133,7 +133,7 @@ function majReseau(etat) {
   b.textContent = !S.enLigne ? (n ? `Hors ligne · ${n} en attente` : 'Hors ligne') : n ? `${n} en attente…` : 'En ligne ✓';
   b.dataset.court = !S.enLigne ? (n ? '⚠ ' + n : '⚠') : n ? n + '…' : '✓';   // version courte pour les petits écrans
 }
-window.addEventListener('online', () => { majReseau(true); synchroniser(); if (typeof synchroniserAppels === 'function') synchroniserAppels(); if (typeof synchroniserNotes === 'function') synchroniserNotes(); });
+window.addEventListener('online', () => { majReseau(true); synchroniser(); setTimeout(() => preparerHorsLigne(true), 5000); if (typeof synchroniserAppels === 'function') synchroniserAppels(); if (typeof synchroniserNotes === 'function') synchroniserNotes(); });
 window.addEventListener('offline', () => majReseau(false));
 let syncEnCours = false;
 async function synchroniser(silencieux = true) {
@@ -166,7 +166,7 @@ async function synchroniser(silencieux = true) {
     if (!(e instanceof HorsLigne) && !silencieux) toast(e.message, 5000);
   } finally { syncEnCours = false; majReseau(); }
 }
-setInterval(() => { if (navigator.onLine) { synchroniser(); if (typeof synchroniserAppels === 'function') synchroniserAppels(); if (typeof synchroniserNotes === 'function') synchroniserNotes(); } }, 60000);
+setInterval(() => { if (navigator.onLine) { preparerHorsLigne(); synchroniser(); if (typeof synchroniserAppels === 'function') synchroniserAppels(); if (typeof synchroniserNotes === 'function') synchroniserNotes(); } }, 60000);
 let delaiSync;
 const syncBientot = () => { clearTimeout(delaiSync); delaiSync = setTimeout(() => synchroniser(), 1500); };
 
@@ -271,7 +271,7 @@ function redimensionnerPhoto(fichier) {
 
 /* ================= BOÎTE À SUGGESTIONS (v2.5) ================= */
 let SUGG_PAGE = '';
-const VERSION_SITE = '3.1';
+const VERSION_SITE = '3.3';
 /* ================= NOTIFICATIONS SUR LE TÉLÉPHONE (v2.6, Firebase) ================= */
 // configuration publique du projet Firebase (faite pour être dans le site) ; la clé privée reste dans Apps Script
 const FIREBASE_CFG = { apiKey: 'AIzaSyDVRNmLz5ph73vf2a9vFhd2RVni8H9swt0', authDomain: 'lpdaoukro-notification.firebaseapp.com', projectId: 'lpdaoukro-notification',
@@ -562,7 +562,7 @@ async function dessinerEnfant(z) {
   z.innerHTML = '<div class="chargement">Chargement…</div>';
   const D = await api('parentEleve', { id: PAR.enfant }), O = PAR.onglet;
   const ong = [['notes', '📝 Notes'], ['absences', '⏰ Absences'], ['frais', '💰 Frais'], ['bulletins', '📄 Bulletins']];
-  let h = `<div class="onglets">${ong.map(([k, l]) => `<button data-po="${k}" class="${O === k ? 'actif' : ''}">${l}</button>`).join('')}</div>`;
+  let h = (D.distinctions || []).map(x => `<div class="par-distinction">🏆 <b>${esc(x.titre)}</b> <span>${esc(x.periode)} · moyenne ${n2(x.moy)}</span></div>`).join('') + `<div class="onglets">${ong.map(([k, l]) => `<button data-po="${k}" class="${O === k ? 'actif' : ''}">${l}</button>`).join('')}</div>`;
   if (O === 'notes') {
     h += [1, 2].map(sem => { const L = D.notes.filter(n => n.semestre === sem); return L.length ? `<h2>Semestre ${sem}</h2>${L.map(m => `<div class="carte par-mat"><div class="par-mat-t"><b>${esc(m.matiere)}</b><span>coef. ${nb(m.coef)}</span><b class="par-moy ${m.moyenne !== null && m.moyenne < 10 ? 'bas' : ''}">${m.moyenne === null ? '—' : n2(m.moyenne)}</b></div>
       ${m.notes.map(n => `<div class="par-note"><span>${esc(n.libelle)} <i>${fr(n.date)}</i></span><b>${esc(n.note)}/${nb(n.bareme)}</b></div>`).join('')}</div>`).join('')}` : ''; }).join('') || '<div class="info">Aucune note approuvée pour le moment.</div>';
@@ -693,7 +693,7 @@ function formConnexion() {
       S.session = { jeton: r.jeton, profil: r.profil, params: r.params }; stock.ecrire('session', S.session);
       api('photos', { matricules: [r.profil.matricule] }).then(p => { Object.assign(S.photos, p.photos); stock.ecrire('photos', S.photos); appliquerPhotos(); }).catch(() => {});
       location.hash = '#/'; stock.ecrire('bienvenue', 1); stock.ecrire('mode', 'admin');
-      const entrer = () => { afficher(); setTimeout(carteBienvenue, 600); majActions(true); };
+      const entrer = () => { afficher(); setTimeout(carteBienvenue, 600); majActions(true); setTimeout(() => preparerHorsLigne(true), 2500); };
       if (r.profil.double) choisirMode(entrer); else entrer();
     } catch (err) { $('#msg').innerHTML = `<div class="erreur">${esc(err.message)}</div>`; b.disabled = false; }
   };
@@ -766,6 +766,11 @@ const PAGES = {
   'paiement':      { titre: 'État de paiement', mod: ['pointage', 'CONSULTE'], roles: ['censeur', 'admin', 'directeur'], fn: pagePaiement },
   'personnel':     { titre: 'Personnel', mod: ['pointage', 'CONSULTE'], roles: ['censeur', 'admin', 'directeur'], fn: pagePersonnel },
   'emplois':       { titre: 'Emplois du temps', mod: ['edt', 'CONSULTE'], roles: ['admin', 'censeur'], fn: (c, a) => pageEmploisV2(c, a) },
+  'agent-mois':    { titre: 'Agent du mois', roles: ['admin', 'directeur', 'censeur', 'educateur', 'comptable', 'intervenant'], fn: c => pageAgentMois(c) },
+  'honneur':       { titre: 'Tableau d\'honneur', roles: ['admin', 'directeur', 'censeur', 'educateur', 'comptable', 'intervenant'], fn: c => pageHonneur(c) },
+  'signalements':  { titre: 'Signalements', roles: ['admin', 'directeur', 'censeur', 'educateur', 'comptable', 'intervenant'], si: () => role() !== 'intervenant' || stock.lire('resp_signal', false), fn: c => pageSignalements(c) },
+  'passage':       { titre: 'Passage d\'année', roles: ['admin', 'directeur'], fn: c => pagePassage(c) },
+  'archives':      { titre: 'Années précédentes', roles: ['admin', 'directeur', 'censeur', 'comptable', 'educateur'], fn: c => pageArchives(c) },
   'familles':      { titre: 'Espace parents', roles: ['admin', 'comptable', 'educateur', 'directeur'], fn: c => pageFamilles(c) },
   'suggestion':    { titre: 'Suggestion', roles: ['intervenant', 'censeur', 'admin', 'educateur', 'comptable', 'directeur'], cache: true, fn: c => pageSuggestion(c) },
   'suggestions':   { titre: 'Suggestions', roles: ['admin'], fn: c => pageSuggestions(c) },
@@ -794,12 +799,12 @@ const PAGES = {
 };
 let pastilles = stock.lire('pastilles', {});
 const GROUPES_MENU = [
-  { id: 'accueil', titre: '🏠 Accueil', pages: ['direction', 'ma-fiche'] },
+  { id: 'accueil', titre: '🏠 Accueil', pages: ['direction', 'ma-fiche', 'agent-mois', 'honneur', 'signalements'] },
   { id: 'personnel', titre: '👨‍🏫 Personnel', pages: ['pointage', 'tableau', 'intervenants', 'rattrapages', 'reclamations', 'paiement', 'personnel'] },
-  { id: 'eleves', titre: '🎓 Élèves', pages: ['eleves', 'effectifs', 'appel', 'absences', 'discipline', 'stages', 'familles'] },
+  { id: 'eleves', titre: '🎓 Élèves', pages: ['eleves', 'effectifs', 'appel', 'absences', 'discipline', 'stages', 'familles', 'archives'] },
   { id: 'notes', titre: '📝 Notes', pages: ['notes', 'bulletins', 'calendrier-conseils'] },
   { id: 'finances', titre: '💰 Finances', pages: ['caisse', 'finances'] },
-  { id: 'admin', titre: '⚙ Administration', pages: ['annonces', 'calendrier-scolaire', 'emplois', 'comptes', 'droits', 'suggestions', 'etablissement', 'licence', 'journal'] }
+  { id: 'admin', titre: '⚙ Administration', pages: ['annonces', 'calendrier-scolaire', 'emplois', 'comptes', 'droits', 'suggestions', 'passage', 'etablissement', 'licence', 'journal'] }
 ];
 let groupeOuvert = null;
 function menu() {
@@ -824,6 +829,8 @@ function menu() {
   $$('#menu .menu-pages a').forEach(a => a.addEventListener('click', () => { groupeOuvert = null; }));
 }
 function afficher() {
+  const pg0 = (location.hash.slice(2) || '').split('/');
+  if (pg0[0] === 'signaler' || pg0[0] === 'suivi') return pageSignalPublic(pg0[0], decodeURIComponent(pg0[1] || ''));
   if (!S.session) return ecranConnexion();
   if (S.session.parent) return afficherParent();
   // nouveau conteneur à chaque page : une page encore en chargement ne peut plus écrire dans la suivante
@@ -842,14 +849,14 @@ function afficher() {
   window.scrollTo(0, 0);
   const tour = afficher.tour = (afficher.tour || 0) + 1;
   const accueil = afficher.accueil;
-  Promise.resolve(PAGES[page].fn(c, decodeURIComponent(arg || ''))).then(() => { if (accueil && tour === afficher.tour && c.isConnected && !$('.salut', c)) c.insertAdjacentHTML('afterbegin', ligneSalut()); }).then(lancerCarrousels).catch(e => {
+  Promise.resolve(PAGES[page].fn(c, decodeURIComponent(arg || ''))).then(() => { if (accueil && tour === afficher.tour && c.isConnected) { if (!$('.salut', c)) c.insertAdjacentHTML('afterbegin', ligneSalut()); if (!$('#av', c)) { $('.salut', c).insertAdjacentHTML('afterend', '<div id="av"></div>'); accueilVivant($('#av', c)); } } }).then(lancerCarrousels).catch(e => {
     if (tour !== afficher.tour) return;   // une autre page a été ouverte entre-temps
-    c.innerHTML = `<div class="erreur">${esc(e.message)}</div>${e instanceof HorsLigne ? '<p class="aide">Cette page a besoin de la connexion la première fois. Le pointage du jour et l\'appel, eux, fonctionnent hors connexion.</p>' : ''}`;
+    c.innerHTML = `<div class="erreur">${esc(e.message)}</div>${e instanceof HorsLigne ? '<p class="aide">Cette page a besoin de la connexion. Le pointage, l\'appel et la saisie des notes fonctionnent hors connexion dès que l\'application a été ouverte une fois avec internet.</p>' : ''}`;
   }).then(appliquerPhotos);
 }
 window.addEventListener('hashchange', afficher);
 document.addEventListener('DOMContentLoaded', () => {
-  $('#etat-reseau').onclick = () => { if (!navigator.onLine) return toast('Pas de connexion : les pointages et les appels partiront automatiquement au retour du réseau.'); synchroniser(false); if (typeof synchroniserAppels === 'function') synchroniserAppels(false); if (typeof synchroniserNotes === 'function') synchroniserNotes(false); };
+  $('#etat-reseau').onclick = () => { if (!navigator.onLine) return toast('Pas de connexion : les pointages, les appels et les notes saisis partiront automatiquement au retour du réseau.' + (stock.lire('pret_hors_ligne', '') ? ' (Données gardées sur ce téléphone le ' + stock.lire('pret_hors_ligne', '') + '.)' : ''), 7000); synchroniser(false); if (typeof synchroniserAppels === 'function') synchroniserAppels(false); if (typeof synchroniserNotes === 'function') synchroniserNotes(false); };
   $('#btn-moi').onclick = () => { location.hash = '#/mon-compte'; };
   $('#btn-actions').onclick = () => { location.hash = '#/actions'; };
   if (!$('#btn-sugg')) { const b = document.createElement('button'); b.id = 'btn-sugg'; b.className = 'btn-actions'; b.title = 'Suggestion ou problème : écrire à l\'administrateur'; b.textContent = '💡'; b.hidden = true;
@@ -859,9 +866,36 @@ document.addEventListener('DOMContentLoaded', () => {
   if ('serviceWorker' in navigator) navigator.serviceWorker.register('sw.js').then(() => setTimeout(rafraichirPush, 4000)).catch(() => {});
   appliquerMarque(); chargerMarque().then(() => { if (!S.session) afficher(); });
   afficher();
+  setTimeout(() => preparerHorsLigne(true), 3000);
   if (S.session && encadrement()) synchroniser();
   if (S.session && typeof synchroniserAppels === 'function') synchroniserAppels();
 });
+
+/* ================= PRÉPARATION HORS CONNEXION (v3.3) =================
+ * Dès que le réseau est là, l'application garde sur le téléphone ce qu'il faut pour
+ * faire l'appel et saisir les notes sans internet (élèves, séances, matières, notes). */
+let prepHL = 0, prepHLenCours = false;
+async function preparerHorsLigne(forcer) {
+  if (!S.session || S.session.parent || !navigator.onLine || prepHLenCours) return;
+  if (!forcer && Date.now() - prepHL < 20 * 60000) return;
+  prepHLenCours = true; prepHL = Date.now();
+  const essai = p => p.then(() => true).catch(() => false);
+  try {
+    const t = [], dbl = S.session.profil && S.session.profil.double;
+    const appel = typeof chargerRefAppel === 'function' && accesPage('appel'), notes = typeof chargerRefNotes0 === 'function' && (accesPage('notes') || dbl);
+    if (appel || notes) t.push(essai(chargerEleves(true)));
+    if (appel) t.push(essai(chargerRefAppel(true)));
+    if (notes) {
+      if (role() === 'intervenant') t.push(essai(chargerRefNotes0('')));
+      else {
+        if (dbl) t.push(essai(api('notesReferentiel', { mode: 'professeur' }).then(r => { NT.ref = r; sauverNT(); })));
+        const k = stock.lire('notes_classe', ''); if (k && accesPage('notes')) t.push(essai(chargerRefNotes0(k)));
+      }
+    }
+    const r = await Promise.all(t);
+    if (r.length && r.every(x => x)) stock.ecrire('pret_hors_ligne', new Date().toLocaleString('fr-FR'));
+  } finally { prepHLenCours = false; }
+}
 
 /* ================= POINTAGE DU JOUR (hors connexion) ================= */
 function etatPointage(_, d, s) {
@@ -1796,4 +1830,356 @@ async function pageDroits(c) {
   f.onsubmit = async ev => { ev.preventDefault();
     try { toast((await api('deleguer', { matricule: f.matricule.value, module: f.module.value, niveau: f.niveau.value, jusquau: f.jusquau.value, motif: f.motif.value })).message, 5000); afficher(); } catch (e) { $('#del-msg').innerHTML = `<div class="erreur">${esc(e.message)}</div>`; } };
   $$('[data-rd]', c).forEach(b => b.onclick = async () => { if (!confirm('Retirer cette délégation ?')) return; try { toast((await api('retirerDelegation', { id: b.dataset.rd })).message); afficher(); } catch (e) { toast(e.message, 5000); } });
+}
+
+
+/* ================= PASSAGE À L'ANNÉE SUIVANTE (v3.2) ================= */
+const PSG = { filtre: '', q: '', modifs: {}, simu: null, bilan: null };
+const PSG_STATUT = { '': ['Pas commencé', ''], BROUILLON: ['En préparation', 'attente'], SOUMIS: ['Envoyé au directeur', 'attente'], 'VALIDÉ': ['Validé par le directeur', 'P'], 'RENVOYÉ': ['Renvoyé par le directeur', 'A'] };
+async function pagePassage(c) {
+  c.innerHTML = '<div class="chargement">Chargement…</div>';
+  let E;
+  try { E = await api('passageEtat'); } catch (e) { c.innerHTML = `<div class="erreur">${esc(e.message)}</div>`; return; }
+  const adm = E.role === 'admin', edit = adm && E.statut !== 'SOUMIS', st = PSG_STATUT[E.statut] || [E.statut, ''];
+  const codes = E.classes.map(k => k.code);
+  if (PSG.filtre && !E.lignes.some(l => l.classe === PSG.filtre)) PSG.filtre = '';
+  if (!PSG.filtre && E.lignes.length) PSG.filtre = E.lignes[0].classe;
+  const D = E.destinations, compte = {}; E.lignes.forEach(l => { compte[l.destination] = (compte[l.destination] || 0) + 1; });
+  const optCl = (v, vide) => `<option value="">${vide}</option>` + codes.map(k => `<option ${k === v ? 'selected' : ''}>${esc(k)}</option>`).join('');
+  const lignes = E.lignes.filter(l => (PSG.filtre === '*' || l.classe === PSG.filtre) && (!PSG.q || (l.nom + ' ' + l.prenoms + ' ' + l.matricule).toUpperCase().includes(PSG.q.toUpperCase())));
+  const decTxt = l => l.decision ? `${esc(l.decision)} <span class="badge ${l.source === 'CONSEIL' ? 'P' : 'attente'}">${l.source === 'CONSEIL' ? 'conseil' : 'proposée'}</span>` : '<span class="aide">aucune</span>';
+  c.innerHTML = `<h1>🎓 Passage à l'année ${esc(E.cible)}</h1>
+    <p class="aide">Année en cours : <b>${esc(E.annee)}</b>. Étapes : contrôles → tableau des passages → validation par le directeur → simulation → bascule. Classes d'examen : <b>3CAP, 3BT et 2BTS</b>.</p>
+    ${E.dernier ? `<div class="info">Dernier passage : <b>${esc(E.dernier.de)} → ${esc(E.dernier.vers)}</b> le ${esc(String(E.dernier.le).slice(0, 10).split('-').reverse().join('/'))}.${E.dernier.archive && adm ? ` <a href="${esc(E.dernier.archive)}" target="_blank" rel="noopener">Ouvrir l'archive dans Drive</a>.` : ''} Les données de l'ancienne année se consultent dans <a href="#/archives">Élèves → Années précédentes</a>.</div>` : ''}
+    ${E.sortants.length && adm ? `<div class="carte"><b>Sortants (fin de cycle ${esc(E.dernier.de)}) : ${E.sortants.length}</b><p class="aide">Un élève qui a échoué à l'examen peut être réinscrit dans sa classe comme redoublant.</p>
+      <details><summary>Voir la liste</summary>${E.sortants.map(x => `<div class="par-note"><span>${esc(x.nom)} ${esc(x.prenoms)} <i>${esc(x.classe)}</i></span><button class="btn petit secondaire" data-reint="${x.id}">↩ Réinscrire redoublant</button></div>`).join('')}</details></div>` : ''}
+    <div class="carte"><div style="display:flex;align-items:center;gap:10px;flex-wrap:wrap"><b>État :</b> <span class="badge ${st[1]}">${esc(st[0])}</span>
+      ${E.valide_par ? `<span class="aide">par ${esc(E.valide_par)} le ${esc(String(E.valide_le).slice(0, 16).replace(/(\d+)-(\d+)-(\d+)/, '$3/$2/$1'))}</span>` : ''}</div>
+      ${E.statut === 'RENVOYÉ' && E.remarque ? `<div class="alerte" style="margin-top:8px">Remarque du directeur : ${esc(E.remarque)}</div>` : ''}
+      <h2>1. Contrôles</h2>${E.controles.map(k => `<div class="psg-ctl ${k.ok ? 'ok' : k.bloquant ? 'ko' : 'av'}">${k.ok ? '✔' : k.bloquant ? '✖' : '⚠'} ${esc(k.texte)}${!k.ok && k.lien ? ` <a href="${k.lien}">ouvrir</a>` : ''}</div>`).join('')}
+      ${!E.dateOk ? `<p class="aide">La bascule sera possible à partir du ${fr(E.finS2)} (fin du semestre 2). Vous pouvez préparer le tableau avant.</p>` : ''}
+      ${adm ? `<div class="actions"><button class="btn" id="psg-gen">${E.lignes.length ? '🔄 Préparer à nouveau (vos corrections sont gardées)' : '📋 Préparer le tableau des passages'}</button></div>` : ''}</div>
+    ${E.lignes.length ? `
+    <div class="carte"><h2 style="margin-top:0">2. Classes de l'année suivante</h2><p class="aide">Les élèves admis d'une classe intermédiaire passent dans la classe indiquée. Les classes d'examen n'ont pas de suite.</p>
+      <div class="table-defil"><table><thead><tr><th>Classe ${esc(E.annee)}</th><th class="n">Effectif</th><th>Classe d'arrivée des admis</th></tr></thead><tbody>
+      ${E.classes.filter(k => k.effectif).map(k => `<tr><td><b>${esc(k.code)}</b></td><td class="n">${k.effectif}</td><td>${k.examen ? '<span class="badge attente">classe d\'examen : sortants</span>' : `<select data-cc="${esc(k.code)}" ${edit ? '' : 'disabled'}>${optCl(k.cible, '— à choisir —')}</select>${k.cible ? '' : ' <span class="badge A">manquante</span>'}`}</td></tr>`).join('')}
+      </tbody></table></div>
+      <h2>3. Dates de l'année ${esc(E.cible)}</h2>
+      <div class="ligne">${[['rentree', 'Rentrée (début S1)'], ['s1_fin', 'Fin du semestre 1'], ['s2_debut', 'Début du semestre 2'], ['s2_fin', 'Fin du semestre 2']].map(([k, l]) => `<div><label>${l}</label><input type="date" data-dt="${k}" value="${esc(E.dates[k] || '')}" ${edit ? '' : 'disabled'}></div>`).join('')}</div>
+      ${edit ? '<div class="actions"><button class="btn secondaire" id="psg-cl">Enregistrer classes et dates</button></div>' : ''}</div>
+    <div class="carte"><h2 style="margin-top:0">4. Tableau des passages (${E.lignes.length} élèves)</h2>
+      <div class="kpis">${Object.keys(D).filter(k => compte[k]).map(k => `<div class="kpi ${k === 'A_DECIDER' ? 'rouge' : k === 'PASSE' ? 'vert' : ''}"><div class="lib">${esc(D[k])}</div><div class="val">${compte[k]}</div></div>`).join('')}</div>
+      <div class="ligne"><div><select id="psg-f"><option value="*" ${PSG.filtre === '*' ? 'selected' : ''}>Toutes les classes</option>${[...new Set(E.lignes.map(l => l.classe))].map(k => `<option ${k === PSG.filtre ? 'selected' : ''}>${esc(k)}</option>`).join('')}</select></div>
+        <div><input id="psg-q" placeholder="Rechercher un élève" value="${esc(PSG.q)}"></div><div style="flex:0 0 auto"><button class="btn secondaire" id="psg-imp">🖨 Imprimer</button></div></div>
+      <div class="table-defil"><table><thead><tr><th>Élève</th><th>Classe</th><th class="n">Moy. ann.</th><th>Décision du conseil</th><th>Destination</th><th>Classe ${esc(E.cible)}</th></tr></thead><tbody>
+      ${lignes.map(l => `<tr class="${l.destination === 'A_DECIDER' ? 'psg-adec' : ''}"><td>${esc(l.nom)} ${esc(l.prenoms)}</td><td>${esc(l.classe)}</td><td class="n">${l.moyenne === null ? '' : n2(l.moyenne)}</td><td>${decTxt(l)}</td>
+        <td><select data-dest="${l.id}" ${edit ? '' : 'disabled'}>${Object.keys(D).map(k => `<option value="${k}" ${k === l.destination ? 'selected' : ''}>${esc(D[k])}</option>`).join('')}</select></td>
+        <td>${l.destination === 'PASSE' || l.destination === 'REDOUBLE' ? `<select data-cib="${l.id}" ${edit ? '' : 'disabled'}>${optCl(l.cible, '—')}</select>` : '—'}</td></tr>`).join('') || '<tr><td colspan="6" class="vide">Aucun élève.</td></tr>'}
+      </tbody></table></div>
+      ${edit ? '<div class="actions"><button class="btn" id="psg-save">Enregistrer les modifications</button></div>' : ''}</div>
+    <div class="carte"><h2 style="margin-top:0">5. Validation par le directeur</h2>
+      ${adm && (E.statut === 'BROUILLON' || E.statut === 'RENVOYÉ') ? `<p>Quand le tableau est prêt, envoyez-le au directeur. Toute modification après validation exigera une nouvelle validation.</p><button class="btn" id="psg-env" ${E.peutSoumettre ? '' : 'disabled'}>📤 Envoyer au directeur</button>${E.peutSoumettre ? '' : '<p class="aide">Corrigez d\'abord les points marqués ✖.</p>'}` : ''}
+      ${adm && E.statut === 'SOUMIS' ? '<p>Le tableau attend la validation du directeur.</p>' : ''}
+      ${E.role === 'directeur' && E.statut === 'SOUMIS' ? '<p>Vérifiez le tableau ci-dessus puis :</p><button class="btn vert" id="psg-val">✔ Valider le tableau</button> <button class="btn rouge" id="psg-ren">↩ Renvoyer avec une remarque</button>' : ''}
+      ${E.statut === 'VALIDÉ' ? '<p>✔ Tableau validé.</p>' : ''}</div>
+    <div class="carte"><h2 style="margin-top:0">6. Simulation et bascule</h2>
+      <button class="btn secondaire" id="psg-sim">🔍 Voir la simulation</button><div id="psg-simu"></div>
+      ${adm && E.statut === 'VALIDÉ' ? `<div class="psg-bascule"><p><b>Bascule vers ${esc(E.cible)}</b> : une copie complète de l'année ${esc(E.annee)} est d'abord faite dans votre Google Drive. Ensuite, les élèves changent de classe et les données de l'année sont remises à zéro.</p>
+        <label>Pour confirmer, tapez <b>PASSAGE ${esc(E.cible)}</b></label><input id="psg-conf" autocomplete="off" placeholder="PASSAGE ${esc(E.cible)}">
+        <div class="actions"><button class="btn rouge" id="psg-go" ${E.dateOk ? '' : 'disabled'}>🎓 Basculer vers ${esc(E.cible)}</button></div>${E.dateOk ? '' : `<p class="aide">Possible à partir du ${fr(E.finS2)}.</p>`}</div>` : ''}</div>` : ''}`;
+  const recharger = () => pagePassage(c);
+  const appel = async (action, data, conf) => { if (conf && !confirm(conf)) return; try { const r = await api(action, data || {}); toast(r.message || 'Enregistré.', 5000); PSG.modifs = {}; recharger(); } catch (e) { toast(e.message, 9000); } };
+  $$('[data-reint]', c).forEach(b => b.onclick = () => appel('passageReintegrer', { id: b.dataset.reint }, 'Réinscrire cet élève comme redoublant dans sa classe ?'));
+  if ($('#psg-gen', c)) $('#psg-gen', c).onclick = async () => { const b = $('#psg-gen', c); b.disabled = true; b.textContent = 'Calcul des moyennes et décisions… (peut prendre une minute)'; await appel('passageGenerer'); };
+  if (!E.lignes.length) return;
+  $('#psg-f', c).onchange = e => { PSG.filtre = e.target.value; recharger(); };
+  $('#psg-q', c).onkeydown = e => { if (e.key === 'Enter') { PSG.q = e.target.value; recharger(); } };
+  $$('[data-dest]', c).forEach(s => s.onchange = () => { const m = PSG.modifs[s.dataset.dest] = PSG.modifs[s.dataset.dest] || {}; m.destination = s.value; const cb = $(`[data-cib="${s.dataset.dest}"]`, c); if (cb && !['PASSE', 'REDOUBLE'].includes(s.value)) cb.disabled = true; });
+  $$('[data-cib]', c).forEach(s => s.onchange = () => { const m = PSG.modifs[s.dataset.cib] = PSG.modifs[s.dataset.cib] || {}; m.cible = s.value; });
+  if ($('#psg-save', c)) $('#psg-save', c).onclick = () => {
+    const L = Object.entries(PSG.modifs).map(([id, m]) => { const l = E.lignes.find(x => x.id === id); return { id, destination: m.destination || l.destination, cible: m.cible }; });
+    if (!L.length) return toast('Aucune modification.'); appel('passageModifier', { lignes: L });
+  };
+  if ($('#psg-cl', c)) $('#psg-cl', c).onclick = () => { const classes = {}, dates = {}; $$('[data-cc]', c).forEach(s => classes[s.dataset.cc] = s.value); $$('[data-dt]', c).forEach(i => dates[i.dataset.dt] = i.value); appel('passageModifier', { classes, dates }); };
+  if ($('#psg-env', c)) $('#psg-env', c).onclick = () => appel('passageSoumettre', {}, 'Envoyer le tableau des passages au directeur pour validation ?');
+  if ($('#psg-val', c)) $('#psg-val', c).onclick = () => appel('passageValider', { decision: 'VALIDER' }, 'Valider le tableau des passages ? L\'administrateur pourra ensuite faire la bascule.');
+  if ($('#psg-ren', c)) $('#psg-ren', c).onclick = () => { const r = prompt('Que faut-il corriger ?'); if (r) appel('passageValider', { decision: 'RENVOYER', remarque: r }); };
+  $('#psg-imp', c).onclick = () => {
+    const grp = {}; E.lignes.forEach(l => (grp[l.classe] = grp[l.classe] || []).push(l));
+    imprimer(Object.keys(grp).map(k => `<div class="page">${entete('TABLEAU DES PASSAGES ' + E.annee + ' → ' + E.cible + ' — ' + k)}
+      <table><thead><tr><th>N°</th><th>Nom et prénoms</th><th>Moy. ann.</th><th>Décision du conseil</th><th>Destination</th><th>Classe ${esc(E.cible)}</th></tr></thead><tbody>
+      ${grp[k].map((l, i) => `<tr><td>${i + 1}</td><td>${esc(l.nom)} ${esc(l.prenoms)}</td><td>${l.moyenne === null ? '' : n2(l.moyenne)}</td><td>${esc(l.decision || '')}</td><td>${esc(D[l.destination])}</td><td>${esc(l.cible || '')}</td></tr>`).join('')}</tbody></table>
+      <div class="signatures"><div>L'Administrateur</div><div>Le Chef d'établissement</div></div></div>`).join(''), 'Tableau des passages ' + E.annee);
+  };
+  $('#psg-sim', c).onclick = async () => {
+    const z = $('#psg-simu', c); z.innerHTML = '<div class="chargement">Simulation…</div>';
+    try { const S2 = await api('passageSimuler');
+      z.innerHTML = `<div class="info">Rien n'est modifié : voici ce que fera la bascule vers <b>${esc(S2.cible)}</b>.</div>
+        <div class="kpis">${Object.keys(D).filter(k => S2.compte[k]).map(k => `<div class="kpi"><div class="lib">${esc(D[k])}</div><div class="val">${S2.compte[k]}</div></div>`).join('')}
+          <div class="kpi rouge"><div class="lib">Arriérés reportés (${S2.arrieres.nb} élèves)</div><div class="val">${fcfa(S2.arrieres.total)}</div></div></div>
+        <div class="table-defil"><table><thead><tr><th>Classe</th><th class="n">Effectif ${esc(S2.annee)}</th><th class="n">Restent</th><th class="n">Partent</th><th class="n">Arrivent</th><th class="n">Effectif ${esc(S2.cible)}</th></tr></thead><tbody>
+        ${S2.parClasse.map(k => `<tr><td>${esc(k.classe)}${k.examen ? ' <span class="aide">(examen)</span>' : ''}</td><td class="n">${k.avant}</td><td class="n">${k.restent}</td><td class="n">${k.partent}</td><td class="n">${k.arrivent}</td><td class="n"><b>${k.apres}</b></td></tr>`).join('')}</tbody></table></div>
+        <p class="aide">Les nouveaux élèves de 1re année s'ajouteront ensuite par les inscriptions.</p>
+        <p><b>Remis à zéro</b> (conservé dans l'archive) : ${S2.tables.map(t => esc(t.libelle) + ' (' + t.lignes + ')').join(', ') || 'rien'}.</p>
+        <p><b>Conservé</b> : personnel, comptes, élèves dans leur nouvelle classe, codes des parents, emplois du temps, matières et coefficients, tarifs (${S2.tarifs} date(s) limite décalée(s) d'un an).</p>
+        <p><b>Nouvelles dates</b> : rentrée ${fr(S2.dates.rentree)}, semestre 1 jusqu'au ${fr(S2.dates.s1_fin)}, semestre 2 du ${fr(S2.dates.s2_debut)} au ${fr(S2.dates.s2_fin)}.</p>`;
+    } catch (e) { z.innerHTML = `<div class="erreur">${esc(e.message)}</div>`; }
+  };
+  if ($('#psg-go', c)) $('#psg-go', c).onclick = async () => {
+    const v = $('#psg-conf', c).value.trim(); if (v.toUpperCase() !== 'PASSAGE ' + E.cible) return toast('Tapez exactement : PASSAGE ' + E.cible, 6000);
+    if (!confirm('Dernière confirmation : basculer l\'application vers ' + E.cible + ' ?')) return;
+    const b = $('#psg-go', c); b.disabled = true; b.textContent = 'Archivage et bascule en cours… ne fermez pas la page';
+    try { const r = await api('passageBasculer', { confirmation: v }); alert(r.message + '\n\nL\'archive de ' + E.annee + ' est dans votre Google Drive.'); stock.effacer('vue_eleves'); location.reload(); }
+    catch (e) { toast(e.message, 10000); b.disabled = false; b.textContent = '🎓 Basculer vers ' + E.cible; }
+  };
+}
+
+/* ---------- années précédentes (archives, lecture seule) ---------- */
+const ARC = { annee: '', q: '', res: null };
+async function pageArchives(c) {
+  c.innerHTML = '<div class="chargement">Chargement…</div>';
+  let L; try { L = (await api('archives')).archives; } catch (e) { c.innerHTML = `<div class="erreur">${esc(e.message)}</div>`; return; }
+  if (!L.length) { c.innerHTML = '<h1>Années précédentes</h1><div class="info">Aucune année archivée pour l\'instant. L\'archive est créée automatiquement lors du passage à l\'année suivante (Administration → Passage d\'année).</div>'; return; }
+  if (!L.some(a => a.annee === ARC.annee)) { ARC.annee = L[0].annee; ARC.res = null; }
+  const A0 = L.find(a => a.annee === ARC.annee), r = role();
+  c.innerHTML = `<h1>Années précédentes</h1><p class="aide">Consultation en lecture seule des années archivées : retrouvez un ancien élève, son bulletin ou ses reçus.</p>
+    <div class="ligne"><div style="flex:0 0 auto"><select id="arc-a">${L.map(a => `<option ${a.annee === ARC.annee ? 'selected' : ''}>${esc(a.annee)}</option>`).join('')}</select></div>
+      <div><input id="arc-q" placeholder="Nom, prénoms ou matricule" value="${esc(ARC.q)}"></div><div style="flex:0 0 auto"><button class="btn" id="arc-go">Rechercher</button></div></div>
+    ${A0.url ? `<p class="aide">Archive du ${fr(A0.le)} (${A0.nb} élèves) — <a href="${esc(A0.url)}" target="_blank" rel="noopener">ouvrir la copie complète dans Google Drive</a>.</p>` : ''}
+    <div id="arc-res">${ARC.res ? '' : '<p class="aide">Tapez au moins 2 lettres puis « Rechercher ».</p>'}</div>`;
+  const dessiner = () => { const z = $('#arc-res', c), E = ARC.res;
+    z.innerHTML = `<div class="table-defil"><table><thead><tr><th>Élève</th><th>Matricule</th><th>Classe ${esc(ARC.annee)}</th><th>Situation</th><th></th></tr></thead><tbody>
+      ${E.map(e => `<tr><td>${esc(e.nom)} ${esc(e.prenoms)}</td><td>${esc(e.matricule || '')}</td><td>${esc(e.classe)}</td><td>${esc(e.situation || '')}</td>
+        <td style="white-space:nowrap">${r !== 'comptable' ? e.bulletins.map(s => `<button class="btn petit" data-ab="${e.id}|${s}">📄 Bulletin S${s}</button>`).join(' ') : ''} ${['admin', 'directeur', 'comptable'].includes(r) ? `<button class="btn petit secondaire" data-af="${e.id}">💰 Frais</button>` : ''}</td></tr>
+        <tr hidden id="af-${e.id}"><td colspan="5"></td></tr>`).join('') || '<tr><td colspan="5" class="vide">Aucun élève trouvé.</td></tr>'}</tbody></table></div>`;
+    const avecAnnee = (params, fn) => { const sv = S.session.params; S.session.params = Object.assign({}, sv, params); try { fn(); } finally { S.session.params = sv; } };
+    $$('[data-ab]', z).forEach(b => b.onclick = async () => { const [id, sem] = b.dataset.ab.split('|');
+      try { const R = await api('archiveBulletin', { annee: ARC.annee, id, semestre: +sem }); const e = R.K.eleves[0];
+        EL.photos[e.id] = R.photo || EL.photos[e.id]; EL.donnees = EL.donnees || { classes: [] }; if (!EL.donnees.classes.some(k => k.code === R.classe.code)) EL.donnees.classes.push(R.classe);
+        await preparerQR(); avecAnnee(R.params, () => imprimer(bulletinHtml(R.K, e), `Bulletin S${sem} ${ARC.annee} - ${e.nom} ${e.prenoms}`));
+      } catch (er) { toast(er.message, 7000); } });
+    $$('[data-af]', z).forEach(b => b.onclick = async () => { const tr = $('#af-' + b.dataset.af, z); if (!tr.hidden) { tr.hidden = true; return; }
+      try { const F = await api('archiveFrais', { annee: ARC.annee, id: b.dataset.af }), Sx = F.situation;
+        tr.hidden = false; tr.firstElementChild.innerHTML = `<div class="psg-frais">Dû : <b>${fcfa(Sx.du)}</b> · Payé : <b>${fcfa(Sx.paye)}</b> · Reste : <b>${fcfa(Sx.reste)}</b>
+          ${F.recus.map(x => `<div class="par-note"><span>Reçu ${esc(x.numero)} <i>${fr(x.date)}</i>${x.statut !== 'VALIDE' ? ' <span class="badge A">annulé</span>' : ''}</span><span><b>${fcfa(x.total)}</b> <button class="btn petit secondaire" data-ar="${esc(x.numero)}">🖨</button></span></div>`).join('') || '<p class="aide">Aucun reçu.</p>'}</div>`;
+        $$('[data-ar]', tr).forEach(k => k.onclick = async () => { try { const R = await api('archiveRecu', { annee: ARC.annee, numero: k.dataset.ar }); avecAnnee({ annee: R.annee }, () => imprimerRecu(R)); } catch (er) { toast(er.message, 6000); } });
+      } catch (er) { toast(er.message, 6000); } });
+  };
+  const chercher = async () => { ARC.q = $('#arc-q', c).value.trim(); $('#arc-res', c).innerHTML = '<div class="chargement">Recherche dans l\'archive…</div>';
+    try { ARC.res = (await api('archiveEleves', { annee: ARC.annee, q: ARC.q })).eleves; dessiner(); } catch (e) { $('#arc-res', c).innerHTML = `<div class="erreur">${esc(e.message)}</div>`; } };
+  $('#arc-a', c).onchange = e => { ARC.annee = e.target.value; ARC.res = null; pageArchives(c); };
+  $('#arc-go', c).onclick = chercher; $('#arc-q', c).onkeydown = e => { if (e.key === 'Enter') chercher(); };
+  if (ARC.res) dessiner();
+}
+
+
+/* ================= ACCUEIL VIVANT (v3.3) : vitrine, comptes à rebours, ma journée ================= */
+const AV = { data: null, t: 0, tour: 0 };
+const cadreHonneur = (photo, nom, grand) => `<div class="medaille${grand ? ' grand' : ''}"><div class="medaille-photo" style="${photo ? `background-image:url('${photo}')` : ''}">${photo ? '' : esc(initiales(nom))}</div><span class="medaille-ruban">🏅</span></div>`;
+async function accueilVivant(z) {
+  if (!z) return;
+  if (!AV.data || Date.now() - AV.t > 10 * 60000) {
+    try { AV.data = await api('accueilVivant'); AV.t = Date.now(); cacheVue('av', AV.data); }
+    catch (e) { const c = cacheVue('av'); if (!c) return; AV.data = c.v; }
+  }
+  if (!z.isConnected) return;
+  const D = AV.data, J = D.journee; stock.ecrire('resp_signal', !!J.responsableSignal);
+  const vit = D.vitrine || [];
+  let h = '';
+  if (vit.length) h += `<div class="vitrine" id="vitrine">${vit.map((v, i) => `<div class="vitrine-carte ${v.eleve ? 'eleve' : 'agent'} ${i ? '' : 'active'}">
+      ${cadreHonneur(v.photo, v.nom, true)}<div class="vitrine-txt"><div class="vitrine-titre">${v.eleve ? '🏆' : '🏅'} ${esc(v.titre)}${v.rang ? ` · ${v.rang === 1 ? '1er' : v.rang + 'e'}` : ''}</div>
+      <div class="vitrine-nom">${esc(v.nom)}</div><div class="vitrine-sous">${esc(v.sous || '')}</div>${v.motivation ? `<div class="vitrine-mot">« ${esc(v.motivation)} »</div>` : ''}</div></div>`).join('')}
+      ${vit.length > 1 ? `<div class="vitrine-points">${vit.map((_, i) => `<i class="${i ? '' : 'on'}"></i>`).join('')}</div>` : ''}</div>`;
+  const reb = D.rebours || [];
+  if (reb.length) h += `<div class="rebours">${reb.map(r => `<div class="rebours-item"><span>${r.icone}</span><b>${r.jours === 0 ? 'Aujourd\'hui' : r.jours === 1 ? 'Demain' : 'J-' + r.jours}</b><small>${esc(r.libelle)}</small></div>`).join('')}</div>`;
+  const cours = J.cours || [];
+  h += `<div class="ma-journee"><div class="mj-titre">☀ Ma journée</div><div class="mj-lignes">
+    <div class="mj-l">${J.arrivee ? `✅ Arrivée pointée à <b>${esc(J.arrivee)}</b>` : J.jourDeCours ? '⏱ Arrivée pas encore pointée aujourd\'hui' : '🌴 Pas de cours aujourd\'hui'}</div>
+    ${cours.map(c => `<div class="mj-l">${c.appel ? '✅' : '📋'} <b>${esc(c.horaire)}</b> ${esc(c.matiere || '')} · ${esc(c.classe)}${c.salle ? ' · ' + esc(c.salle) : ''} ${c.appel ? '<span class="aide">appel fait</span>' : '<a href="#/appel">faire l\'appel</a>'}</div>`).join('')}
+    ${J.signalements ? `<div class="mj-l">📍 <a href="#/signalements">${J.signalements} signalement(s) à traiter</a></div>` : ''}
+    ${ACT.donnees && ACT.donnees.actions.length ? `<div class="mj-l">🔔 <a href="#/actions">${ACT.donnees.actions.length} action(s) en attente</a></div>` : ''}</div></div>`;
+  z.innerHTML = h;
+  const vz = $('#vitrine', z);
+  if (vz && vit.length > 1) {
+    const tour = ++AV.tour; let k = 0; const cartes = $$('.vitrine-carte', vz), pts = $$('.vitrine-points i', vz);
+    const montrer = j => { k = (j + cartes.length) % cartes.length; cartes.forEach((x, i) => x.classList.toggle('active', i === k)); pts.forEach((x, i) => x.classList.toggle('on', i === k)); };
+    pts.forEach((p, i) => p.onclick = () => montrer(i));
+    const t = setInterval(() => { if (tour !== AV.tour || !vz.isConnected) return clearInterval(t); montrer(k + 1); }, 5000);
+  }
+  if (vz && !stock.lire('confettis_' + D.date, false)) { stock.ecrire('confettis_' + D.date, true); confettis(vz); }
+}
+function confettis(el) {
+  const c = ['#F28C28', '#1E7B3A', '#F5C518', '#2C6FB7', '#C62828'];
+  for (let i = 0; i < 40; i++) { const s = document.createElement('i'); s.className = 'confetti'; s.style.left = Math.random() * 100 + '%'; s.style.background = c[i % c.length];
+    s.style.animationDelay = (Math.random() * .8) + 's'; s.style.transform = `rotate(${Math.random() * 360}deg)`; el.appendChild(s); setTimeout(() => s.remove(), 3200); }
+}
+
+/* ================= TABLEAU D'HONNEUR (élèves) ================= */
+const HN = { sem: 0, exclus: [], prop: null };
+async function pageHonneur(c) {
+  c.innerHTML = '<div class="chargement">Chargement…</div>';
+  const H = await api('honneur', HN.sem ? { semestre: HN.sem } : {}); HN.sem = H.semestre;
+  const R = H.reglages, parNiv = {}; H.publie.forEach(x => (parNiv[x.libelle] = parNiv[x.libelle] || []).push(x));
+  const direction = ['directeur', 'censeur', 'admin'].includes(role());
+  c.innerHTML = `<h1>🏆 Tableau d'honneur</h1>
+    <div class="ligne"><div style="flex:0 0 auto"><select id="hn-s">${[1, 2].map(k => `<option value="${k}" ${k === H.semestre ? 'selected' : ''}>Semestre ${k}</option>`).join('')}</select></div>
+      <div class="aide" style="align-self:center">Conditions : moyenne générale ≥ <b>${nb(R.seuilMoy)}</b> et chaque unité (UF1, UF2, UF3 / UEP, UEG) ≥ <b>${nb(R.seuilUnite)}</b>, sans sanction · les <b>${R.nb}</b> premiers de chaque niveau.</div></div>
+    ${H.publie.length ? `<div class="actions"><button class="btn secondaire" id="hn-imp">🖨 Imprimer le tableau d'honneur</button></div>
+      ${Object.keys(parNiv).map(n => `<h2>${esc(n)}</h2><div class="honneur-grille">${parNiv[n].map(x => `<div class="honneur-carte">${cadreHonneur(x.photo, x.nom)}
+        <div><div class="honneur-rang">${x.rang === 1 ? '🥇 1er' : x.rang === 2 ? '🥈 2e' : '🥉 ' + x.rang + 'e'}</div><b>${esc(x.nom)}</b><div class="aide">${esc(x.classe)} · moyenne <b>${n2(x.moy)}</b></div>
+        <div class="aide">${Object.entries(x.unites || {}).map(([k, v]) => esc(k) + ' ' + n2(v)).join(' · ')}</div><button class="btn petit secondaire" data-cert="${esc(x.id)}">🏅 Certificat</button></div></div>`).join('')}</div>`).join('')}`
+      : `<div class="info">Le tableau d'honneur du semestre ${H.semestre} n'est pas encore publié.</div>`}
+    ${direction ? `<div class="carte"><h2 style="margin-top:0">Propositions${H.peutValider ? ' et publication' : ''}</h2>
+      <p class="aide">L'application calcule, niveau par niveau, les élèves qui remplissent les conditions. ${H.peutValider ? 'Vous pouvez écarter un élève : le suivant prend sa place. Rien n\'est publié sans votre clic.' : 'Seul le directeur publie.'}</p>
+      <button class="btn" id="hn-calc">🔍 Calculer les propositions</button><div id="hn-prop"></div></div>` : ''}
+    ${H.peutRegler ? `<details class="carte"><summary><b>⚙ Réglages de la reconnaissance</b></summary>
+      <div class="ligne"><div><label>Seuil moyenne générale</label><input id="rg-m" type="number" step="0.25" min="0" max="20" value="${R.seuilMoy}"></div><div><label>Seuil de chaque unité</label><input id="rg-u" type="number" step="0.25" min="0" max="20" value="${R.seuilUnite}"></div>
+        <div><label>Élèves par niveau</label><input id="rg-n" type="number" min="1" max="10" value="${R.nb}"></div><div><label>Jours d'affichage à l'accueil</label><input id="rg-j" type="number" min="1" max="31" value="${R.jours}"></div></div>
+      <div class="ligne"><div><label>Heure de prise de service (personnel administratif)</label><input id="rg-h" type="time" value="${esc(R.heure)}"></div><div><label>Date des examens (compte à rebours)</label><input id="rg-e" type="date" value="${esc(R.examens || '')}"></div></div>
+      <button class="btn secondaire" id="rg-ok">Enregistrer les réglages</button></details>` : ''}`;
+  $('#hn-s', c).onchange = e => { HN.sem = +e.target.value; HN.prop = null; HN.exclus = []; pageHonneur(c); };
+  if ($('#hn-imp', c)) $('#hn-imp', c).onclick = () => imprimer(`<div class="page">${entete('TABLEAU D\'HONNEUR — SEMESTRE ' + H.semestre)}${Object.keys(parNiv).map(n => `<h3 class="hn-niv">${esc(n)}</h3><div class="hn-imp">${parNiv[n].map(x => `<div class="hn-imp-c">${cadreHonneur(x.photo, x.nom)}<b>${esc(x.nom)}</b><span>${x.rang === 1 ? '1er' : x.rang + 'e'} · ${esc(x.classe)} · ${n2(x.moy)}</span></div>`).join('')}</div>`).join('')}
+    <p style="margin-top:14px;text-align:center"><i>Félicitations à nos lauréats pour leur travail et leur discipline !</i></p></div>`, 'Tableau d\'honneur S' + H.semestre);
+  $$('[data-cert]', c).forEach(b => b.onclick = () => { const x = H.publie.find(y => y.id === b.dataset.cert);
+    certificat('CERTIFICAT DE MÉRITE', x.nom, `inscrit(e) en <b>${esc(x.classe)}</b>, est classé(e) <b>${x.rang === 1 ? '1er' : x.rang + 'e'}</b> au tableau d'honneur de la <b>${esc(x.libelle)}</b> pour le semestre ${H.semestre} de l'année scolaire ${esc(H.annee)}, avec une moyenne générale de <b>${n2(x.moy)}/20</b>.`, x.photo); });
+  if ($('#rg-ok', c)) $('#rg-ok', c).onclick = async () => { try { toast((await api('reglagesReco', { reglages: { seuilMoy: $('#rg-m').value, seuilUnite: $('#rg-u').value, nb: $('#rg-n').value, jours: $('#rg-j').value, heure: $('#rg-h').value, examens: $('#rg-e').value } })).message); AV.data = null; pageHonneur(c); } catch (e) { toast(e.message, 6000); } };
+  const dessinerProp = () => { const z = $('#hn-prop', c), P = HN.prop;
+    z.innerHTML = P.map(N => `<h3>${esc(N.libelle)} <span class="aide">${N.classes.join(', ')} · ${N.nbEligibles} élève(s) remplissent les conditions</span></h3>
+      ${N.retenus.length ? N.retenus.map((x, i) => `<div class="par-note"><span>${i + 1}. <b>${esc(x.nom)} ${esc(x.prenoms)}</b> <i>${esc(x.classe)}</i> · ${n2(x.moy)} <span class="aide">${Object.entries(x.unites).map(([k, v]) => k + ' ' + n2(v)).join(' · ')}</span></span>${H.peutValider ? `<button class="btn petit secondaire" data-ex="${x.id}">Écarter</button>` : ''}</div>`).join('') : '<p class="aide">Aucun élève ne remplit les conditions.</p>'}`).join('')
+      + (HN.exclus.length ? `<p class="aide">${HN.exclus.length} élève(s) écarté(s). <a href="#" id="hn-raz">Annuler</a></p>` : '')
+      + (H.peutValider ? `<div class="actions"><button class="btn vert" id="hn-pub">🏆 Publier le tableau d'honneur</button></div><p class="aide">La publication affiche les photos à l'accueil pendant ${R.jours} jours et le jour du conseil de chaque classe, crée une annonce et prévient les parents abonnés.</p>` : '');
+    $$('[data-ex]', z).forEach(b => b.onclick = () => { HN.exclus.push(b.dataset.ex); calc(); });
+    if ($('#hn-raz', z)) $('#hn-raz', z).onclick = e => { e.preventDefault(); HN.exclus = []; calc(); };
+    if ($('#hn-pub', z)) $('#hn-pub', z).onclick = async () => { if (!confirm('Publier le tableau d\'honneur du semestre ' + H.semestre + ' ?')) return;
+      try { toast((await api('publierHonneur', { semestre: H.semestre, exclus: HN.exclus })).message, 6000); HN.prop = null; HN.exclus = []; AV.data = null; pageHonneur(c); } catch (e) { toast(e.message, 7000); } };
+  };
+  const calc = async () => { $('#hn-prop', c).innerHTML = '<div class="chargement">Calcul des moyennes de toutes les classes…</div>';
+    try { HN.prop = (await api('honneur', { semestre: H.semestre, propositions: true, exclus: HN.exclus })).propositions; dessinerProp(); } catch (e) { $('#hn-prop', c).innerHTML = `<div class="erreur">${esc(e.message)}</div>`; } };
+  if ($('#hn-calc', c)) { $('#hn-calc', c).onclick = calc; if (HN.prop) dessinerProp(); }
+}
+function certificat(titre, nom, texte, photo) {
+  const P = S.session.params;
+  imprimer(`<div class="page paysage certif"><div class="certif-cadre">
+    <div class="certif-haut"><img src="medias/ministere.png" alt=""><div><b>${esc(String(P.etablissement).toUpperCase())}</b><br><span>Année scolaire ${esc(P.annee)}</span></div><img src="${logoNoir()}" alt=""></div>
+    <div class="certif-titre">${esc(titre)}</div>
+    <div class="certif-corps">${photo ? `<div class="certif-photo" style="background-image:url('${photo}')"></div>` : ''}<div><p>Le Chef d'établissement certifie que</p><div class="certif-nom">${esc(nom)}</div><p>${texte}</p></div></div>
+    <div class="certif-bas"><span>${esc(lieuLe())} ${fr(dateLocale())}</span><span>Le Chef d'établissement<br><br><br>${esc(P.directeur || '')}</span></div></div></div>`, titre + ' ' + nom);
+}
+
+/* ================= AGENT DU MOIS (personnel) ================= */
+const AGM = { mois: '' };
+async function pageAgentMois(c) {
+  c.innerHTML = '<div class="chargement">Chargement…</div>';
+  const G = await api('agentMois', AGM.mois ? { mois: AGM.mois } : {}); AGM.mois = G.mois;
+  const P = G.publies, dernier = P.length ? P[0].mois : '', actuels = P.filter(x => x.mois === dernier), anciens = P.filter(x => x.mois !== dernier);
+  const lib = t => t === 'AGENT_ENS' ? 'Enseignant du mois' : 'Agent administratif du mois';
+  const carte = (x, grand) => `<div class="agent-carte${grand ? ' grand' : ''}">${cadreHonneur(x.photo, x.nom, grand)}<div><div class="vitrine-titre">🏅 ${lib(x.type)} — ${esc(x.moisTexte)}</div><div class="vitrine-nom">${esc(x.nom)}</div><div class="aide">${esc(x.fonction || '')}</div>
+    ${x.motivation ? `<div class="vitrine-mot">« ${esc(x.motivation)} »</div>` : ''}<button class="btn petit secondaire" data-certa="${esc(x.type + '|' + x.mois)}">🏅 Certificat</button></div></div>`;
+  c.innerHTML = `<h1>🏅 Agent du mois</h1>
+    ${actuels.length ? `<div class="agents-actuels">${actuels.map(x => carte(x, true)).join('')}</div>` : '<div class="info">Aucun agent du mois publié pour l\'instant.</div>'}
+    ${anciens.length ? `<h2>Mois précédents</h2>${[...new Set(anciens.map(x => x.mois))].map(m => `<div class="agents-mois"><b>${esc(anciens.find(x => x.mois === m).moisTexte.replace(/^./, x => x.toUpperCase()))}</b>${anciens.filter(x => x.mois === m).map(x => carte(x)).join('')}</div>`).join('')}` : ''}
+    ${G.peutChoisir ? `<div class="carte"><h2 style="margin-top:0">Choisir les lauréats</h2>
+      <div class="ligne"><div style="flex:0 0 auto"><select id="ag-m">${G.moisPossibles.map(m => `<option value="${m}" ${m === G.mois ? 'selected' : ''}>${esc(m.split('-').reverse().join('/'))}</option>`).join('')}</select></div>
+      <div class="aide" style="align-self:center">Propositions calculées d'après le pointage, les appels et les notes. La direction ne concourt pas.</div></div>
+      ${[['ens', 'Enseignant du mois', G.candidats.ens, true], ['adm', 'Agent administratif du mois', G.candidats.adm, false]].map(([k, t, L, ens]) => `<h3>${t}</h3>
+        ${L.map((x, i) => `<label class="ag-cand"><input type="radio" name="ag-${k}" value="${esc(x.matricule)}" ${i ? '' : ''}><span><b>${esc(x.nom)}</b> <span class="aide">${esc(x.fonction)}</span><br><span class="aide">${esc(x.texte)}</span></span><b class="ag-score">${x.score}</b></label>`).join('') || '<p class="aide">Pas assez de données ce mois-ci (pointages, arrivées).</p>'}
+        <label class="ag-cand"><input type="radio" name="ag-${k}" value="__autre"><span>Autre : <select id="ag-${k}-autre"><option value="">— choisir —</option>${G.agents.filter(a => a.ens === ens).map(a => `<option value="${esc(a.matricule)}">${esc(a.nom)}${a.fonction ? ' — ' + esc(a.fonction) : ''}</option>`).join('')}</select></span></label>
+        <textarea id="ag-${k}-mot" rows="2" maxlength="300" placeholder="Mot de motivation (affiché avec la photo)"></textarea>`).join('')}
+      <div class="actions"><button class="btn vert" id="ag-pub">🏅 Publier</button></div><p class="aide">Vous pouvez publier une seule des deux distinctions. La photo décorée s'affiche à l'accueil, une annonce part à tout le personnel et le lauréat reçoit une notification.</p></div>` : ''}`;
+  $$('[data-certa]', c).forEach(b => b.onclick = () => { const [t, m] = b.dataset.certa.split('|'), x = P.find(y => y.type === t && y.mois === m);
+    certificat('CERTIFICAT DE RECONNAISSANCE', x.nom, `${esc(x.fonction || '')}, est distingué(e) <b>${lib(x.type)}</b> pour le mois de <b>${esc(x.moisTexte)}</b>.${x.motivation ? '<br><i>« ' + esc(x.motivation) + ' »</i>' : ''}<br>Avec nos félicitations et nos remerciements pour son engagement.`, x.photo); });
+  if (!G.peutChoisir) return;
+  $('#ag-m', c).onchange = e => { AGM.mois = e.target.value; pageAgentMois(c); };
+  $('#ag-pub', c).onclick = async () => {
+    const q = { mois: G.mois };
+    for (const k of ['ens', 'adm']) { const r = $(`input[name="ag-${k}"]:checked`, c); if (!r) continue; const m = r.value === '__autre' ? $(`#ag-${k}-autre`, c).value : r.value; if (!m) continue; q[k] = { matricule: m, motivation: $(`#ag-${k}-mot`, c).value }; }
+    if (!q.ens && !q.adm) return toast('Choisissez au moins un lauréat.');
+    if (!confirm('Publier la distinction du mois de ' + G.moisTexte + ' ?')) return;
+    try { toast((await api('choisirAgentMois', q)).message, 6000); AV.data = null; pageAgentMois(c); } catch (e) { toast(e.message, 7000); }
+  };
+}
+
+/* ================= SIGNALEMENTS PAR QR CODE ================= */
+const SGN = { statut: 'OUVERTS', cat: '', lieu: '' };
+const urlSignal = j => location.origin + location.pathname + '#/signaler/' + j;
+function appareilId() { let a = stock.lire('appareil_id', ''); if (!a) { a = Math.random().toString(36).slice(2) + Date.now().toString(36); stock.ecrire('appareil_id', a); } return a; }
+async function pageSignalPublic(type, jeton) {
+  $('#entete').hidden = true; $('#menu').hidden = true;
+  const c0 = $('#contenu'), c = c0.cloneNode(false); c0.replaceWith(c); c.style.maxWidth = '560px'; c.style.padding = '16px';
+  c.innerHTML = '<div class="chargement">Chargement…</div>';
+  const suivi = async (code) => {
+    c.innerHTML = `<div class="sig-pub"><h1>🔎 Suivre un signalement</h1><form id="sv"><label>Code de suivi</label><input name="code" value="${esc(code || '')}" placeholder="SIG-XXXXXX" required style="text-transform:uppercase"><div id="msg"></div><button class="btn large" style="margin-top:12px">Voir où il en est</button></form><div id="sv-r"></div>${S.session ? '' : '<p class="aide" style="text-align:center;margin-top:20px"><a href="#/">Accueil du site</a></p>'}</div>`;
+    const go = async v => { try { const r = await api('suiviSignalement', { code: v, appareil: appareilId() });
+        $('#sv-r').innerHTML = `<div class="carte"><b>${esc(r.code)}</b> — ${esc(r.lieu)} · ${esc(r.categorie)}<p>Statut : <span class="badge ${r.statut === 'RÉSOLU' ? 'P' : 'attente'}">${esc(r.statut)}</span> <span class="aide">envoyé le ${esc(String(r.cree_le).slice(0, 16))}</span></p>${r.reponse ? `<div class="info">Réponse de l'établissement : ${esc(r.reponse)}</div>` : ''}</div>`;
+      } catch (e) { $('#msg').innerHTML = `<div class="erreur">${esc(e.message)}</div>`; } };
+    $('#sv').onsubmit = e => { e.preventDefault(); $('#msg').innerHTML = ''; go(e.target.code.value.trim()); };
+    if (code) go(code);
+  };
+  if (type === 'suivi') return suivi(jeton);
+  let L; try { L = await api('signalementLieu', { jeton }); if (!c.isConnected) return; } catch (e) { if (!c.isConnected) return; c.innerHTML = `<div class="sig-pub"><h1>📍 Signaler un problème</h1><div class="erreur">${esc(e.message)}</div></div>`; return; }
+  let photo = '';
+  c.innerHTML = `<div class="sig-pub"><div class="sig-entete"><img src="${logoCouleur()}" alt=""><div><b>${esc(L.etab)}</b><br><span>📍 ${esc(L.lieu)}</span></div></div>
+    <h1>Signaler un problème</h1><p class="aide">Votre signalement est <b>anonyme</b> : personne ne saura qui l'a envoyé, sauf si vous choisissez de donner votre nom.</p>
+    <form id="sg"><label>Type de problème</label><div class="sig-cats">${Object.entries(L.categories).map(([k, v]) => `<label><input type="radio" name="cat" value="${k}" required><span>${esc(v)}</span></label>`).join('')}</div>
+      <label>Décrivez le problème</label><textarea name="desc" rows="4" maxlength="800" required placeholder="Ex. : le robinet du fond fuit depuis ce matin."></textarea>
+      <label>Photo (facultatif)</label><input type="file" id="sg-ph" accept="image/*" capture="environment"><div id="sg-ph-v"></div>
+      <label class="case"><input type="checkbox" name="urg"> C'est urgent (danger, blessure, risque électrique…)</label>
+      <label class="case"><input type="checkbox" name="id" id="sg-id"> Je souhaite donner mon identité (pour être recontacté)</label>
+      <div id="sg-ident" hidden><label>Nom et prénoms</label><input name="nom" maxlength="80"><label>Je suis</label><select name="qual"><option>Élève</option><option>Personnel</option><option>Parent</option><option>Visiteur</option></select><input name="cls" placeholder="Classe (si élève)" maxlength="30"><label>Téléphone</label><input name="tel" type="tel" maxlength="20"></div>
+      <div id="msg"></div><button class="btn large" style="margin-top:14px">📨 Envoyer le signalement</button></form>
+    <p class="aide" style="text-align:center;margin-top:16px"><a href="#/suivi">J'ai déjà un code de suivi</a></p></div>`;
+  $('#sg-id').onchange = e => { $('#sg-ident').hidden = !e.target.checked; };
+  $('#sg-ph').onchange = async e => { const f = e.target.files[0]; if (!f) return; try { photo = await reduireDocument(f); $('#sg-ph-v').innerHTML = `<img src="${photo}" style="max-width:160px;border-radius:8px;margin-top:6px">`; } catch (er) { toast(er.message); photo = ''; } };
+  $('#sg').onsubmit = async e => { e.preventDefault(); const f = e.target, b = $('button', f); b.disabled = true; $('#msg').innerHTML = '';
+    try { const r = await api('signaler', { jeton, categorie: f.cat.value, description: f.desc.value, urgence: f.urg.checked ? 'URGENT' : 'NORMAL', photo, appareil: appareilId(),
+        identite: f.id.checked, nom: f.nom.value, qualite: f.qual.value + (f.cls.value ? ' ' + f.cls.value : ''), telephone: f.tel.value });
+      c.innerHTML = `<div class="sig-pub" style="text-align:center"><div style="font-size:3rem">✅</div><h1>Merci !</h1><p>Votre signalement est enregistré et transmis au responsable.</p>
+        <div class="sig-code">${esc(r.code)}</div><p class="aide">Notez ce <b>code de suivi</b> (ou faites une capture d'écran) : il vous permet de voir la suite donnée, sans dire qui vous êtes.</p>
+        <a class="btn secondaire" href="#/suivi/${encodeURIComponent(r.code)}">Suivre ce signalement</a></div>`;
+    } catch (er) { $('#msg').innerHTML = `<div class="erreur">${esc(er.message)}</div>`; b.disabled = false; } };
+}
+async function pageSignalements(c) {
+  c.innerHTML = '<div class="chargement">Chargement…</div>';
+  const D = await api('signalements'), CAT = D.categories;
+  const L = D.liste.filter(x => (SGN.statut === 'OUVERTS' ? ['REÇU', 'EN COURS'].includes(x.statut) : !SGN.statut || x.statut === SGN.statut) && (!SGN.cat || x.categorie === SGN.cat) && (!SGN.lieu || x.lieu === SGN.lieu));
+  const lieux = [...new Set(D.liste.map(x => x.lieu))].sort();
+  c.innerHTML = `<h1>📍 Signalements</h1>
+    <div class="kpis"><div class="kpi rouge"><div class="lib">À traiter</div><div class="val">${D.stats.ouverts}</div></div><div class="kpi"><div class="lib">Total</div><div class="val">${D.stats.total}</div></div>
+      ${D.stats.delai !== null ? `<div class="kpi vert"><div class="lib">Délai moyen de résolution</div><div class="val">${D.stats.delai < 48 ? D.stats.delai + ' h' : Math.round(D.stats.delai / 24) + ' j'}</div></div>` : ''}</div>
+    <div class="ligne"><div><select id="sg-st"><option value="OUVERTS">À traiter</option><option value="">Tous</option>${D.statuts.map(s => `<option ${s === SGN.statut ? 'selected' : ''}>${s}</option>`).join('')}</select></div>
+      <div><select id="sg-cat"><option value="">Toutes les catégories</option>${Object.entries(CAT).map(([k, v]) => `<option value="${k}" ${k === SGN.cat ? 'selected' : ''}>${esc(v)}</option>`).join('')}</select></div>
+      <div><select id="sg-li"><option value="">Tous les lieux</option>${lieux.map(l => `<option ${l === SGN.lieu ? 'selected' : ''}>${esc(l)}</option>`).join('')}</select></div></div>
+    ${L.map(x => `<div class="carte sig-item ${x.urgence === 'URGENT' ? 'urgent' : ''} ${x.categorie === 'VIOLENCE' ? 'confid' : ''}">
+      <div class="sig-tete"><b>${esc(CAT[x.categorie] || x.categorie)}</b> · 📍 ${esc(x.lieu)} ${x.urgence === 'URGENT' ? '<span class="badge A">URGENT</span>' : ''} ${x.categorie === 'VIOLENCE' ? '<span class="badge C">🔒 confidentiel</span>' : ''}<span class="aide" style="margin-left:auto">${esc(String(x.cree_le).slice(0, 16).replace(/(\d+)-(\d+)-(\d+)/, '$3/$2/$1'))} · ${esc(x.code)}</span></div>
+      <p>${esc(x.description)}</p>${x.photo ? `<button class="btn petit secondaire" data-ph="${x.id}">📷 Voir la photo</button><div id="ph-${x.id}"></div>` : ''}
+      <p class="aide">${x.identite ? `👤 ${esc(x.identite.nom)} — ${esc(x.identite.qualite)}${x.identite.telephone ? ' · ☎ ' + esc(x.identite.telephone) : ''}` : '👤 Anonyme'}${x.responsableNom ? ' · confié à <b>' + esc(x.responsableNom) + '</b>' : ''}</p>
+      <div class="ligne"><div><label>Statut</label><select data-st="${x.id}">${D.statuts.map(s => `<option ${s === x.statut ? 'selected' : ''}>${s}</option>`).join('')}</select></div>
+        ${D.peutAttribuer ? `<div><label>Confier à</label><select data-re="${x.id}"><option value="">—</option>${D.personnel.map(p => `<option value="${p.matricule}" ${p.matricule === x.responsable ? 'selected' : ''}>${esc(p.nom)}</option>`).join('')}</select></div>` : ''}</div>
+      <label>Réponse (visible avec le code de suivi)</label><textarea data-rp="${x.id}" rows="2" maxlength="500">${esc(x.reponse || '')}</textarea>
+      <button class="btn petit" data-ok="${x.id}">Enregistrer</button></div>`).join('') || '<div class="info">Aucun signalement dans cette sélection.</div>'}
+    ${D.admin ? `<div class="carte"><h2 style="margin-top:0">Emplacements et QR codes</h2><p class="aide">Imprimez l'affiche de chaque emplacement et collez-la sur place. « Nouveau QR » rend l'ancienne affiche inutilisable.</p>
+      ${D.lieux.map(l => `<div class="par-note"><span><b>${esc(l.nom)}</b> ${l.actif ? '' : '<span class="badge A">désactivé</span>'} <span class="aide">${D.stats.parLieu[l.nom] || 0} signalement(s)</span></span>
+        <span style="white-space:nowrap"><button class="btn petit" data-aff="${l.id}">🖨 Affiche</button> <button class="btn petit secondaire" data-act="${l.id}">${l.actif ? 'Désactiver' : 'Activer'}</button> <button class="btn petit secondaire" data-nj="${l.id}">Nouveau QR</button></span></div>`).join('') || '<p class="aide">Aucun emplacement.</p>'}
+      <div class="ligne" style="margin-top:10px"><div><input id="li-nom" placeholder="Nouvel emplacement (ex. Toilettes filles, Atelier froid, Salle B3…)" maxlength="60"></div><div style="flex:0 0 auto"><button class="btn" id="li-aj">➕ Ajouter</button></div></div>
+      ${D.lieux.length ? '<button class="btn secondaire" id="li-tout">🖨 Imprimer toutes les affiches</button>' : ''}</div>
+      <div class="carte"><h2 style="margin-top:0">Responsables par catégorie</h2><p class="aide">Ils reçoivent une notification à chaque signalement de leur catégorie. Les signalements « Violence ou harcèlement » ne sont visibles que par la direction et la personne désignée ici (éducateur principal), pas par l'administrateur.</p>
+      ${Object.entries(CAT).map(([k, v]) => `<div class="ligne"><div style="flex:0 0 40%"><b>${esc(v)}</b></div><div><select data-rc="${k}"><option value="">— administrateur seulement —</option>${D.personnel.map(p => `<option value="${p.matricule}" ${(D.responsables[k] || [])[0] === p.matricule ? 'selected' : ''}>${esc(p.nom)}</option>`).join('')}</select></div></div>`).join('')}
+      <button class="btn secondaire" id="rc-ok">Enregistrer les responsables</button></div>` : ''}`;
+  const re = () => pageSignalements(c);
+  $('#sg-st', c).value = SGN.statut; $('#sg-st', c).onchange = e => { SGN.statut = e.target.value; re(); };
+  $('#sg-cat', c).onchange = e => { SGN.cat = e.target.value; re(); }; $('#sg-li', c).onchange = e => { SGN.lieu = e.target.value; re(); };
+  $$('[data-ph]', c).forEach(b => b.onclick = async () => { try { const r = await api('signalements', { photo: b.dataset.ph }); $('#ph-' + b.dataset.ph).innerHTML = r.photo ? `<img src="${r.photo}" style="max-width:100%;border-radius:8px;margin-top:6px">` : ''; b.remove(); } catch (e) { toast(e.message); } });
+  $$('[data-ok]', c).forEach(b => b.onclick = async () => { const id = b.dataset.ok, q = { id, statut: $(`[data-st="${id}"]`, c).value, reponse: $(`[data-rp="${id}"]`, c).value };
+    if ($(`[data-re="${id}"]`, c)) q.responsable = $(`[data-re="${id}"]`, c).value;
+    try { toast((await api('traiterSignalement', q)).message); AV.data = null; re(); } catch (e) { toast(e.message, 6000); } });
+  if (!D.admin) return;
+  const affiche = l => `<div class="page affiche-qr"><div class="aq-haut"><img src="${logoCouleur()}" alt=""><b>${esc(S.session.params.etablissement)}</b></div><div class="aq-lieu">📍 ${esc(l.nom)}</div>
+    <div class="aq-titre">Un problème ici ?</div><div class="aq-sous">Propreté, électricité, eau, mobilier, sécurité, violence…<br><b>Scannez et signalez-le. C'est anonyme.</b></div><div class="aq-qr">${qrSvg(urlSignal(l.jeton))}</div>
+    <div class="aq-bas">Vous pouvez donner votre nom si vous souhaitez être recontacté.</div></div>`;
+  $$('[data-aff]', c).forEach(b => b.onclick = async () => { await preparerQR(); imprimer(affiche(D.lieux.find(l => l.id === b.dataset.aff)), 'Affiche QR ' + D.lieux.find(l => l.id === b.dataset.aff).nom); });
+  if ($('#li-tout', c)) $('#li-tout', c).onclick = async () => { await preparerQR(); imprimer(D.lieux.filter(l => l.actif).map(affiche).join(''), 'Affiches QR signalements'); };
+  $$('[data-act]', c).forEach(b => b.onclick = async () => { const l = D.lieux.find(x => x.id === b.dataset.act); try { toast((await api('enregistrerLieu', { id: l.id, actif: !l.actif })).message); re(); } catch (e) { toast(e.message); } });
+  $$('[data-nj]', c).forEach(b => b.onclick = async () => { if (!confirm('Créer un nouveau QR code ? L\'ancienne affiche ne fonctionnera plus : il faudra imprimer la nouvelle.')) return; try { toast((await api('enregistrerLieu', { id: b.dataset.nj, nouveauJeton: true })).message); re(); } catch (e) { toast(e.message); } });
+  $('#li-aj', c).onclick = async () => { try { toast((await api('enregistrerLieu', { nom: $('#li-nom', c).value })).message); re(); } catch (e) { toast(e.message, 6000); } };
+  $('#rc-ok', c).onclick = async () => { const R = {}; $$('[data-rc]', c).forEach(s => { if (s.value) R[s.dataset.rc] = [s.value]; }); try { toast((await api('responsablesSignal', { responsables: R })).message); } catch (e) { toast(e.message, 6000); } };
 }

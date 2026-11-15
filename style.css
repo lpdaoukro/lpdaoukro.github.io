@@ -612,3 +612,78 @@ tr.a-confirmer td { background: #FFF8E6; }
 @media (max-width: 760px) { .horloge { padding: 5px 7px; } .horloge .h-long { display: none; } .horloge .h-court { display: inline; cursor: pointer; } }
 .horloge-cnx { text-align: center; font-size: .88rem; font-weight: 600; opacity: .75; margin: 6px 0 10px; font-variant-numeric: tabular-nums; }
 @media print { .horloge, .horloge-cnx { display: none !important; } }
+
+/* ===== Passage d'année (v3.2) ===== */
+.psg-ctl { padding: 5px 0; font-size: .93rem; }
+.psg-ctl.ok { color: #1E7B3A; } .psg-ctl.ko { color: #C62828; font-weight: 600; } .psg-ctl.av { color: #B26A00; }
+tr.psg-adec td { background: rgba(198,40,40,.06); }
+.psg-bascule { margin-top: 14px; padding: 12px; border: 2px dashed #C62828; border-radius: 10px; }
+.psg-frais { padding: 6px 4px; }
+
+/* ===== Reconnaissance, accueil vivant, signalements (v3.3) ===== */
+.medaille { position: relative; width: 74px; height: 74px; flex: 0 0 auto; }
+.medaille.grand { width: 112px; height: 112px; }
+.medaille-photo { width: 100%; height: 100%; border-radius: 50%; background: #f3e7c4 center/cover no-repeat; display: flex; align-items: center; justify-content: center; font-weight: 700; font-size: 1.4rem; color: #8a6d1d;
+  border: 4px solid #E0B12E; box-shadow: 0 0 0 3px #fff, 0 0 0 6px #E0B12E, 0 6px 18px rgba(176,132,20,.45); }
+.medaille-ruban { position: absolute; right: -6px; bottom: -4px; font-size: 1.7rem; filter: drop-shadow(0 2px 3px rgba(0,0,0,.3)); }
+.medaille.grand .medaille-ruban { font-size: 2.3rem; }
+.vitrine { position: relative; border-radius: 16px; padding: 18px 18px 26px; margin: 10px 0 14px; overflow: hidden; color: #3b2a00;
+  background: radial-gradient(circle at 15% 20%, #fff8dc 0, #fbe7a3 45%, #f2c94c 100%); box-shadow: 0 8px 24px rgba(176,132,20,.25); min-height: 150px; }
+.vitrine-carte { display: none; align-items: center; gap: 18px; animation: vit-in .6s ease; }
+.vitrine-carte.active { display: flex; }
+@keyframes vit-in { from { opacity: 0; transform: translateY(8px) scale(.98); } to { opacity: 1; transform: none; } }
+.vitrine-titre { font-size: .8rem; font-weight: 700; text-transform: uppercase; letter-spacing: .04em; color: #8a5a00; }
+.vitrine-nom { font-size: 1.35rem; font-weight: 800; margin: 2px 0; }
+.vitrine-sous { font-size: .9rem; opacity: .8; }
+.vitrine-mot { font-style: italic; margin-top: 6px; font-size: .92rem; }
+.vitrine-points { position: absolute; bottom: 9px; left: 0; right: 0; display: flex; justify-content: center; gap: 6px; }
+.vitrine-points i { width: 8px; height: 8px; border-radius: 50%; background: rgba(0,0,0,.18); cursor: pointer; }
+.vitrine-points i.on { background: #8a5a00; width: 20px; border-radius: 4px; }
+.confetti { position: absolute; top: -10px; width: 8px; height: 12px; border-radius: 2px; animation: confetti 2.8s ease-in forwards; pointer-events: none; }
+@keyframes confetti { to { top: 110%; transform: translateX(30px) rotate(540deg); opacity: .2; } }
+.rebours { display: flex; gap: 8px; overflow-x: auto; margin-bottom: 12px; padding-bottom: 2px; }
+.rebours-item { flex: 1 0 104px; background: var(--carte, #fff); border: 1px solid var(--bord, #e3e7ec); border-radius: 12px; padding: 8px 10px; display: grid; grid-template-columns: auto 1fr; column-gap: 6px; align-items: center; }
+.rebours-item span { grid-row: span 2; font-size: 1.5rem; }
+.rebours-item b { font-size: 1.05rem; color: #1E7B3A; }
+.rebours-item small { font-size: .75rem; opacity: .75; line-height: 1.15; }
+.ma-journee { background: var(--carte, #fff); border-radius: 14px; padding: 12px 14px; margin-bottom: 14px; border-left: 5px solid #1E7B3A; box-shadow: 0 2px 8px rgba(0,0,0,.05); }
+.mj-titre { font-weight: 800; margin-bottom: 6px; }
+.mj-l { padding: 4px 0; font-size: .93rem; }
+.honneur-grille { display: grid; grid-template-columns: repeat(auto-fill, minmax(260px, 1fr)); gap: 12px; }
+.honneur-carte, .agent-carte { display: flex; gap: 14px; align-items: center; background: var(--carte, #fff); border-radius: 14px; padding: 12px; box-shadow: 0 2px 10px rgba(176,132,20,.15); border: 1px solid #f0dfa6; }
+.agent-carte.grand { background: linear-gradient(135deg, #fffaf0, #fbefc8); padding: 16px; margin-bottom: 12px; }
+.agents-actuels { display: grid; grid-template-columns: repeat(auto-fit, minmax(300px, 1fr)); gap: 12px; }
+.agents-mois { margin-bottom: 14px; } .agents-mois .agent-carte { margin-top: 6px; }
+.honneur-rang { font-weight: 800; color: #8a5a00; }
+.ag-cand { display: flex; align-items: center; gap: 10px; padding: 8px; border: 1px solid var(--bord, #e3e7ec); border-radius: 10px; margin: 6px 0; cursor: pointer; }
+.ag-cand > span { flex: 1; } .ag-score { font-size: 1.2rem; color: #1E7B3A; }
+.par-distinction { background: linear-gradient(135deg, #fff8dc, #f6d77a); border-radius: 12px; padding: 10px 12px; margin-bottom: 10px; }
+.par-distinction span { display: block; font-size: .85rem; opacity: .8; }
+.sig-pub h1 { margin-top: 6px; } .sig-entete { display: flex; gap: 10px; align-items: center; } .sig-entete img { height: 48px; }
+.sig-cats { display: grid; grid-template-columns: 1fr 1fr; gap: 6px; }
+.sig-cats label { display: flex; } .sig-cats input { display: none; }
+.sig-cats span { flex: 1; border: 2px solid var(--bord, #d6dbe1); border-radius: 10px; padding: 9px 8px; font-size: .9rem; cursor: pointer; }
+.sig-cats input:checked + span { border-color: #1E7B3A; background: rgba(30,123,58,.08); font-weight: 700; }
+label.case { display: flex; gap: 8px; align-items: center; font-weight: normal; margin-top: 10px; }
+.sig-code { font: 800 1.8rem monospace; letter-spacing: 3px; background: #f3f6f9; border: 2px dashed #1E7B3A; border-radius: 12px; padding: 12px; margin: 12px auto; max-width: 280px; }
+.sig-item.urgent { border-left: 5px solid #C62828; } .sig-item.confid { background: #fbf5ff; }
+.sig-tete { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; }
+/* impressions */
+.certif .certif-cadre { border: 10px double #B8860B; height: 100%; padding: 18px 28px; display: flex; flex-direction: column; box-sizing: border-box; }
+.certif-haut { display: flex; justify-content: space-between; align-items: center; text-align: center; } .certif-haut img { height: 70px; }
+.certif-titre { text-align: center; font: 800 30pt Georgia, serif; color: #8a5a00; margin: 18px 0 8px; letter-spacing: 2px; }
+.certif-corps { display: flex; gap: 22px; align-items: center; font-size: 15pt; flex: 1; }
+.certif-photo { width: 120px; height: 150px; flex: 0 0 auto; background: center/cover; border: 4px solid #B8860B; border-radius: 6px; }
+.certif-nom { font: 800 24pt Georgia, serif; margin: 6px 0 10px; }
+.certif-bas { display: flex; justify-content: space-between; font-size: 12pt; }
+.hn-niv { margin: 14px 0 6px; border-bottom: 2px solid #B8860B; } .hn-imp { display: flex; gap: 18px; flex-wrap: wrap; }
+.hn-imp-c { display: flex; flex-direction: column; align-items: center; text-align: center; width: 30%; gap: 4px; } .hn-imp-c span { font-size: 9pt; }
+.affiche-qr { text-align: center; display: flex; flex-direction: column; align-items: center; gap: 10px; }
+.aq-haut { display: flex; align-items: center; gap: 10px; font-size: 13pt; } .aq-haut img { height: 60px; }
+.aq-lieu { font-size: 22pt; font-weight: 800; color: #1E7B3A; } .aq-titre { font-size: 34pt; font-weight: 900; }
+.aq-sous { font-size: 14pt; } .aq-qr svg { width: 95mm; height: 95mm; } .aq-bas { font-size: 11pt; color: #555; }
+.ag-cand input[type=radio] { width: 20px; height: 20px; flex: 0 0 auto; margin: 0; }
+.ag-cand select { width: auto; max-width: 100%; display: inline-block; }
+.ag-cand label, .ag-cand span { font-weight: normal; }
+label.case input[type=checkbox] { width: 22px; height: 22px; flex: 0 0 auto; margin: 0; }
+label.case { justify-content: flex-start; text-align: left; }

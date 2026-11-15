@@ -80,7 +80,7 @@ async function chargerRefNotes(classe) {
 async function chargerRefNotes0(classe) {
   if (role() === 'intervenant') {
     try { NT.ref = await api('notesReferentiel'); sauverNT(); }
-    catch (e) { if (!(e instanceof HorsLigne) || !NT.ref) throw e; }
+    catch (e) { if (e instanceof HorsLigne && !NT.ref) NT.ref = stock.lire('ref_notes', null); if (!(e instanceof HorsLigne) || !NT.ref) throw e; }
     return NT.ref;
   }
   if (!classe) return null;
