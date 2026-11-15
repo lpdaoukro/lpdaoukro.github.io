@@ -54,8 +54,8 @@ const S = {
   photos: stock.lire('photos', {}),
   enLigne: navigator.onLine
 };
-const modeProf = () => !!(S.session && S.session.profil.double && stock.lire('mode', 'admin') === 'professeur');
-const role = () => S.session && (S.session.profil.double ? (modeProf() ? 'intervenant' : 'admin') : S.session.profil.role);
+const modeProf = () => !!(S.session && S.session.profil && S.session.profil.double && stock.lire('mode', 'admin') === 'professeur');
+const role = () => S.session && (S.session.parent ? 'parent' : S.session.profil.double ? (modeProf() ? 'intervenant' : 'admin') : S.session.profil.role);
 /* droits réglables (v2.3) : niveau effectif AGIT / CONSULTE / AUCUN d'un module pour l'utilisateur */
 const RANG_DROIT = { AUCUN: 0, CONSULTE: 1, AGIT: 2 };
 const droit = m => { if (!S.session || modeProf()) return undefined; if (role() === 'admin') return 'AGIT'; return (S.session.profil.droits || {})[m]; };
@@ -271,7 +271,7 @@ function redimensionnerPhoto(fichier) {
 
 /* ================= BOÎTE À SUGGESTIONS (v2.5) ================= */
 let SUGG_PAGE = '';
-const VERSION_SITE = '2.9';
+const VERSION_SITE = '3.0';
 /* ================= NOTIFICATIONS SUR LE TÉLÉPHONE (v2.6, Firebase) ================= */
 // configuration publique du projet Firebase (faite pour être dans le site) ; la clé privée reste dans Apps Script
 const FIREBASE_CFG = { apiKey: 'AIzaSyDVRNmLz5ph73vf2a9vFhd2RVni8H9swt0', authDomain: 'lpdaoukro-notification.firebaseapp.com', projectId: 'lpdaoukro-notification',
@@ -302,24 +302,25 @@ async function activerPush() {
   const p = await Notification.requestPermission();
   if (p !== 'granted') throw new Error("Vous n'avez pas autorisé les notifications.");
   const t = await jetonPush(); if (!t) throw new Error("Impossible d'obtenir l'autorisation de notification. Réessayez.");
-  const r = await api('abonnerPush', { cle_push: t, ancien: stock.lire('push_jeton', ''), appareil: nomAppareil() });
+  const r = await api(S.session && S.session.parent ? 'parentPush' : 'abonnerPush', { cle_push: t, ancien: stock.lire('push_jeton', ''), appareil: nomAppareil() });
   stock.ecrire('push_jeton', t);
   return r;
 }
 async function couperPush() {
   const t = stock.lire('push_jeton', '');
-  if (t) { try { await api('desabonnerPush', { cle_push: t }); } catch (e) { /* rien */ } try { await jetonPush().then(() => firebase.messaging().deleteToken()); } catch (e) { /* rien */ } }
+  if (t) { try { await api(S.session && S.session.parent ? 'parentPush' : 'desabonnerPush', S.session && S.session.parent ? { cle_push: t, couper: true } : { cle_push: t }); } catch (e) { /* rien */ } try { await jetonPush().then(() => firebase.messaging().deleteToken()); } catch (e) { /* rien */ } }
   stock.ecrire('push_jeton', '');
 }
 /** Au démarrage : le jeton change parfois ; on le renvoie au serveur s'il a changé. */
 async function rafraichirPush() {
   try { if (etatPush() !== 'actif' || !navigator.onLine) return; const t = await jetonPush(); const a = stock.lire('push_jeton', '');
-    if (t && t !== a) { await api('abonnerPush', { cle_push: t, ancien: a, appareil: nomAppareil() }); stock.ecrire('push_jeton', t); } } catch (e) { /* rien */ }
+    if (t && t !== a) { await api(S.session && S.session.parent ? 'parentPush' : 'abonnerPush', { cle_push: t, ancien: a, appareil: nomAppareil() }); stock.ecrire('push_jeton', t); } } catch (e) { /* rien */ }
 }
 function blocPush(id) {
   const e = etatPush();
   const txt = { actif: '✅ Activées sur cet appareil.', inactif: 'Recevez sur ce téléphone les annonces, les demandes et les actions urgentes, même quand l\'application est fermée.', refuse: '⛔ Bloquées dans le navigateur.',
     non: 'Ce navigateur ne permet pas les notifications.', ios: 'Sur iPhone : ajoutez d\'abord l\'application à l\'écran d\'accueil (Partager → « Sur l\'écran d\'accueil »), puis ouvrez-la depuis l\'icône.' }[e];
+  if (S.session && S.session.parent) return `<div id="${id}"><p class="aide" style="margin-top:0">${txt.replace("les annonces, les demandes et les actions urgentes", "les nouvelles notes, absences, bulletins et reçus")}</p>${e === 'actif' ? '<button class="btn petit rouge" data-push="couper">Couper</button>' : e === 'inactif' || e === 'refuse' ? '<button class="btn" data-push="activer">🔔 Activer les notifications</button>' : ''}</div>`;
   return `<div id="${id}"><p class="aide" style="margin-top:0">${txt}</p>${e === 'actif' ? `<button class="btn petit secondaire" data-push="tester">Envoyer un test</button> <button class="btn petit rouge" data-push="couper">Couper</button>
     <div class="prefs-notif" data-prefs><label><input type="checkbox" data-pref="matin" checked> ☀ Message du matin <span class="aide">(enseignants : 30 min avant le 1er cours ; autres : 7 h s'il y a quelque chose à signaler)</span></label>
     <label><input type="checkbox" data-pref="soir" checked> 🌙 Bilan du soir à 18 h 30</label></div>` : e === 'inactif' || e === 'refuse' ? '<button class="btn" data-push="activer">🔔 Activer les notifications</button>' : ''}</div>`;
@@ -479,6 +480,130 @@ async function pageLicence(c) {
     try { const r = await api('enregistrerLicence', { cle: e.target.cle.value }); toast(r.message, 6000); await chargerMarque(); afficher(); } catch (er) { $('#lic-msg').innerHTML = `<div class="erreur">${esc(er.message)}</div>`; } };
 }
 
+/* ================= ESPACE PARENTS (v3.0) ================= */
+function formParent() {
+  $('#zone').innerHTML = `<p class="aide">Suivez les notes, les absences et les frais de vos enfants. Utilisez le <b>numéro de téléphone</b> inscrit sur la fiche de votre enfant.</p>
+    <form id="fp"><label>Numéro de téléphone</label><input name="t" type="tel" inputmode="tel" required placeholder="ex. 07 07 00 00 00" autocomplete="tel">
+    <label>Code personnel (4 chiffres)</label><input name="c" class="code" type="password" inputmode="numeric" pattern="\\d{4}" maxlength="4" required autocomplete="current-password">
+    <div id="msg"></div><button class="btn large" style="margin-top:14px">Entrer dans l'espace parents</button></form>
+    <p class="aide" style="text-align:center;margin-top:10px"><a href="#" id="fp-prem">Première connexion (j'ai reçu un code d'activation)</a></p>`;
+  const entrer = async r => { S.session = { parent: true, jeton: r.jeton, telephone: r.telephone }; stock.ecrire('session', S.session); location.hash = '#/parent'; afficher(); };
+  $('#fp').onsubmit = async e => { e.preventDefault(); const f = e.target, b = $('button', f); b.disabled = true; $('#msg').innerHTML = '';
+    try { await entrer(await api('parentConnexion', { telephone: f.t.value, code: f.c.value })); } catch (er) { $('#msg').innerHTML = `<div class="erreur">${esc(er.message)}</div>`; b.disabled = false; } };
+  $('#fp-prem').onclick = ev => { ev.preventDefault();
+    $('#zone').innerHTML = `<p class="aide">Entrez le code d'activation à 6 chiffres reçu de l'établissement (WhatsApp ou papier), puis choisissez votre code personnel.</p>
+      <form id="fa"><label>Numéro de téléphone</label><input name="t" type="tel" inputmode="tel" required placeholder="ex. 07 07 00 00 00">
+      <label>Code d'activation (6 chiffres)</label><input name="a" inputmode="numeric" pattern="\\d{6}" maxlength="6" required>
+      <label>Choisissez votre code personnel (4 chiffres)</label><input name="c" class="code" type="password" inputmode="numeric" pattern="\\d{4}" maxlength="4" required>
+      <label>Confirmez le code</label><input name="c2" class="code" type="password" inputmode="numeric" pattern="\\d{4}" maxlength="4" required>
+      <div id="msg"></div><button class="btn large" style="margin-top:14px">Activer mon espace</button></form><p class="aide" style="text-align:center"><a href="#" id="fa-ret">← Retour</a></p>`;
+    $('#fa-ret').onclick = e2 => { e2.preventDefault(); formParent(); };
+    $('#fa').onsubmit = async e2 => { e2.preventDefault(); const f = e2.target, b = $('button', f);
+      if (f.c.value !== f.c2.value) { $('#msg').innerHTML = '<div class="erreur">Les deux codes ne sont pas identiques.</div>'; return; }
+      b.disabled = true; try { await entrer(await api('parentConnexion', { telephone: f.t.value, activation: f.a.value, code: f.c.value })); } catch (er) { $('#msg').innerHTML = `<div class="erreur">${esc(er.message)}</div>`; b.disabled = false; } };
+  };
+}
+const PAR = { moi: null, enfant: null, onglet: 'notes' };
+async function afficherParent() {
+  const c0 = $('#contenu'), c = c0.cloneNode(false); c0.replaceWith(c); c.style.maxWidth = ''; c.style.padding = '';
+  $('#entete').hidden = false; $('#menu').hidden = true;
+  ['#btn-actions', '#btn-sugg', '#btn-mode', '#etat-reseau'].forEach(k => { if ($(k)) $(k).hidden = true; });
+  $('#moi-nom').textContent = 'Parent'; $('#btn-moi').onclick = () => window.scrollTo({ top: document.body.scrollHeight, behavior: 'smooth' });
+  c.innerHTML = '<div class="chargement">Chargement…</div>';
+  try {
+    const M = PAR.moi = await api('parentMoi'); S.session.params = M.params; stock.ecrire('session', S.session);
+    const q = new URLSearchParams((location.hash.split('?')[1] || ''));
+    if (q.get('paiement') === 'ok') { try { const v = await api('parentVerifier'); M.abonnement = v.abonnement; } catch (e) { /* rien */ } history.replaceState(null, '', '#/parent'); }
+    if (!PAR.enfant || !M.enfants.some(e => e.id === PAR.enfant)) PAR.enfant = M.enfants[0] && M.enfants[0].id;
+    const A = M.abonnement, wa = String(M.contact || '').replace(/\D/g, '');
+    c.innerHTML = `<h1>👨‍👩‍👧 Espace parents</h1>
+      ${!M.enfants.length ? '<div class="alerte">Aucun élève n\'est rattaché à ce numéro. Demandez à l\'établissement de vérifier le numéro sur la fiche de votre enfant.</div>' : ''}
+      <div class="par-enfants">${M.enfants.map(e => `<button class="${e.id === PAR.enfant ? 'actif' : ''}" data-enf="${e.id}"><b>${esc(e.prenoms.split(' ')[0])}</b> ${esc(e.nom)}<span>${esc(e.classe)}</span></button>`).join('')}</div>
+      ${A.actif ? '' : `<div class="carte par-abo"><h2 style="margin-top:0">Abonnement ${esc(A.annee)} : ${fcfa(A.prix)} pour l'année</h2>
+        <p>Un seul abonnement pour <b>tous vos enfants</b> inscrits dans l'établissement. Il ouvre les notes, les absences, les frais, les bulletins et les notifications sur votre téléphone.</p>
+        ${A.wave ? '<button class="btn vert large" id="par-wave">Payer avec Wave</button>' : ''}${A.attente ? '<p class="aide">Un paiement Wave est en cours : <a href="#" id="par-verif">vérifier maintenant</a>.</p>' : ''}
+        <p class="aide">Vous pouvez aussi régler à la caisse de l'établissement : l'abonnement sera activé aussitôt.</p></div>`}
+      ${M.annonces.length || M.calendrier.length ? `<div class="carte"><b>📢 Informations de l'établissement</b>${M.annonces.map(a => `<div class="par-ann"><b>${esc(a.titre)}</b> ${esc(a.texte || '')}</div>`).join('')}${M.calendrier.map(a => `<div class="par-ann">${esc(a.titre)} — ${esc(a.texte)}</div>`).join('')}</div>` : ''}
+      <div id="par-corps"></div>
+      <div class="carte"><b>🔔 Notifications sur ce téléphone</b>${blocPush('par-push')}</div>
+      <div class="actions"><button class="btn secondaire" id="par-code">Changer mon code</button><button class="btn secondaire" id="par-sortir">Se déconnecter</button></div>`;
+    $$('[data-enf]', c).forEach(b => b.onclick = () => { PAR.enfant = b.dataset.enf; afficherParent(); });
+    const pz = () => { const z = $('#par-push'); if (z) { z.outerHTML = blocPush('par-push'); brancherPush($('#par-push'), pz); } }; brancherPush($('#par-push'), pz);
+    if ($('#par-wave')) $('#par-wave').onclick = async () => { try { const r = await api('parentWave', { retour: location.origin + location.pathname }); if (r.url) location.href = r.url; else { toast(r.message); afficherParent(); } } catch (e) { toast(e.message, 7000); } };
+    if ($('#par-verif')) $('#par-verif').onclick = async ev => { ev.preventDefault(); const v = await api('parentVerifier'); toast(v.abonnement.actif ? 'Paiement confirmé : merci !' : 'Paiement pas encore confirmé par Wave.'); afficherParent(); };
+    $('#par-sortir').onclick = async () => { try { await api('parentDeconnexion'); } catch (e) { /* rien */ } S.session = null; stock.effacer('session'); PAR.moi = null; location.hash = ''; afficher(); };
+    $('#par-code').onclick = async () => { const a = prompt('Ancien code (4 chiffres) :'); if (!a) return; const n = prompt('Nouveau code (4 chiffres) :'); if (!n) return;
+      try { toast((await api('parentChangerCode', { ancien: a, nouveau: n })).message); } catch (e) { toast(e.message, 5000); } };
+    if (A.actif && PAR.enfant) await dessinerEnfant($('#par-corps'));
+  } catch (e) { c.innerHTML = `<div class="erreur">${esc(e.message)}</div>`; }
+}
+async function dessinerEnfant(z) {
+  z.innerHTML = '<div class="chargement">Chargement…</div>';
+  const D = await api('parentEleve', { id: PAR.enfant }), O = PAR.onglet;
+  const ong = [['notes', '📝 Notes'], ['absences', '⏰ Absences'], ['frais', '💰 Frais'], ['bulletins', '📄 Bulletins']];
+  let h = `<div class="onglets">${ong.map(([k, l]) => `<button data-po="${k}" class="${O === k ? 'actif' : ''}">${l}</button>`).join('')}</div>`;
+  if (O === 'notes') {
+    h += [1, 2].map(sem => { const L = D.notes.filter(n => n.semestre === sem); return L.length ? `<h2>Semestre ${sem}</h2>${L.map(m => `<div class="carte par-mat"><div class="par-mat-t"><b>${esc(m.matiere)}</b><span>coef. ${nb(m.coef)}</span><b class="par-moy ${m.moyenne !== null && m.moyenne < 10 ? 'bas' : ''}">${m.moyenne === null ? '—' : n2(m.moyenne)}</b></div>
+      ${m.notes.map(n => `<div class="par-note"><span>${esc(n.libelle)} <i>${fr(n.date)}</i></span><b>${esc(n.note)}/${nb(n.bareme)}</b></div>`).join('')}</div>`).join('')}` : ''; }).join('') || '<div class="info">Aucune note approuvée pour le moment.</div>';
+    h += '<p class="aide">Seules les notes approuvées par les professeurs apparaissent. La moyenne indiquée est celle de la matière, sur 20.</p>';
+  } else if (O === 'absences') {
+    const nj = D.absences.filter(a => a.type !== 'RETARD' && !a.justifiee).reduce((t, a) => t + a.heures, 0);
+    h += `<div class="kpis"><div class="kpi"><div class="lib">Absences</div><div class="val">${D.absences.filter(a => a.type !== 'RETARD').length}</div></div><div class="kpi rouge"><div class="lib">Heures non justifiées</div><div class="val">${nb(nj)}</div></div><div class="kpi"><div class="lib">Retards</div><div class="val">${D.absences.filter(a => a.type === 'RETARD').length}</div></div></div>
+      <div class="table-defil"><table><thead><tr><th>Date</th><th>Cours</th><th>Type</th><th></th></tr></thead><tbody>${D.absences.map(a => `<tr><td>${fr(a.date)}</td><td>${esc(a.matiere || '')} <span class="aide">${esc(a.horaire || '')}</span></td><td>${a.type === 'RETARD' ? 'Retard' + (a.minutes ? ' ' + a.minutes + ' min' : '') : 'Absence (' + nb(a.heures) + ' h)'}</td><td>${a.justifiee ? '<span class="badge P">justifiée</span>' : a.type === 'RETARD' ? '' : '<span class="badge A">non justifiée</span>'}</td></tr>`).join('') || '<tr><td colspan="4" class="vide">Aucune absence. Bravo !</td></tr>'}</tbody></table></div>
+      <p class="aide">Pour justifier une absence, présentez le justificatif à l'éducateur.</p>`;
+  } else if (O === 'frais') {
+    const F = D.frais;
+    h += `<div class="kpis"><div class="kpi"><div class="lib">Total dû</div><div class="val">${fcfa(F.du)}</div></div><div class="kpi vert"><div class="lib">Payé</div><div class="val">${fcfa(F.paye)}</div></div><div class="kpi ${F.retard ? 'rouge' : ''}"><div class="lib">Reste${F.retard ? ' (dont ' + fcfa(F.retard) + ' en retard)' : ''}</div><div class="val">${fcfa(F.reste)}</div></div></div>
+      <div class="table-defil"><table><thead><tr><th>Rubrique</th><th class="n">Dû</th><th class="n">Payé</th><th class="n">Reste</th><th>Échéance</th></tr></thead><tbody>${F.lignes.map(l => `<tr><td>${esc(l.rubrique)}</td><td class="n">${fcfa(l.du)}</td><td class="n">${fcfa(l.paye)}</td><td class="n">${fcfa(l.reste)}</td><td>${l.limite ? fr(l.limite) : ''}</td></tr>`).join('')}</tbody></table></div>
+      <h2>Reçus</h2>${D.recus.map(r => `<div class="par-note"><span>Reçu n° ${esc(r.numero)} <i>${fr(r.date)}</i></span><span><b>${fcfa(r.total)}</b> <button class="btn petit secondaire" data-recu="${esc(r.numero)}">🖨 Télécharger</button></span></div>`).join('') || '<p class="aide">Aucun paiement enregistré.</p>'}`;
+  } else {
+    h += D.bulletins.length ? D.bulletins.map(s => `<div class="par-note"><span>Bulletin du semestre ${s}</span><button class="btn petit" data-bul="${s}">📄 Télécharger</button></div>`).join('') : '<div class="info">Aucun bulletin validé pour le moment.</div>';
+  }
+  z.innerHTML = h;
+  $$('[data-po]', z).forEach(b => b.onclick = () => { PAR.onglet = b.dataset.po; dessinerEnfant(z); });
+  $$('[data-recu]', z).forEach(b => b.onclick = async () => { try { imprimerRecu(await api('parentRecu', { numero: b.dataset.recu })); } catch (e) { toast(e.message, 6000); } });
+  $$('[data-bul]', z).forEach(b => b.onclick = async () => {
+    try { const R = await api('parentBulletin', { id: PAR.enfant, semestre: +b.dataset.bul }); const e = R.K.eleves[0];
+      S.session.params = Object.assign({}, S.session.params, R.params); EL.photos[e.id] = R.photo || EL.photos[e.id]; EL.donnees = EL.donnees || { classes: [] };
+      if (!EL.donnees.classes.some(k => k.code === R.classe.code)) EL.donnees.classes.push(R.classe);
+      await preparerQR(); imprimer(bulletinHtml(R.K, e), `Bulletin S${R.K.semestre} - ${e.nom} ${e.prenoms} - ${R.K.classe}`);
+    } catch (er) { toast(er.message, 7000); } });
+}
+/* ----- côté établissement : familles, codes d'activation, abonnements ----- */
+async function pageFamilles(c) {
+  let q = '';
+  const dessiner = async () => {
+    const F = await api('familles', { q }), encaisse = ['admin', 'comptable'].includes(role()), code = ['admin', 'comptable', 'educateur'].includes(role());
+    c.innerHTML = `<h1>Espace parents</h1>
+      <p class="aide">Les parents se connectent avec le <b>numéro de téléphone</b> inscrit sur la fiche de leur enfant (père, mère ou tuteur). Tous les enfants portant ce numéro sont regroupés. Abonnement : <b>${fcfa(F.prix)} par famille</b> pour l'année ${esc(F.annee)}${F.wave ? ', payable par Wave ou à la caisse' : ', payable à la caisse (Wave pas encore configuré)'}.</p>
+      <div class="kpis"><div class="kpi"><div class="lib">Familles (numéros)</div><div class="val">${F.total}</div></div><div class="kpi"><div class="lib">Comptes activés</div><div class="val">${F.comptes}</div></div>
+        <div class="kpi vert"><div class="lib">Familles abonnées</div><div class="val">${F.abonnes}</div></div><div class="kpi rouge"><div class="lib">Élèves sans numéro de parent</div><div class="val">${F.sansTelephone}</div></div></div>
+      <div class="ligne"><div><input id="fm-q" placeholder="Rechercher : numéro, nom de l'élève ou classe" value="${esc(q)}"></div><div style="flex:0 0 auto"><button class="btn" id="fm-go">Rechercher</button></div></div>
+      <div class="table-defil"><table><thead><tr><th>Téléphone</th><th>Enfants</th><th>Compte</th><th>Abonnement</th><th></th></tr></thead><tbody>
+      ${F.familles.map(f => `<tr><td><b>${esc(f.telephone.replace(/(\d{2})(?=\d)/g, '$1 '))}</b></td><td>${f.enfants.map(e => `${esc(e.nom)} <span class="aide">(${esc(e.classe)})</span>`).join('<br>')}</td>
+        <td>${f.compte === 'ACTIF' ? '<span class="badge P">activé</span>' : f.compte === 'À ACTIVER' ? '<span class="badge attente">code envoyé</span>' : '—'}</td>
+        <td>${f.abonne ? `<span class="badge P">payé</span> <span class="aide">${esc(f.mode)} ${fr(f.le)}</span>` : '<span class="aide">non</span>'}</td>
+        <td style="white-space:nowrap">${code ? `<button class="btn petit" data-code="${f.telephone}">📲 Code</button>` : ''} ${encaisse && !f.abonne ? `<button class="btn petit vert" data-abo="${f.telephone}">✔ Payé</button>` : ''}${role() === 'admin' && f.abonne ? ` <button class="btn petit rouge" data-ann="${f.telephone}">✕</button>` : ''}</td></tr>`).join('') || '<tr><td colspan="5" class="vide">Aucune famille trouvée.</td></tr>'}
+      </tbody></table></div><p class="aide">${F.familles.length < F.total ? `Affichage des ${F.familles.length} premières familles : utilisez la recherche.` : ''} Un numéro faux ou absent se corrige dans la fiche de l'élève.</p><div id="fm-code"></div>`;
+    $('#fm-go').onclick = () => { q = $('#fm-q').value; dessiner(); }; $('#fm-q').onkeydown = e => { if (e.key === 'Enter') { q = e.target.value; dessiner(); } };
+    $$('[data-code]', c).forEach(b => b.onclick = async () => {
+      try { const R = await api('codeParent', { telephone: b.dataset.code });
+        $('#fm-code').innerHTML = `<div class="carte" style="border-left:4px solid #1E7B3A"><h2 style="margin-top:0">Code d'activation : <span style="font-family:monospace;letter-spacing:3px">${esc(R.code)}</span></h2>
+          <p>Numéro ${esc(R.telephone)} — ${R.enfants.map(esc).join(', ')}. Valable 30 jours.</p>
+          <a class="btn vert" target="_blank" rel="noopener" href="https://wa.me/225${R.telephone}?text=${encodeURIComponent(R.message)}">💬 Envoyer par WhatsApp</a> <button class="btn secondaire" id="fm-imp">🖨 Imprimer le papier</button></div>`;
+        $('#fm-code').scrollIntoView({ behavior: 'smooth' });
+        $('#fm-imp').onclick = () => imprimer(`<div class="page">${entete('ACCÈS À L\'ESPACE PARENTS')}<p>Enfant(s) : <b>${R.enfants.map(esc).join(', ')}</b></p>
+          <p style="font-size:14pt">Numéro de téléphone : <b>${esc(R.telephone)}</b><br>Code d'activation : <b style="font-family:monospace;letter-spacing:3px">${esc(R.code)}</b> (valable 30 jours)</p>
+          <ol><li>Ouvrez le site de l'établissement sur votre téléphone : <b>${esc(location.origin + location.pathname)}</b></li><li>Touchez « 👨‍👩‍👧 Parents », puis « Première connexion ».</li><li>Entrez votre numéro, ce code d'activation, puis choisissez votre code personnel à 4 chiffres.</li></ol>
+          <p>Abonnement annuel : ${fcfa(R.prix)} pour tous vos enfants, payable par Wave ou à la caisse.</p></div>`, 'Acces espace parents ' + R.telephone);
+      } catch (e) { toast(e.message, 6000); } });
+    $$('[data-abo]', c).forEach(b => b.onclick = async () => { const mode = confirm('Paiement reçu à la caisse ?\n\nOK = caisse · Annuler = transfert Mobile Money') ? 'CAISSE' : 'TRANSFERT'; const ref = prompt('Référence (n° de transaction ou observation, facultatif) :') || '';
+      try { toast((await api('activerAbonnement', { telephone: b.dataset.abo, mode, reference: ref })).message); dessiner(); } catch (e) { toast(e.message, 6000); } });
+    $$('[data-ann]', c).forEach(b => b.onclick = async () => { if (!confirm('Annuler l’abonnement de cette famille ?')) return; try { toast((await api('activerAbonnement', { telephone: b.dataset.ann, annuler: true })).message); dessiner(); } catch (e) { toast(e.message, 6000); } });
+  };
+  await dessiner();
+}
+
 /* ================= DIAPORAMA ================= */
 const PHOTOS_ACCUEIL = [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11].map(i => `medias/accueil-${i}.jpg`);      // sans visages : page publique de connexion
 const PHOTOS_ATELIERS = [1, 2, 3, 4, 5, 6].map(i => `medias/atelier-${i}.jpg`); // après connexion
@@ -517,15 +642,17 @@ function ecranConnexion(onglet = 'connexion') {
       <h1>${esc(nomEtabTitre())}</h1><div class="aide">Gestion de l'établissement</div>
       <div class="drapeau"><i></i><i></i><i></i></div></div>
     ${MQ().demo ? `<div class="demo-roles"><p><b>Essayez l'application en un clic</b> : choisissez un rôle.</p><div>${(MQ().comptesDemo || []).map((x, i) => `<button class="btn" data-demo="${i}">${x.icone} ${esc(x.role)}</button>`).join('')}</div>
+      ${MQ().parentDemo ? `<div style="margin-top:6px"><button class="btn secondaire" data-demo-parent style="width:100%">👨‍👩‍👧 Parent d'élève (3 enfants)</button></div>` : ''}
       <p class="aide">Données fictives, remises à zéro chaque nuit. <a href="https://wa.me/${String(MQ().contact || '').replace(/\D/g, '')}" target="_blank" rel="noopener">💬 WhatsApp ${esc(MQ().contact || '')}</a></p></div>` : ''}
-    <div class="onglets"><button data-o="connexion">Se connecter</button><button data-o="inscription">Première connexion / nouveau code</button></div>
+    <div class="onglets"><button data-o="connexion">Personnel</button><button data-o="inscription">Première connexion</button><button data-o="parent">👨‍👩‍👧 Parents</button></div>
     <div id="zone"></div>
   </div></div>`;
   $$('.onglets button', c).forEach(b => {
     b.classList.toggle('actif', b.dataset.o === onglet);
     b.onclick = () => ecranConnexion(b.dataset.o);
   });
-  if (onglet === 'connexion') formConnexion(); else formInscription();
+  if (onglet === 'connexion') formConnexion(); else if (onglet === 'parent') formParent(); else formInscription();
+  if ($('[data-demo-parent]', c)) $('[data-demo-parent]', c).onclick = () => { ecranConnexion('parent'); const f = $('#fp'); f.t.value = MQ().parentDemo.telephone; f.c.value = MQ().parentDemo.code; f.requestSubmit(); };
   $$('[data-demo]', c).forEach(b => b.onclick = () => { const x = MQ().comptesDemo[b.dataset.demo]; const f = $('#f'); if (!f) return; f.m.value = x.matricule; f.c.value = x.code; f.requestSubmit(); });
   lancerCarrousels();
 }
@@ -616,6 +743,7 @@ const PAGES = {
   'paiement':      { titre: 'État de paiement', mod: ['pointage', 'CONSULTE'], roles: ['censeur', 'admin', 'directeur'], fn: pagePaiement },
   'personnel':     { titre: 'Personnel', mod: ['pointage', 'CONSULTE'], roles: ['censeur', 'admin', 'directeur'], fn: pagePersonnel },
   'emplois':       { titre: 'Emplois du temps', mod: ['edt', 'CONSULTE'], roles: ['admin', 'censeur'], fn: (c, a) => pageEmploisV2(c, a) },
+  'familles':      { titre: 'Espace parents', roles: ['admin', 'comptable', 'educateur', 'directeur'], fn: c => pageFamilles(c) },
   'suggestion':    { titre: 'Suggestion', roles: ['intervenant', 'censeur', 'admin', 'educateur', 'comptable', 'directeur'], cache: true, fn: c => pageSuggestion(c) },
   'suggestions':   { titre: 'Suggestions', roles: ['admin'], fn: c => pageSuggestions(c) },
   'etablissement': { titre: 'Établissement', roles: ['admin'], fn: c => pageEtablissement(c) },
@@ -645,7 +773,7 @@ let pastilles = stock.lire('pastilles', {});
 const GROUPES_MENU = [
   { id: 'accueil', titre: '🏠 Accueil', pages: ['direction', 'ma-fiche'] },
   { id: 'personnel', titre: '👨‍🏫 Personnel', pages: ['pointage', 'tableau', 'intervenants', 'rattrapages', 'reclamations', 'paiement', 'personnel'] },
-  { id: 'eleves', titre: '🎓 Élèves', pages: ['eleves', 'effectifs', 'appel', 'absences', 'discipline', 'stages'] },
+  { id: 'eleves', titre: '🎓 Élèves', pages: ['eleves', 'effectifs', 'appel', 'absences', 'discipline', 'stages', 'familles'] },
   { id: 'notes', titre: '📝 Notes', pages: ['notes', 'bulletins', 'calendrier-conseils'] },
   { id: 'finances', titre: '💰 Finances', pages: ['caisse', 'finances'] },
   { id: 'admin', titre: '⚙ Administration', pages: ['annonces', 'calendrier-scolaire', 'emplois', 'comptes', 'droits', 'suggestions', 'etablissement', 'licence', 'journal'] }
@@ -674,6 +802,7 @@ function menu() {
 }
 function afficher() {
   if (!S.session) return ecranConnexion();
+  if (S.session.parent) return afficherParent();
   // nouveau conteneur à chaque page : une page encore en chargement ne peut plus écrire dans la suivante
   const c0 = $('#contenu'), c = c0.cloneNode(false); c0.replaceWith(c); c.style.maxWidth = ''; c.style.padding = '';
   $('#entete').hidden = false; $('#menu').hidden = false;
@@ -1527,6 +1656,7 @@ function choisirMode(suite) {
 }
 function majEnteteMode() {
   const b = $('#btn-mode'); if (!b) return;
+  if (S.session && S.session.parent) { b.hidden = true; return; }
   const d = S.session && S.session.profil.double; b.hidden = !d;
   if (d) { b.textContent = modeProf() ? '👨‍🏫 Prof' : '⚙ Admin'; b.dataset.court = modeProf() ? '👨‍🏫' : '⚙'; b.title = modeProf() ? 'Vous êtes en mode Professeur — passer en mode Administrateur' : 'Vous êtes en mode Administrateur — passer en mode Professeur'; b.classList.toggle('prof', modeProf()); }
   $('#btn-actions').hidden = !S.session;
@@ -1536,6 +1666,7 @@ function majEnteteMode() {
 /* ================= BANDE D'ANNONCES ET BOÎTE « MES ACTIONS » (v2.1) ================= */
 const ACT = { donnees: null, le: 0 };
 async function majActions(forcer) {
+  if (S.session && S.session.parent) return;
   if (!S.session || !navigator.onLine) return dessinerBande();
   if (!forcer && Date.now() - ACT.le < 60000) return dessinerBande();
   ACT.le = Date.now();
