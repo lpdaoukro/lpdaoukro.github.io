@@ -56,18 +56,25 @@ function absJustifiee(id, d) {
   return ((REF_J.justifs || {})[id] || []).some(p => d >= p[0] && d <= p[1]);
 }
 /** ABS justifiée : ne compte pas ; ABS non justifiée : 0 ; NN : ne compte pas. */
+/* v3.7 : sanctions et bonus de points appliqués à la note (la note saisie reste inchangée) */
+function ajDe(v, idEl) { const P = (REF_J && REF_J.ajustements && REF_J.ajustements.parEval) || {}; return (P[v.id] || {})[idEl] || null; }
+function noteEffective(v, idEl) {
+  const n = v.notes[idEl], a = ajDe(v, idEl); if (!a || n === undefined || n === '' || n === 'ABS' || n === 'NN' || isNaN(parseFloat(String(n).replace(',', '.')))) return n;
+  return a.zero ? 0 : Math.round(Math.min(v.bareme, Math.max(0, parseFloat(String(n).replace(',', '.')) + a.pts)) * 100) / 100;
+}
 function moyenneMatiere(evals, idEl) {
   let p = 0, q = 0;
   evals.forEach(v => {
-    let n = v.notes[idEl]; if (n === undefined || n === '' || n === 'NN') return;
+    let n = noteEffective(v, idEl); if (n === undefined || n === '' || n === 'NN') return;
     if (n === 'ABS') { if (absJustifiee(idEl, v.date)) return; n = 0; }
     p += (+n) / v.bareme * 20 * v.coef; q += v.coef;
   });
   return q ? p / q : null;
 }
 function noteAffichee(v, idEl) {
-  const n = v.notes[idEl];
+  const n = v.notes[idEl], a = ajDe(v, idEl);
   if (n === undefined) return '';
+  if (a && noteEffective(v, idEl) !== n) return String(n).replace('.', ',') + ' → ' + String(noteEffective(v, idEl)).replace('.', ',');
   if (n === 'ABS') return absJustifiee(idEl, v.date) ? 'ABS J' : 'ABS NJ → 0';
   return String(n).replace('.', ',');
 }
@@ -145,13 +152,15 @@ async function pageNotes(c) {
       <p class="aide" style="margin-top:0">Semestre ${st.sem} · coefficient ${nb(m.coef)}${m.profs ? ' · ' + esc(m.profs) : ''}</p>
       ${(() => { const cs = (ref.conseils || {})[m.classe + '|' + st.sem]; return cs && dateLocale() <= cs.date ? `<div class="info">📅 Conseil de classe le <b>${fr(cs.date)}</b>${cs.heure ? ' à ' + esc(cs.heure) : ''} · saisie et approbation jusqu'au <b>${fr(cs.limite)}</b> ; le ${fr(cs.approbation)}, les notes non approuvées le seront automatiquement.</div>` : ''; })()}
       ${v ? `<div class="alerte">🔒 ${esc(v)}</div>` : ''}
-      <div class="actions" style="margin-bottom:10px">${!v ? '<button class="btn vert" id="n-nouv">➕ Nouvelle évaluation</button>' : ''}<button class="btn secondaire" id="n-fiche">🖨 Fiche de notes</button>${!v && role() !== 'directeur' ? '<button class="btn secondaire" id="n-app">✍ Appréciations</button>' : ''}</div>
+      <div class="actions" style="margin-bottom:10px">${!v ? '<button class="btn vert" id="n-nouv">➕ Nouvelle évaluation</button>' : ''}<button class="btn secondaire" id="n-fiche">🖨 Fiche de notes</button>${prof ? '<button class="btn secondaire" id="n-aj">± Sanction / bonus</button>' : ''}<button class="btn secondaire" id="n-ajl">📋 Sanctions et bonus</button>${!v && role() !== 'directeur' ? '<button class="btn secondaire" id="n-app">✍ Appréciations</button>' : ''}</div>
       <div class="table-defil"><table class="grille-notes"><thead><tr><th>Élève</th>${ev.map(x => `<th class="n cliquable" data-ev="${x.id}" title="Modifier">${esc(x.libelle || x.type)}<div class="aide">${frCourt(x.date)} · /${nb(x.bareme)} · c${nb(x.coef)}${x.attente ? ' ⏳' : ''}</div>${badgeVerrou(ref, x)}</th>`).join('')}<th class="n">Moy./20</th></tr></thead>
       <tbody>${el.map(e => { const mo = moyenneMatiere(ev, e.id); return `<tr><td><b>${esc(e.nom)}</b> ${esc(e.prenoms)}${app[e.id] ? `<div class="aide">« ${esc(app[e.id])} »</div>` : ''}</td>${ev.map(x => `<td class="n">${esc(noteAffichee(x, e.id))}</td>`).join('')}<td class="n"><b>${n2(mo)}</b></td></tr>`; }).join('')}</tbody></table></div>
       ${!ev.length ? '<div class="info">Aucune évaluation ce semestre. Touchez « Nouvelle évaluation ».</div>' : '<p class="aide">Touchez le titre d\'une évaluation pour la modifier.</p>'}`;
     $('#n-retour').onclick = e => { e.preventDefault(); liste(); };
     if ($('#n-nouv')) $('#n-nouv').onclick = () => { st.ev = null; vueEval(); };
     $('#n-fiche').onclick = () => imprimerFicheNotes(m, ev, el, st.sem, app);
+    if ($('#n-aj')) $('#n-aj').onclick = () => panneauAjustement(m, el, async () => { ref = await chargerRefNotes(st.classe); vueMatiere(); });
+    $('#n-ajl').onclick = () => listeAjustements(m, async () => { ref = await chargerRefNotes(st.classe); vueMatiere(); });
     if ($('#n-app')) $('#n-app').onclick = () => vueAppreciations();
     $$('[data-ev]', c).forEach(x => x.onclick = () => { st.ev = ev.find(y => y.id === x.dataset.ev); vueEval(); });
   };
@@ -187,7 +196,7 @@ async function pageNotes(c) {
         ${!v ? `<div class="actions" style="margin:6px 0"><input type="file" id="imp-f" accept=".xlsx,.xls,.csv,.ods,.docx,.pdf,image/*" hidden><button type="button" class="btn secondaire" id="imp-b">📥 Importer les notes (Excel, Word, PDF, photo)</button><button type="button" class="btn secondaire" id="imp-m">📄 Modèle Excel</button></div>` : ''}
         <p class="aide">Pour chaque élève : la note, ou <b>A</b> pour absent (absence justifiée : non comptée ; absence non justifiée : <b>0</b>), <b>N</b> pour non noté, par exemple élève arrivé en cours d'année ou dispensé (jamais compté). La touche Entrée passe à l'élève suivant.</p></div>
       ${el.map((e, i) => `<div class="ligne-appel"><span class="num">${i + 1}</span>${avatarEleve(e, 'petit')}<div class="nom-appel"><b>${esc(e.nom)}</b> ${esc(e.prenoms)}</div>
-        <input class="saisie-note" data-e="${e.id}" value="${esc(x.notes[e.id] === undefined ? '' : String(x.notes[e.id]).replace('.', ','))}" inputmode="decimal" autocomplete="off" ${v ? 'disabled' : ''}></div>`).join('')}
+        <input class="saisie-note" data-e="${e.id}" value="${esc(x.notes[e.id] === undefined ? '' : String(x.notes[e.id]).replace('.', ','))}" inputmode="decimal" autocomplete="off" ${v ? 'disabled' : ''}>${badgeAj(x, e.id)}</div>`).join('')}
       <div id="ev-msg"></div>
       ${!v ? `<button class="btn vert large" id="ev-enr" style="position:sticky;bottom:10px">✔ Enregistrer les notes</button>${!nouveau ? '<button type="button" class="btn rouge petit" id="ev-sup" style="margin-top:10px">Supprimer cette évaluation</button>' : ''}` : ''}</form>`;
     appliquerPhotosEleves(); if (navigator.onLine) chargerPhotosEleves(el.map(e => e.id));
@@ -951,4 +960,80 @@ async function importerNotes(f, eleves, bareme) {
     $('#imp-ann', v).onclick = () => { v.remove(); ok(null); };
     $('#imp-ok', v).onclick = () => { const o = {}; $$('.imp-n', v).forEach(i => { if (i.value.trim()) o[i.dataset.e] = i.value.trim(); }); v.remove(); ok(o); };
   });
+}
+
+
+/* ===================== v3.7 : SANCTIONS, BONUS ET AVERTISSEMENTS PAR MATIÈRE ===================== */
+function badgeAj(v, idEl) {
+  const a = ajDe(v, idEl); if (a) return `<span class="aj-badge ${a.zero || a.pts < 0 ? 'moins' : 'plus'}" title="${esc(a.det.map(d => d.motif).join(' · '))}">${a.zero ? '→ 0' : (a.pts > 0 ? '+' : '') + String(a.pts).replace('.', ',') + ' → ' + String(noteEffective(v, idEl)).replace('.', ',')}</span>`;
+  const att = ((REF_J && REF_J.ajustements && REF_J.ajustements.attente) || []).filter(x => x.e === idEl && x.m === v.m);
+  return att.length && !v.notes[idEl] ? `<span class="aj-badge attente" title="${esc(att.map(x => x.motif).join(' · '))}">${att.map(x => (x.points > 0 ? '+' : '') + x.points).join(' ')} à appliquer</span>` : '';
+}
+const AJ_FILE = () => stock.lire('file_aj', []);
+async function envoyerAjustement(q) {
+  try { return await api('ajusterNote', q); }
+  catch (e) { if (e instanceof HorsLigne) { const f = AJ_FILE(); f.push(q); stock.ecrire('file_aj', f); return { message: 'Gardé sur le téléphone : envoyé au retour du réseau.', propositions: [], horsLigne: true }; } throw e; }
+}
+async function synchroniserAjustements() {
+  const f = AJ_FILE(); if (!f.length || !navigator.onLine) return; const reste = [];
+  for (const q of f) { try { await api('ajusterNote', q); } catch (e) { if (e instanceof HorsLigne) reste.push(q); else toast('Sanction/bonus non enregistré : ' + e.message, 7000); } }
+  stock.ecrire('file_aj', reste); if (f.length > reste.length) toast((f.length - reste.length) + ' sanction(s)/bonus envoyé(s).');
+}
+window.addEventListener('online', () => setTimeout(synchroniserAjustements, 3000));
+setTimeout(synchroniserAjustements, 6000);
+function panneauAjustement(m, eleves, apres) {
+  const MOT = { SANCTION: ['🚫 Tricherie', '🗣 Bavardage', '📵 Téléphone en classe', '📄 Devoir non fait', '😤 Perturbation du cours'], BONUS: ['🙋 Belle participation', '🤝 Entraide', '💡 Bonne initiative', '✨ Travail soigné', '📈 Progrès remarquable', '🎤 Exposé réussi'] };
+  MOT.AVERTISSEMENT = MOT.SANCTION; MOT.ZERO = ['🚫 Tricherie avérée'];
+  const st = { type: 'SANCTION', pts: 1, motif: '', cible: 'PRECEDENTE', sel: new Set() };
+  const d = document.createElement('div'); d.className = 'modale'; document.body.appendChild(d);
+  const fermer = () => d.remove();
+  const dessiner = () => {
+    d.innerHTML = `<div class="modale-boite"><button class="modale-x" id="aj-x">✕</button><h2 style="margin-top:0">± Sanction / bonus — ${esc(m.matiere)} · ${esc(m.classe)}</h2>
+      <div class="aj-types">${[['SANCTION', '➖ Retrait'], ['BONUS', '➕ Bonus'], ['AVERTISSEMENT', '⚠ Avertissement'], ['ZERO', '🚫 Note à 0']].map(([k, l]) => `<button class="${st.type === k ? 'actif' : ''}" data-t="${k}">${l}</button>`).join('')}</div>
+      ${st.type === 'SANCTION' || st.type === 'BONUS' ? `<label>Points (sur le barème de la note)</label><div class="aj-pts">${[0.5, 1, 1.5, 2, 3, 4, 5].map(p => `<button class="${st.pts === p ? 'actif' : ''}" data-p="${p}">${st.type === 'BONUS' ? '+' : '−'}${String(p).replace('.', ',')}</button>`).join('')}</div>` : ''}
+      ${st.type === 'AVERTISSEMENT' ? '<p class="aide">Sans retrait de points. Au 3e avertissement dans la matière, l\'application vous proposera une sanction.</p>' : ''}
+      <label>Motif</label><div class="aj-motifs">${MOT[st.type].map(x => `<button class="${st.motif === x.replace(/^\S+\s/, '') ? 'actif' : ''}" data-m="${esc(x.replace(/^\S+\s/, ''))}">${esc(x)}</button>`).join('')}</div>
+      <input id="aj-mot" maxlength="150" placeholder="ou motif libre" value="${MOT[st.type].some(x => x.replace(/^\S+\s/, '') === st.motif) ? '' : esc(st.motif)}">
+      ${st.type === 'SANCTION' || st.type === 'BONUS' ? `<label>S'applique à</label><div class="aj-types">${[['PRECEDENTE', 'La note précédente'], ['SUIVANTE', 'La note suivante']].map(([k, l]) => `<button class="${st.cible === k ? 'actif' : ''}" data-c="${k}">${l}</button>`).join('')}</div>` : ''}
+      ${st.type === 'ZERO' ? '<p class="aide">La dernière note saisie de l\'élève dans cette matière est ramenée à 0.</p>' : ''}
+      ${st.type !== 'BONUS' ? '<label class="case"><input type="checkbox" id="aj-sig"> Signaler aussi à la vie scolaire (incident de discipline)</label>' : ''}
+      <label>Élève(s) ${st.type === 'BONUS' ? '<a href="#" id="aj-tous" class="aide">tout sélectionner</a>' : ''}</label>
+      <div class="aj-eleves">${eleves.map(e => `<label class="${st.sel.has(e.id) ? 'sel' : ''}"><input type="checkbox" value="${e.id}" ${st.sel.has(e.id) ? 'checked' : ''}> ${esc(e.nom)} ${esc(e.prenoms)}</label>`).join('')}</div>
+      <div class="actions"><button class="btn vert" id="aj-ok">Enregistrer (${st.sel.size})</button></div></div>`;
+    $('#aj-x', d).onclick = fermer; d.onclick = ev => { if (ev.target === d) fermer(); };
+    $$('[data-t]', d).forEach(b => b.onclick = () => { st.type = b.dataset.t; st.motif = ''; if (st.type === 'ZERO' && st.sel.size > 1) st.sel = new Set([...st.sel].slice(0, 1)); dessiner(); });
+    $$('[data-p]', d).forEach(b => b.onclick = () => { st.pts = +b.dataset.p; dessiner(); });
+    $$('[data-c]', d).forEach(b => b.onclick = () => { st.cible = b.dataset.c; dessiner(); });
+    $$('[data-m]', d).forEach(b => b.onclick = () => { st.motif = b.dataset.m; dessiner(); });
+    $('#aj-mot', d).oninput = e => { st.motif = e.target.value; };
+    $$('.aj-eleves input', d).forEach(i => i.onchange = () => { if (st.type === 'ZERO') st.sel.clear(); if (i.checked) st.sel.add(i.value); else st.sel.delete(i.value); dessiner(); });
+    if ($('#aj-tous', d)) $('#aj-tous', d).onclick = ev => { ev.preventDefault(); eleves.forEach(e => st.sel.add(e.id)); dessiner(); };
+    $('#aj-ok', d).onclick = async () => {
+      if (!st.sel.size) return toast('Choisissez au moins un élève.'); if (!st.motif.trim()) return toast('Choisissez ou écrivez le motif.');
+      const q = { id_matiere: m.id, eleves: [...st.sel], type: st.type, points: st.pts, motif: st.motif, cible: st.cible, signaler: !!($('#aj-sig', d) && $('#aj-sig', d).checked) };
+      try { const r = await envoyerAjustement(q); toast(r.message, 6000); fermer();
+        for (const p of r.propositions || []) {
+          if (confirm(`${p.nom} a reçu ${p.n} avertissements en ${m.matiere}.\n\nRetirer 1 point sur sa note précédente ? (Annuler = garder les avertissements)`)) {
+            try { await api('ajusterNote', { id_matiere: m.id, eleves: [p.id], type: 'SANCTION', points: 1, motif: p.n + ' avertissements (bavardage, comportement)', cible: 'PRECEDENTE' }); }
+            catch (e) { await api('ajusterNote', { id_matiere: m.id, eleves: [p.id], type: 'SANCTION', points: 1, motif: p.n + ' avertissements', cible: 'SUIVANTE' }); }
+            await api('annulerAjustement', { convertir: true, id_eleve: p.id, id_matiere: m.id }); toast('Sanction enregistrée, avertissements remis à zéro.');
+          }
+        }
+        if (apres && !r.horsLigne) apres();
+      } catch (e) { toast(e.message, 7000); }
+    };
+  };
+  dessiner();
+}
+async function listeAjustements(m, apres) {
+  const d = document.createElement('div'); d.className = 'modale'; document.body.appendChild(d);
+  d.innerHTML = '<div class="modale-boite"><div class="chargement">Chargement…</div></div>'; d.onclick = ev => { if (ev.target === d) d.remove(); };
+  const L = await api('ajustementsNotes', { id_matiere: m.id });
+  const ico = { SANCTION: '➖', BONUS: '➕', AVERTISSEMENT: '⚠', ZERO: '🚫' };
+  $('.modale-boite', d).innerHTML = `<button class="modale-x" id="al-x">✕</button><h2 style="margin-top:0">Sanctions et bonus — ${esc(m.matiere)} · ${esc(m.classe)}</h2>
+    ${L.ajustements.map(a => `<div class="par-note ${a.statut === 'ANNULÉ' ? 'barre' : ''}"><span>${ico[a.type]} <b>${esc(a.eleve)}</b> ${a.type === 'SANCTION' || a.type === 'BONUS' ? `<b>${a.points > 0 ? '+' : ''}${String(a.points).replace('.', ',')}</b>` : a.type === 'ZERO' ? '<b>→ 0</b>' : ''} · ${esc(a.motif)}
+      <div class="aide">${esc(a.evaluation || (a.type === 'AVERTISSEMENT' ? 'avertissement' : ''))} · ${esc(a.par)}, ${esc(String(a.le).slice(0, 10).split('-').reverse().join('/'))}${a.statut === 'ANNULÉ' ? ' · annulé' : a.statut === 'CONVERTI' ? ' · converti en sanction' : ''}</div></span>
+      ${a.peutAnnuler && a.statut !== 'CONVERTI' ? `<button class="btn petit secondaire" data-an="${a.id}">Annuler</button>` : ''}</div>`).join('') || '<p class="aide">Aucune sanction ni bonus dans cette matière.</p>'}`;
+  $('#al-x', d).onclick = () => d.remove();
+  $$('[data-an]', d).forEach(b => b.onclick = async () => { if (!confirm('Annuler cet ajustement ? La note redevient celle saisie.')) return; try { toast((await api('annulerAjustement', { id: b.dataset.an })).message); d.remove(); if (apres) apres(); } catch (e) { toast(e.message, 6000); } });
 }

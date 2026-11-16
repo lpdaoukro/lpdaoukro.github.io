@@ -273,7 +273,7 @@ function redimensionnerPhoto(fichier) {
 
 /* ================= BOÎTE À SUGGESTIONS (v2.5) ================= */
 let SUGG_PAGE = '';
-const VERSION_SITE = '3.6';
+const VERSION_SITE = '3.7';
 /* ================= NOTIFICATIONS SUR LE TÉLÉPHONE (v2.6, Firebase) ================= */
 // configuration publique du projet Firebase (faite pour être dans le site) ; la clé privée reste dans Apps Script
 const FIREBASE_CFG = { apiKey: 'AIzaSyDVRNmLz5ph73vf2a9vFhd2RVni8H9swt0', authDomain: 'lpdaoukro-notification.firebaseapp.com', projectId: 'lpdaoukro-notification',
@@ -567,7 +567,7 @@ async function dessinerEnfant(z) {
   let h = (D.distinctions || []).map(x => `<div class="par-distinction">🏆 <b>${esc(x.titre)}</b> <span>${esc(x.periode)} · moyenne ${n2(x.moy)}</span></div>`).join('') + `<div class="onglets">${ong.map(([k, l]) => `<button data-po="${k}" class="${O === k ? 'actif' : ''}">${l}</button>`).join('')}</div>`;
   if (O === 'notes') {
     h += [1, 2].map(sem => { const L = D.notes.filter(n => n.semestre === sem); return L.length ? `<h2>Semestre ${sem}</h2>${L.map(m => `<div class="carte par-mat"><div class="par-mat-t"><b>${esc(m.matiere)}</b><span>coef. ${nb(m.coef)}</span><b class="par-moy ${m.moyenne !== null && m.moyenne < 10 ? 'bas' : ''}">${m.moyenne === null ? '—' : n2(m.moyenne)}</b></div>
-      ${m.notes.map(n => `<div class="par-note"><span>${esc(n.libelle)} <i>${fr(n.date)}</i></span><b>${esc(n.note)}/${nb(n.bareme)}</b></div>`).join('')}</div>`).join('')}` : ''; }).join('') || '<div class="info">Aucune note approuvée pour le moment.</div>';
+      ${m.notes.map(n => `<div class="par-note"><span>${esc(n.libelle)} <i>${fr(n.date)}</i>${n.ajustement ? `<div class="aide">${n.ajustement.details.map(d => (d.type === 'BONUS' ? '🙋 Bonus +' + d.points : d.type === 'ZERO' ? '🚫 Note ramenée à 0' : '⚠ Retrait ' + d.points) + ' : ' + esc(d.motif)).join('<br>')} (note obtenue : ${esc(n.ajustement.brute)})</div>` : ''}</span><b>${esc(n.note)}/${nb(n.bareme)}</b></div>`).join('')}</div>`).join('')}` : ''; }).join('') || '<div class="info">Aucune note approuvée pour le moment.</div>';
     h += '<p class="aide">Seules les notes approuvées par les professeurs apparaissent. La moyenne indiquée est celle de la matière, sur 20.</p>';
   } else if (O === 'absences') {
     const nj = D.absences.filter(a => a.type !== 'RETARD' && !a.justifiee).reduce((t, a) => t + a.heures, 0);

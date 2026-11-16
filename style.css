@@ -829,3 +829,23 @@ tr.grp td { background: var(--gris-clair); }
 .etiq svg { width: 28mm; height: 28mm; flex: 0 0 auto; }
 .etiq b { display: block; font-size: 9pt; line-height: 1.15; } .etiq span { display: block; font-size: 7.5pt; margin-top: 1mm; } .etiq small { display: block; font-size: 6pt; color: #555; margin-top: 1mm; }
 .stk-act { display: flex; gap: 6px; flex-wrap: wrap; margin-top: 6px; }
+
+/* ===== v3.7 : exclusion, sanctions et bonus ===== */
+.choix-appel button.actif[data-v="X"] { background: #6B21A8; color: #fff; border-color: #6B21A8; }
+@media (max-width: 400px) { .choix-appel button { width: 36px; height: 40px; } }
+.ligne-appel.exclu { background: rgba(107,33,168,.07); }
+.motif-excl { color: #6B21A8; font-weight: 600; }
+.aj-badge { display: inline-block; margin-left: 6px; font-size: .78rem; font-weight: 700; border-radius: 999px; padding: 2px 8px; white-space: nowrap; }
+.aj-badge.moins { background: #FDE2E2; color: #B91C1C; } .aj-badge.plus { background: #DCFCE7; color: #166534; } .aj-badge.attente { background: #FEF3C7; color: #92400E; }
+.modale { position: fixed; inset: 0; background: rgba(0,0,0,.45); z-index: 900; display: flex; align-items: flex-end; justify-content: center; }
+.modale-boite { background: var(--carte, #fff); color: var(--texte); width: 100%; max-width: 560px; max-height: 92vh; overflow-y: auto; border-radius: 16px 16px 0 0; padding: 16px; position: relative; }
+@media (min-width: 700px) { .modale { align-items: center; } .modale-boite { border-radius: 16px; } }
+.modale-x { position: absolute; top: 10px; right: 12px; border: 0; background: none; font-size: 1.2rem; cursor: pointer; color: var(--gris); }
+.aj-types, .aj-pts, .aj-motifs { display: flex; gap: 6px; flex-wrap: wrap; margin: 4px 0 8px; }
+.aj-types button, .aj-pts button, .aj-motifs button { border: 2px solid var(--bord); background: var(--carte, #fff); color: var(--texte); border-radius: 10px; padding: 7px 10px; font: inherit; font-size: .9rem; cursor: pointer; }
+.aj-types button.actif, .aj-pts button.actif, .aj-motifs button.actif { border-color: #1E7B3A; background: rgba(30,123,58,.1); font-weight: 700; }
+.aj-eleves { max-height: 34vh; overflow-y: auto; border: 1px solid var(--bord); border-radius: 10px; padding: 4px 8px; }
+.aj-eleves label { display: flex; gap: 8px; align-items: center; padding: 6px 0; font-weight: normal; border-bottom: 1px solid var(--bord); }
+.aj-eleves label.sel { font-weight: 700; } .aj-eleves input { width: 20px; height: 20px; flex: 0 0 auto; }
+.par-note.barre span { text-decoration: line-through; opacity: .6; }
+.nom-appel .badge { white-space: normal; display: inline-block; line-height: 1.2; font-size: .72rem; } .nom-appel { min-width: 0; }

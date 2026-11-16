@@ -98,34 +98,41 @@ async function pageAppel(c, arg) {
     const deb = hNum(String(s.horaire).split('-')[0]);
     const eleves = D.eleves.filter(e => s.classes.includes(cleCode(e.classe)) && e.situation === 'INSCRIT').sort((a, b) => cmp(a.classe, b.classe) || cmp(nomComplet(a), nomComplet(b)));
     const prec = appelDe(etat.d, s.id);
-    const marques = {}; (prec ? prec.abs : []).forEach(a => { marques[a.e] = { t: a.t, min: a.min || '' }; });
+    const marques = {}; (prec ? prec.abs : []).forEach(a => { marques[a.e] = { t: a.t, min: a.min || '', motif: a.motif || '' }; });
+    // v3.7 : sans appel pour cette séance, on reprend l'état du dernier appel du jour sur la même classe (absent → absent, retard → présent)
+    const ante = !prec ? appelAnterieur(s, etat.d, deb) : null, repris = {};
+    if (ante) { const ids = new Set(D.eleves.filter(e => s.classes.includes(cleCode(e.classe))).map(e => e.id));
+      ante.abs.forEach(a => { if (!ids.has(a.e) || a.t === 'R') return; marques[a.e] = { t: 'A', min: '' }; repris[a.e] = a.t; }); }
     const sortieDe = id => (ref.sorties || []).find(x => x.e === id && x.d === etat.d && hNum(x.h) !== null && deb !== null && deb >= hNum(x.h) - 10);
     const justifDe = id => (ref.justifs || []).find(x => x.e === id && etat.d >= x.du && etat.d <= x.au);
     if (!prec) eleves.forEach(e => { if (sortieDe(e.id)) marques[e.id] = { t: 'A', min: '' }; });
     const compter = () => {
       const v = Object.values(marques);
-      $('#a-compte').innerHTML = `<b>${eleves.length - v.length}</b> présent(s) · <b style="color:#C00000">${v.filter(x => x.t === 'A').length}</b> absent(s) · <b style="color:#B45F06">${v.filter(x => x.t === 'R').length}</b> retard(s)`;
+      $('#a-compte').innerHTML = `<b>${eleves.length - v.length}</b> présent(s) · <b style="color:#C00000">${v.filter(x => x.t === 'A' || x.t === 'X').length}</b> absent(s)${v.some(x => x.t === 'X') ? ` dont ${v.filter(x => x.t === 'X').length} exclu(s)` : ''} · <b style="color:#B45F06">${v.filter(x => x.t === 'R').length}</b> retard(s)`;
     };
     c.innerHTML = `<p><a href="#/appel" id="a-retour">← Toutes les séances</a></p>
       <h1 style="margin-bottom:2px">${esc(s.classes.join(' + '))}</h1>
       <p class="aide" style="margin-top:0">${esc(jourLong(etat.d))} · ${esc(s.horaire)} · ${esc(s.matiere || '')} · ${nb(s.heures)} h${role() !== 'intervenant' ? ' · ' + esc(s.prof) : ''}</p>
       ${prec && !prec.attente ? `<div class="info">Appel déjà fait${prec.par ? ' par ' + esc(prec.par) : ''}${prec.le ? ' le ' + esc(prec.le) : ''}. Vous pouvez le corriger.</div>` : ''}
-      <div class="aide">Tout le monde est présent par défaut : touchez <b>A</b> pour un absent, <b>R</b> pour un retard. Un retard de plus de ${ref.params.seuilRetard} min compte comme une absence.</div>
+      ${ante ? `<div class="info">📋 Pré-rempli d'après l'appel de <b>${esc(ante.horaire)}</b>${ante.par ? ' (' + esc(ante.par) + ')' : ''} : <b>${Object.keys(repris).length}</b> absent(s) repris, les élèves en retard sont mis présents. Vérifiez puis enregistrez.</div>` : ''}
+      <div class="aide">${ante ? '' : 'Tout le monde est présent par défaut : '}touchez <b>A</b> pour un absent, <b>R</b> pour un retard, <b>E</b> pour un élève exclu du cours. Un retard de plus de ${ref.params.seuilRetard} min compte comme une absence.</div>
       <div class="barre-appel"><div id="a-compte"></div><button class="btn petit secondaire" id="a-tous">Tous présents</button></div>
       <div id="a-eleves">${eleves.map((e, i) => {
         const so = sortieDe(e.id), j = justifDe(e.id);
         return `<div class="ligne-appel" data-e="${e.id}"><span class="num">${i + 1}</span>${avatarEleve(e)}
           <div class="nom-appel"><b>${esc(e.nom)}</b> ${esc(e.prenoms)}${s.classes.length > 1 ? ` <span class="aide">${esc(e.classe)}</span>` : ''}
             ${so ? `<div><span class="badge bleu">Sorti(e) à ${esc(so.h)}</span></div>` : ''}${j ? `<div><span class="badge P">Justifié : ${esc(j.m)}</span></div>` : ''}
+            ${repris[e.id] ? `<div><span class="badge attente">${repris[e.id] === 'X' ? 'exclu' : 'absent'} au cours précédent</span></div>` : ''}<div class="motif-excl aide" hidden></div>
             <div class="min-retard" hidden><input type="number" min="1" max="240" inputmode="numeric" placeholder="min"> min de retard</div></div>
-          <div class="choix-appel"><button type="button" data-v="P">P</button><button type="button" data-v="A">A</button><button type="button" data-v="R">R</button></div></div>`;
+          <div class="choix-appel"><button type="button" data-v="P">P</button><button type="button" data-v="A">A</button><button type="button" data-v="R">R</button><button type="button" data-v="X" title="Exclu du cours">E</button></div></div>`;
       }).join('') || '<div class="info">Aucun élève inscrit dans cette classe.</div>'}</div>
       <div id="a-msg"></div>
       <button class="btn vert large" id="a-enr" style="position:sticky;bottom:10px">✔ Enregistrer l'appel</button>`;
     const majLigne = el => {
       const m = marques[el.dataset.e], v = m ? m.t : 'P';
       $$('.choix-appel button', el).forEach(b => b.classList.toggle('actif', b.dataset.v === v));
-      el.classList.toggle('absent', v === 'A'); el.classList.toggle('retard', v === 'R');
+      el.classList.toggle('absent', v === 'A' || v === 'X'); el.classList.toggle('retard', v === 'R'); el.classList.toggle('exclu', v === 'X');
+      const zm = $('.motif-excl', el); if (zm) { zm.hidden = v !== 'X'; zm.textContent = v === 'X' ? '🚪 Exclu du cours' + (m.motif ? ' : ' + m.motif : '') : ''; }
       const z = $('.min-retard', el); z.hidden = v !== 'R';
       if (v === 'R') { const inp = $('input', z); inp.value = m.min || ''; }
     };
@@ -133,7 +140,9 @@ async function pageAppel(c, arg) {
       majLigne(el);
       $$('.choix-appel button', el).forEach(b => b.onclick = () => {
         const v = b.dataset.v;
-        if (v === 'P') delete marques[el.dataset.e]; else marques[el.dataset.e] = { t: v, min: v === 'R' ? (marques[el.dataset.e] || {}).min || '' : '' };
+        let motif = '';
+        if (v === 'X') { motif = prompt('Motif de l\'exclusion du cours (l\'éducateur sera prévenu) :', ''); if (motif === null) return; }
+        if (v === 'P') delete marques[el.dataset.e]; else marques[el.dataset.e] = { t: v, min: v === 'R' ? (marques[el.dataset.e] || {}).min || '' : '', motif };
         majLigne(el); compter();
         if (v === 'R') $('.min-retard input', el).focus();
       });
@@ -144,7 +153,7 @@ async function pageAppel(c, arg) {
     $('#a-tous').onclick = () => { Object.keys(marques).forEach(k => delete marques[k]); $$('.ligne-appel', c).forEach(majLigne); compter(); };
     $('#a-retour').onclick = ev => { ev.preventDefault(); dessinerListe(); };
     $('#a-enr').onclick = async () => {
-      const abs = Object.entries(marques).map(([e, m]) => ({ e, t: m.t, min: m.t === 'R' ? Number(m.min) || 0 : 0 }));
+      const abs = Object.entries(marques).map(([e, m]) => ({ e, t: m.t, min: m.t === 'R' ? Number(m.min) || 0 : 0, motif: m.t === 'X' ? m.motif || '' : undefined }));
       const sansMin = abs.filter(a => a.t === 'R' && !a.min);
       if (sansMin.length) { $('#a-msg').innerHTML = `<div class="erreur">Indiquez les minutes de retard (${sansMin.length} élève(s)).</div>`; return; }
       AB.file = AB.file.filter(x => !(x.d === etat.d && x.s === s.id));
@@ -466,4 +475,18 @@ function imprimerConvocation(E, sem) {
     <p>Vous êtes prié(e) de vous présenter au lycée, au bureau de la Vie scolaire, le <b>……………………………</b> à <b>…………</b>, muni(e) de la présente convocation.</p>
     <p>Comptant sur votre compréhension et votre collaboration pour la réussite de ${f ? 'votre fille' : 'votre enfant'}, veuillez recevoir nos salutations distinguées.</p></div>
     <div class="signatures" style="grid-template-columns:1fr 1fr"><div>L'Éducateur</div><div>Le Chef d'établissement</div></div></div>`);
+}
+
+
+/* v3.7 : dernier appel du même jour, sur une des classes de la séance, commencé avant elle (le mien ou celui d'un collègue). */
+function appelAnterieur(s, d, deb) {
+  const ref = AB.ref; if (!ref || deb === null) return null;
+  const inter = cls => (cls || []).some(c => s.classes.includes(c));
+  const cands = [];
+  const miens = (ref.appels || []).concat((AB.file || []).map(x => ({ d: x.d, s: x.s, abs: x.abs, par: 'vous' })));
+  miens.forEach(a => { if (a.d !== d || a.s === s.id) return; const sx = ref.seances.find(y => y.id === a.s); if (!sx || !inter(sx.classes)) return;
+    const db = hNum(String(sx.horaire).split('-')[0]); if (db !== null && db < deb) cands.push({ deb: db, horaire: sx.horaire, par: a.par === 'vous' ? 'vous' : (sx.prof || ''), abs: a.abs || [] }); });
+  (ref.voisins || []).forEach(v => { if (v.d === d && v.deb !== null && v.deb < deb && inter(v.cls)) cands.push(v); });
+  cands.sort((a, b) => b.deb - a.deb);
+  return cands[0] || null;
 }

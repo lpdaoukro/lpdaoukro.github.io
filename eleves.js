@@ -189,6 +189,17 @@ async function pageEleve(c, id) {
     try { const r = await api('situationEleve', Object.assign({ id: e.id }, Object.fromEntries(new FormData(ev.target)))); toast(r.message); EL.donnees = null; await chargerEleves(true); afficher(); }
     catch (err) { $('#msg-s').innerHTML = `<div class="erreur">${esc(err.message)}</div>`; b.disabled = false; }
   };
+  if (!nouveau && ['admin', 'censeur', 'educateur', 'directeur', 'intervenant'].includes(role())) {
+    const z = document.createElement('details'); z.className = 'carte'; z.innerHTML = '<summary><b>📈 Comportement en classe (sanctions, bonus, avertissements)</b></summary><div class="aide">Chargement…</div>'; c.appendChild(z);
+    z.addEventListener('toggle', async () => { if (!z.open || z.dataset.ok) return; z.dataset.ok = 1;
+      try { const L = await api('ajustementsNotes', { id_eleve: e.id }), A = L.ajustements.filter(a => a.statut !== 'ANNULÉ'), R = L.resume;
+        const recent = A.slice(0, 30), lim = new Date(Date.now() - 30 * 864e5).toISOString().slice(0, 10), mois = A.filter(a => String(a.le).slice(0, 10) >= lim);
+        const solde = mois.reduce((t, a) => t + (a.type === 'BONUS' ? 1 : a.type === 'AVERTISSEMENT' ? 0 : -1), 0);
+        z.innerHTML = `<summary><b>📈 Comportement en classe</b></summary><div class="kpis"><div class="kpi rouge"><div class="lib">Sanctions</div><div class="val">${R.sanctions}</div></div><div class="kpi"><div class="lib">Avertissements</div><div class="val">${R.avertissements}</div></div><div class="kpi vert"><div class="lib">Bonus</div><div class="val">${R.bonus}</div></div></div>
+          <p>Tendance sur 30 jours : <b>${solde > 0 ? '📈 en progrès' : solde < 0 ? '📉 à surveiller' : '➖ stable'}</b></p>
+          ${recent.map(a => `<div class="par-note"><span>${a.type === 'BONUS' ? '➕' : a.type === 'AVERTISSEMENT' ? '⚠' : a.type === 'ZERO' ? '🚫' : '➖'} <b>${esc(a.matiere)}</b> ${a.type === 'SANCTION' || a.type === 'BONUS' ? (a.points > 0 ? '+' : '') + String(a.points).replace('.', ',') : ''} · ${esc(a.motif)} <span class="aide">${esc(a.par)}, ${esc(String(a.le).slice(0, 10).split('-').reverse().join('/'))}</span></span></div>`).join('') || '<p class="aide">Rien à signaler.</p>'}`;
+      } catch (err) { z.innerHTML = `<summary><b>📈 Comportement en classe</b></summary><div class="erreur">${esc(err.message)}</div>`; } });
+  }
   if (!nouveau) {
     $('#p-fiche').onclick = () => imprimerFicheEleve(e, cl);
     if ($('#p-certif')) $('#p-certif').onclick = async () => { if (await documentAutorise(e, 'CERTIFICAT')) imprimerCertificat(e, cl); };
