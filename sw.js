@@ -1,6 +1,6 @@
 // Service worker : garde l'application sur le téléphone pour qu'elle s'ouvre même sans connexion.
 const PORTEE = new URL(self.registration.scope).pathname.replace(/\W+/g, '_');   // '_' pour le site principal, '_demo_' pour la démo
-const VERSION = 'lpd-v44' + PORTEE;
+const VERSION = 'lpd-v45' + PORTEE;
 const FICHIERS = ['./', 'index.html', 'style.css', 'app.js', 'eleves.js', 'absences.js', 'notes.js', 'discipline.js', 'frais.js', 'stages.js', 'edt.js', 'config.js', 'manifest.webmanifest', 'icone-192.png', 'icone-512.png',
   'medias/embleme-blanc.png', 'medias/embleme-noir-petit.png', 'medias/logo-complet.png',
   'medias/armoiries.png', 'medias/ministere.png', 'medias/embleme-generique.svg', 'medias/embleme-generique-blanc.svg',

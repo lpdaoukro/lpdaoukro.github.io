@@ -273,7 +273,7 @@ function redimensionnerPhoto(fichier) {
 
 /* ================= BOÎTE À SUGGESTIONS (v2.5) ================= */
 let SUGG_PAGE = '';
-const VERSION_SITE = '3.7';
+const VERSION_SITE = '3.8';
 /* ================= NOTIFICATIONS SUR LE TÉLÉPHONE (v2.6, Firebase) ================= */
 // configuration publique du projet Firebase (faite pour être dans le site) ; la clé privée reste dans Apps Script
 const FIREBASE_CFG = { apiKey: 'AIzaSyDVRNmLz5ph73vf2a9vFhd2RVni8H9swt0', authDomain: 'lpdaoukro-notification.firebaseapp.com', projectId: 'lpdaoukro-notification',
@@ -947,7 +947,8 @@ async function pagePointage(c) {
     const presQ = {}; (ref.pres || []).filter(q => q.d === date).forEach(q => presQ[q.m] = q);
     const finMin = hor => { const m = String(hor || '').split('-')[1]; return m ? debutMin(m) : 9999; };
     /** Proposition « Présent (QR) » : arrivée avant le début et pas de départ avant la fin (tolérance 15 min) ou départ accepté. */
-    const propQR = (p, sx) => { const q = presQ[p.matricule]; if (!q || !q.a) return null; const a = debutMin(q.a.replace(':', 'h')), dp = q.dp ? debutMin(q.dp.replace(':', 'h')) : null;
+    const apFait = new Set((ref.ap || []).filter(a => a.d === date).map(a => a.s));
+    const propQR = (p, sx) => { if (apFait.has(sx.id)) return { ok: true, appel: true }; const q = presQ[p.matricule]; if (!q || !q.a) return null; const a = debutMin(q.a.replace(':', 'h')), dp = q.dp ? debutMin(q.dp.replace(':', 'h')) : null;
       const deb = debutMin(sx.horaire), fin = finMin(sx.horaire);
       if (a > deb) return { ok: false, txt: 'arrivé à ' + q.a + ' (QR)' };
       if (dp !== null && dp < fin - 15 && q.sd !== 'ACCEPTÉ') return { ok: false, txt: 'parti à ' + q.dp + ' (QR)' };
@@ -987,7 +988,7 @@ async function pagePointage(c) {
         <div class="compteur" style="margin-top:6px"><b>${jourLong(date)}</b> · ${faits}/${total} séances pointées
           ${S.file.length ? ` · <span class="en-attente-sync">${S.file.length} en attente d'envoi</span>` : ''}</div>
       </div>
-      ${aValiderQR.length && modifiable ? `<div class="succes qr-valid"><span>📲 <b>${aValiderQR.length} séance(s)</b> peuvent être validées d'après le pointage QR (arrivée avant le cours, pas de départ avant la fin).</span> <button class="btn petit vert" id="qr-ok">✔ Valider les présences QR</button></div>` : ''}
+      ${aValiderQR.length && modifiable ? `<div class="succes qr-valid"><span>📲 <b>${aValiderQR.length} séance(s)</b> peuvent être validées d'après le pointage QR ou l'appel fait par l'enseignant.</span> <button class="btn petit vert" id="qr-ok">✔ Valider les présences QR et appels</button></div>` : ''}
       ${rappel && rappel.d !== date ? `<div class="alerte rappel"><span>⏰ ${rappel.d === ajouterJours(auj, -1) ? 'Hier' : 'Le ' + jourLong(rappel.d)}, <b>${rappel.n} séance(s)</b> n'ont pas été pointées.</span> <button class="btn petit orange" id="aller-rappel">Pointer ce jour</button></div>` : ''}
       ${!S.enLigne ? '<div class="alerte">Vous êtes hors connexion. Continuez à pointer : tout sera envoyé automatiquement dès le retour du réseau.</div>' : ''}
       ${conge ? `<div class="info">Jour de congé : <b>${esc(conge)}</b>. Les séances ne sont pas dues ; vous pouvez les marquer C.</div>` : ''}
@@ -1007,7 +1008,7 @@ async function pagePointage(c) {
             const e = etatPointage(ref, date, s.id), pq = !e.st ? propQR(p, s) : null;
             return `<div class="seance ${pq && pq.ok ? 'sugg-qr' : ''}" data-s="${s.id}">
               <div class="quoi"><b>${esc(s.horaire)}</b> · ${esc(s.matiere)} · ${esc(s.classe)} <span class="badge ${esc(s.niveau)}">${esc(s.niveau)}</span> · ${nb(s.heures)} h
-                ${e.attente ? '<span class="en-attente-sync"> · en attente d\'envoi</span>' : ''}${pq ? (pq.ok ? ' <span class="badge qr">Présent (QR) proposé</span>' : ` <span class="badge attente">⚠ ${esc(pq.txt)}</span>`) : ''}</div>
+                ${e.attente ? '<span class="en-attente-sync"> · en attente d\'envoi</span>' : ''}${pq ? (pq.ok ? ` <span class="badge qr">${pq.appel ? 'Présent (appel fait)' : 'Présent (QR) proposé'}</span>` : ` <span class="badge attente">⚠ ${esc(pq.txt)}</span>`) : ''}</div>
               <div class="choix">${['P', 'A', 'C'].map(k => `<button class="${k} ${e.st === k ? 'on' : ''}" data-st="${k}" ${modifiable ? '' : 'disabled'} title="${{ P: 'Présent', A: 'Absent', C: 'Congé / pas de cours' }[k]}">${k}</button>`).join('')}</div>
               ${e.st === 'A' ? `<div class="motif"><select data-motif ${modifiable ? '' : 'disabled'}>${MOTIFS.map(m => `<option ${m === (e.m || 'Sans motif') ? 'selected' : ''}>${m}</option>`).join('')}</select></div>` : ''}
             </div>`;
@@ -2376,7 +2377,8 @@ async function pageArrivees(c) {
   const etiq = { 'À L\'HEURE': ['P', 'à l\'heure'], RETARD: ['attente', 'en retard'], 'PAS ARRIVÉ': ['A', 'pas arrivé'], ATTENDU: ['', 'attendu'], 'SANS COURS': ['', 'pas de cours'] };
   const ligne = x => `<tr class="arv-${x.etat === 'RETARD' ? 'retard' : x.etat === 'PAS ARRIVÉ' ? 'abs' : x.arrivee ? 'ok' : ''}"><td>${avatar(x.matricule, x.nom, 'petit')} <b>${esc(x.nom)}</b><div class="aide">${esc(x.fonction)}${x.compte ? '' : ' · sans compte'}</div></td>
     <td class="aide">${esc(x.attendu)}</td>
-    <td>${x.arrivee ? `<b>${esc(x.arrivee)}</b> ${x.srcA === 'CENSORAT' ? `<span class="aide">au censorat${x.parA ? ' (' + esc(x.parA) + ')' : ''}</span>` : '<span class="badge qr">QR</span>'}` : ''} <span class="badge ${etiq[x.etat][0]}">${etiq[x.etat][1]}</span>
+    <td>${x.arrivee ? `<b>${esc(x.arrivee)}</b> ${x.srcA === 'CENSORAT' ? `<span class="aide">au censorat${x.parA ? ' (' + esc(x.parA) + ')' : ''}</span>` : x.srcA === 'APPEL' ? '<span class="badge qr">📋 par l\'appel</span>' : '<span class="badge qr">QR</span>'}` : ''} <span class="badge ${etiq[x.etat][0]}">${etiq[x.etat][1]}</span>
+      ${x.appelDistant ? `<div class="alerte arv-motif">📋 Appel fait hors de l'établissement (${esc(x.appelDistant)}) : arrivée non enregistrée.</div>` : ''}
       ${!x.arrivee && V.peutPointer && auj ? `<button class="btn petit" data-pm="${x.matricule}|ARRIVEE">Pointer l'arrivée</button>` : ''}</td>
     <td>${x.depart ? `<b>${esc(x.depart)}</b> ${x.srcD === 'CENSORAT' ? '<span class="aide">au censorat</span>' : x.srcD === 'DÉCLARÉ' ? '<span class="aide">déclaré</span>' : '<span class="badge qr">QR</span>'}` : ''}
       ${x.etatDep === 'À EXAMINER' ? `<div class="alerte arv-motif">Départ avant la fin : « ${esc(x.motif)} »${V.peutPointer ? `<br><button class="btn petit vert" data-dd="${x.matricule}|ACCEPTÉ">Accepter</button> <button class="btn petit secondaire" data-dd="${x.matricule}|SIGNALÉ">Garder signalé</button>` : ''}</div>` : ''}
