@@ -273,7 +273,7 @@ function redimensionnerPhoto(fichier) {
 
 /* ================= BOÎTE À SUGGESTIONS (v2.5) ================= */
 let SUGG_PAGE = '';
-const VERSION_SITE = '3.10';
+const VERSION_SITE = '3.11';
 /* ================= NOTIFICATIONS SUR LE TÉLÉPHONE (v2.6, Firebase) ================= */
 // configuration publique du projet Firebase (faite pour être dans le site) ; la clé privée reste dans Apps Script
 const FIREBASE_CFG = { apiKey: 'AIzaSyDVRNmLz5ph73vf2a9vFhd2RVni8H9swt0', authDomain: 'lpdaoukro-notification.firebaseapp.com', projectId: 'lpdaoukro-notification',
@@ -755,6 +755,9 @@ const PAGES = {
   'ma-fiche':      { titre: 'Ma fiche', roles: ['intervenant', 'censeur', 'admin'], si: () => S.session.profil.intervenant || role() === 'intervenant', fn: pageMaFiche },
   'cahier':        { titre: 'Cahier de textes', roles: ['intervenant', 'censeur', 'admin', 'directeur', 'educateur'], fn: (c, a) => pageCahier(c, a) },
   'cahier-seance': { titre: 'Cahier de textes', roles: ['intervenant', 'censeur', 'admin'], cache: true, fn: (c, a) => pageCahierSeance(c, a) },
+  'cahier-passe':  { titre: 'Séances passées', roles: ['intervenant'], cache: true, fn: c => pageCahierPasse(c) },
+  'cahier-serie':  { titre: 'Remplir en série', roles: ['intervenant'], cache: true, fn: c => pageCahierSerie(c) },
+  'cahier-ratt':   { titre: 'Séance de rattrapage', roles: ['intervenant'], cache: true, fn: c => pageCahierRattrapage(c) },
   'cahier-classe': { titre: 'Cahier de textes', roles: ['intervenant', 'censeur', 'admin', 'directeur', 'educateur'], cache: true, fn: (c, a) => pageCahierClasse(c, a) },
   'progression':   { titre: 'Progression', roles: ['intervenant', 'censeur', 'admin', 'directeur', 'educateur'], cache: true, fn: (c, a) => pageProgression(c, a) },
   'import-progression': { titre: 'Importer une progression', roles: ['intervenant', 'censeur', 'admin', 'directeur'], cache: true, fn: c => pageImportProgression(c) },
