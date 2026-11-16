@@ -273,7 +273,7 @@ function redimensionnerPhoto(fichier) {
 
 /* ================= BOÎTE À SUGGESTIONS (v2.5) ================= */
 let SUGG_PAGE = '';
-const VERSION_SITE = '3.8';
+const VERSION_SITE = '3.8.1';
 /* ================= NOTIFICATIONS SUR LE TÉLÉPHONE (v2.6, Firebase) ================= */
 // configuration publique du projet Firebase (faite pour être dans le site) ; la clé privée reste dans Apps Script
 const FIREBASE_CFG = { apiKey: 'AIzaSyDVRNmLz5ph73vf2a9vFhd2RVni8H9swt0', authDomain: 'lpdaoukro-notification.firebaseapp.com', projectId: 'lpdaoukro-notification',
@@ -2035,12 +2035,15 @@ async function accueilVivant(z) {
   const reb = D.rebours || [];
   if (reb.length) h += `<div class="rebours">${reb.map(r => `<div class="rebours-item"><span>${r.icone}</span><b>${r.jours === 0 ? 'Aujourd\'hui' : r.jours === 1 ? 'Demain' : 'J-' + r.jours}</b><small>${esc(r.libelle)}</small></div>`).join('')}</div>`;
   h += blocsVie(D);
-  const cours = J.cours || [];
+  // état réel des appels : serveur + appels déjà sur ce téléphone (envoyés ou en attente d'envoi)
+  const auj0 = dateLocale(), local = typeof AB !== 'undefined' ? AB : null;
+  const appelLocal = id => { if (!local) return ''; if ((local.file || []).some(x => x.d === auj0 && x.s === id)) return 'attente'; if (((local.ref && local.ref.appels) || []).some(x => x.d === auj0 && x.s === id)) return 'fait'; return ''; };
+  const cours = (J.cours || []).map(c => Object.assign({}, c, { etatAppel: c.appel ? 'fait' : appelLocal(c.id) }));
   h += `<div class="ma-journee"><div class="mj-titre">☀ Ma journée</div><div class="mj-lignes">
     <div class="mj-l">${J.arrivee ? `✅ Arrivée pointée à <b>${esc(J.arrivee)}</b>${J.depart ? ` · 🚪 départ à <b>${esc(J.depart)}</b>` : ''}` : J.jourDeCours ? '⏱ Arrivée pas encore pointée aujourd\'hui' : '🌴 Pas de cours aujourd\'hui'}</div>
     ${J.departOublie ? `<div class="mj-l mj-oubli">⚠ Départ du <b>${fr(J.departOublie.date)}</b> non pointé (arrivé à ${esc(J.departOublie.arrivee)}).
       <div class="ligne" style="margin-top:6px"><div style="flex:0 0 110px"><input type="time" id="do-h" value="17:40"></div><div><input id="do-m" maxlength="150" placeholder="Pourquoi le départ n'a pas été pointé ?"></div><div style="flex:0 0 auto"><button class="btn petit" id="do-ok">Déclarer</button></div></div></div>` : ''}
-    ${cours.map(c => `<div class="mj-l">${c.appel ? '✅' : '📋'} <b>${esc(c.horaire)}</b> ${esc(c.matiere || '')} · ${esc(c.classe)}${c.salle ? ' · ' + esc(c.salle) : ''} ${c.appel ? '<span class="aide">appel fait</span>' : '<a href="#/appel">faire l\'appel</a>'}</div>`).join('')}
+    ${cours.map(c => `<div class="mj-l">${c.etatAppel === 'fait' ? '✅' : c.etatAppel === 'attente' ? '⏳' : '📋'} <b>${esc(c.horaire)}</b> ${esc(c.matiere || '')} · ${esc(c.classe)}${c.salle ? ' · ' + esc(c.salle) : ''} ${c.etatAppel === 'fait' ? '<span class="aide">appel fait</span>' : c.etatAppel === 'attente' ? '<span class="aide">appel fait, envoi en attente</span>' : '<a href="#/appel">faire l\'appel</a>'}</div>`).join('')}
     ${J.signalements ? `<div class="mj-l">📍 <a href="#/signalements">${J.signalements} signalement(s) à traiter</a></div>` : ''}
     ${ACT.donnees && ACT.donnees.actions.length ? `<div class="mj-l">🔔 <a href="#/actions">${ACT.donnees.actions.length} action(s) en attente</a></div>` : ''}</div></div>`;
   z.innerHTML = h;

@@ -28,7 +28,7 @@ async function synchroniserAppels(silencieux = true) {
     if (nbR) toast(`${nbR} appel(s) refusé(s) par le serveur : voir la page « Appel ».`, 6000);
     else if (!silencieux) toast('Appel envoyé ✓');
     if (AB.file.length) { syncAppelsEnCours = false; return synchroniserAppels(silencieux); }
-    await chargerRefAppel(true);
+    await chargerRefAppel(true); if (typeof AV !== 'undefined') AV.data = null;
     if (typeof redessinerAppel === 'function') redessinerAppel();
   } catch (e) {
     if (!(e instanceof HorsLigne) && !silencieux) toast(e.message, 5000);
@@ -160,7 +160,7 @@ async function pageAppel(c, arg) {
       const pos = role() === 'intervenant' && etat.d === dateLocale() ? await positionRapide() : null;
       AB.file = AB.file.filter(x => !(x.d === etat.d && x.s === s.id));
       AB.file.push(Object.assign({ d: etat.d, s: s.id, abs, t: horo(), hl: !navigator.onLine }, pos ? { pos } : {}));
-      sauverAB(); majReseau();
+      sauverAB(); majReseau(); if (typeof AV !== 'undefined') AV.data = null;
       toast(navigator.onLine ? 'Appel enregistré, envoi en cours…' : 'Appel gardé sur le téléphone : il partira au retour du réseau.', 4000);
       dessinerListe();
       synchroniserAppels(false);
