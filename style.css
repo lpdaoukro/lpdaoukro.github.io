@@ -867,3 +867,25 @@ tr.ligne-alerte td { background: rgba(247,127,0,.08); }
 #impression .prog-obs { border: 1px solid #555; min-height: 22mm; margin-top: 8px; padding: 4px; font-size: 9pt; }
 #impression .ct-print .prog-t { font-size: 8pt; }
 #impression .prog-print .signatures div, #impression .ct-print .signatures div { height: 55px; }
+
+/* --- v3.10 : tableau de bord --- */
+.tb-barre { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; justify-content: space-between; margin: 6px 0; }
+.tb-periodes { display: flex; gap: 4px; flex-wrap: wrap; }
+.tb-periodes button { border: 1px solid var(--bord); background: var(--carte, #fff); color: var(--texte); border-radius: 999px; padding: 5px 12px; font: inherit; font-size: .85rem; cursor: pointer; }
+.tb-periodes button.actif { background: var(--bleu); border-color: var(--bleu); color: #fff; font-weight: 600; }
+.tb-rapport { display: flex; gap: 6px; align-items: center; }
+.tb-rapport input { width: 150px; padding: 5px 8px; }
+.tb-evol { font-size: .75rem; color: var(--gris); }
+.tb-evol.bon { color: var(--vert); } .tb-evol.mauvais { color: var(--rouge); }
+.kpi.cliquable:hover { border-color: var(--bleu2); }
+.tb-graph { width: 100%; max-width: 560px; height: auto; display: block; background: var(--carte, #fff); border: 1px solid var(--bord); border-radius: var(--rayon); padding: 4px; }
+.tb-graph .tb-bar { fill: var(--bleu2); opacity: .55; } .tb-graph .tb-bar-act { fill: var(--bleu2); }
+.tb-graph .tb-val { font-size: 9px; fill: var(--texte); } .tb-graph .tb-lib { font-size: 9px; fill: var(--gris); }
+.tb-hbar { display: flex; flex-direction: column; gap: 5px; max-width: 640px; }
+.tb-hl { display: grid; grid-template-columns: minmax(90px, 38%) 1fr auto; gap: 8px; align-items: center; font-size: .85rem; }
+.tb-hn { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.tb-ht { background: var(--gris-clair); border-radius: 6px; height: 12px; overflow: hidden; }
+.tb-ht i { display: block; height: 100%; background: var(--bleu2); border-radius: 6px; }
+.tb-ht i.rouge { background: var(--rouge); } .tb-ht i.orange { background: var(--orange); } .tb-ht i.vert { background: var(--vert); }
+#impression .tb-print h3 { font-size: 10.5pt; margin: 8px 0 3px; }
+#impression .tb-print .prog-t td:first-child { width: 55%; }
