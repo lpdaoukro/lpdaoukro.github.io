@@ -113,6 +113,7 @@ function champSaisie(k, lib, type, oblig, e, D) {
   const v = e[k] === undefined ? '' : e[k];
   let inp;
   if (type === 'sexe') inp = `<select name="${k}"><option value=""></option><option value="M" ${v === 'M' ? 'selected' : ''}>Masculin</option><option value="F" ${v === 'F' ? 'selected' : ''}>Féminin</option></select>`;
+  else if (type === 'classe' && e.id) inp = `<input type="hidden" name="${k}" value="${esc(v)}"><select disabled>${optionsClasses(D.classes, cleCode(v), '— choisir —')}</select><div class="aide">Pour changer de classe : bouton « 🔁 Changer de classe » plus bas.</div>`;   // v3.9
   else if (type === 'classe') inp = `<select name="${k}">${optionsClasses(D.classes, cleCode(v), '— choisir —')}</select>`;
   else if (type === 'statut') inp = `<select name="${k}"><option value=""></option>${D.statuts.map(s => `<option ${s === v ? 'selected' : ''}>${s}</option>`).join('')}</select>`;
   else if (type === 'ouinon') inp = `<select name="${k}"><option value="NON">Non</option><option value="OUI" ${v === 'OUI' ? 'selected' : ''}>Oui</option></select>`;
@@ -162,6 +163,13 @@ async function pageEleve(c, id) {
       <form id="fs" class="ligne"><div><label>Situation</label><select name="situation">${D.situations.map(s => `<option ${s === e.situation ? 'selected' : ''}>${s}</option>`).join('')}</select></div>
       <div><label>Date</label><input type="date" name="date" value="${dateLocale()}"></div><div><label>Motif</label><input name="motif" placeholder="ex. transfert au LP de Bouaké" value="${esc(e.motif_situation || '')}"></div>
       <div style="flex:0 0 auto"><button class="btn orange">Changer la situation</button></div></form><div id="msg-s"></div></div>` : ''}
+    ${!nouveau && edit && e.situation === 'INSCRIT' ? `<div class="carte" id="chg-classe"><h2 style="margin-top:0">🔁 Changer de classe</h2>
+      <p class="aide">L'élève passe dans une autre classe : ses notes de l'année sont reprises pour les matières communes, ses absences le suivent, ses frais sont recalculés et les enseignants des deux classes sont prévenus.</p>
+      <div class="ligne"><div><label>Nouvelle classe</label><select id="cc-vers">${optionsClasses(D.classes.filter(k => k.code !== cleCode(e.classe)), '', '— choisir —')}</select></div>
+        <div><label>Date du changement</label><input type="date" id="cc-date" value="${dateLocale()}" max="${dateLocale()}"></div>
+        <div><label>Motif</label><input id="cc-motif" maxlength="200" placeholder="ex. erreur d'affectation, changement de spécialité"></div>
+        <div style="flex:0 0 auto"><button class="btn" id="cc-voir">Voir ce qui sera repris</button></div></div><div id="cc-apercu"></div></div>` : ''}
+    <div id="histo-classe"></div>
     ${!nouveau && e.modifie_le ? `<p class="aide">Dernière modification : ${esc(e.modifie_le)} par ${esc(e.modifie_par || '')}</p>` : ''}`;
   appliquerPhotosEleves();
   let photo = '';
@@ -189,6 +197,8 @@ async function pageEleve(c, id) {
     try { const r = await api('situationEleve', Object.assign({ id: e.id }, Object.fromEntries(new FormData(ev.target)))); toast(r.message); EL.donnees = null; await chargerEleves(true); afficher(); }
     catch (err) { $('#msg-s').innerHTML = `<div class="erreur">${esc(err.message)}</div>`; b.disabled = false; }
   };
+  if (!nouveau) histoClasse(e);
+  if ($('#cc-voir')) $('#cc-voir').onclick = () => apercuChangementClasse(e);
   if (!nouveau && ['admin', 'censeur', 'educateur', 'directeur', 'intervenant'].includes(role())) {
     const z = document.createElement('details'); z.className = 'carte'; z.innerHTML = '<summary><b>📈 Comportement en classe (sanctions, bonus, avertissements)</b></summary><div class="aide">Chargement…</div>'; c.appendChild(z);
     z.addEventListener('toggle', async () => { if (!z.open || z.dataset.ok) return; z.dataset.ok = 1;
@@ -430,4 +440,33 @@ async function documentAutorise(e, document, semestre) {
   }
   toast(`Impayé de ${fcfa(b.retard)} : ${doc} est retenu. Le directeur peut accorder une dérogation (page « Frais » de l'élève).`, 7000);
   return false;
+}
+
+/* ===================== v3.9 : CHANGEMENT DE CLASSE ===================== */
+async function histoClasse(e) {
+  try { const H = await api('historiqueClasse', { id: e.id }); const z = $('#histo-classe'); if (!z || !H.liste.length) return;
+    z.innerHTML = `<div class="carte"><h2 style="margin-top:0">🔁 Historique des classes</h2>${H.liste.map(x => `<div class="par-note"><span><b>${esc(x.de)}</b> → <b>${esc(x.vers)}</b> le ${fr(x.date)}${x.motif ? ' · ' + esc(x.motif) : ''}</span><span class="aide">${x.reports ? x.reports + ' note(s) reprise(s)' : ''}${x.frais ? ' · frais ' + esc(x.frais) : ''}</span></div>`).join('')}</div>`;
+  } catch (err) { /* sans effet */ }
+}
+async function apercuChangementClasse(e) {
+  const vers = $('#cc-vers').value, z = $('#cc-apercu'); if (!vers) return toast('Choisissez la nouvelle classe.');
+  const q = { id_eleve: e.id, vers, date: $('#cc-date').value, motif: $('#cc-motif').value };
+  z.innerHTML = '<div class="chargement">Vérification…</div>';
+  try {
+    const R = await api('changerClasse', q), avec = R.reports.filter(r => r.id_vers), sans = R.reports.filter(r => !r.id_vers);
+    z.innerHTML = `<div class="info" style="margin-top:10px"><b>${esc(nomComplet(e))}</b> : <b>${esc(R.de)}</b> → <b>${esc(R.vers)}</b></div>
+      ${avec.length ? `<h3>Notes reprises (${avec.reduce((t, r) => t + r.notes.length, 0)})</h3><div class="table-defil"><table><thead><tr><th>Matière en ${esc(R.de)}</th><th>→ en ${esc(R.vers)}</th><th>Notes</th></tr></thead><tbody>
+        ${avec.map(r => `<tr><td>${esc(r.matiere)}</td><td>${esc(r.matiere_vers)}</td><td>${r.notes.map(n => `${esc(n.note)}/${nb(n.bareme)} <span class="aide">S${n.semestre} ${frCourt(n.date)}</span>`).join(' · ')}</td></tr>`).join('')}</tbody></table></div>` : '<p class="aide">Aucune note à reprendre.</p>'}
+      ${sans.length ? `<div class="alerte">Matières sans équivalent en ${esc(R.vers)} (notes non reprises) : ${sans.map(r => esc(r.matiere) + ' (' + r.notes.length + ')').join(', ')}.</div>` : ''}
+      <p>Absences de l'année : <b>${R.absences}</b> (elles suivent l'élève).</p>
+      ${R.frais.change ? `<div class="alerte">💰 Les frais changent : ${fcfa(R.frais.avant)} → <b>${fcfa(R.frais.apres)}</b>.</div>` : '<p class="aide">Frais inchangés.</p>'}
+      ${avec.length ? '<label class="case"><input type="checkbox" id="cc-rep" checked> Reprendre les notes dans la nouvelle classe</label>' : ''}
+      <button class="btn vert large" id="cc-ok">✔ Confirmer le changement de classe</button>`;
+    $('#cc-ok').onclick = async () => {
+      $('#cc-ok').disabled = true;
+      try { const r = await api('changerClasse', Object.assign(q, { enregistrer: true, reporter: $('#cc-rep') ? $('#cc-rep').checked : false }));
+        toast(r.message, 7000); EL.donnees = null; await chargerEleves(true); afficher(); }
+      catch (err) { toast(err.message, 7000); $('#cc-ok').disabled = false; }
+    };
+  } catch (err) { z.innerHTML = `<div class="erreur">${esc(err.message)}</div>`; }
 }

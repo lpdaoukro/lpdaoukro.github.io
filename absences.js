@@ -61,12 +61,14 @@ async function pageAppel(c, arg) {
   if (!ref) throw new HorsLigne("La première ouverture de l'appel nécessite une connexion internet.");
   const prof = role() === 'intervenant';
   const auj = dateLocale();
-  const etat = { d: stock.lire('appel_date', auj), cls: stock.lire('appel_cls', ''), seance: null };
+  // v3.8.2 : la date choisie n'est gardée que pour la journée en cours ; chaque nouveau jour, l'appel s'ouvre sur aujourd'hui
+  const memo = stock.lire('appel_date2', null);
+  const etat = { d: memo && memo.le === auj ? memo.d : auj, cls: stock.lire('appel_cls', ''), seance: null };
   if (etat.d > auj || (prof && ecartJours(etat.d, auj) > ref.params.fenetre)) etat.d = auj;
   if (arg) { const [d, s] = arg.split('|'); if (d && s) { etat.d = d; etat.seance = s; } }
 
   const dessinerListe = () => {
-    etat.seance = null; stock.ecrire('appel_date', etat.d); stock.ecrire('appel_cls', etat.cls);
+    etat.seance = null; stock.ecrire('appel_date2', { d: etat.d, le: auj }); stock.ecrire('appel_cls', etat.cls); stock.effacer('appel_date');
     const cg = congeAB(etat.d);
     let l = jourSem(etat.d) > 4 || cg ? [] : seancesDuJour(etat.d);
     if (etat.cls) l = l.filter(s => s.classes.includes(etat.cls));
@@ -77,6 +79,7 @@ async function pageAppel(c, arg) {
       ${AB.rejets.length ? `<div class="erreur">Appels refusés par le serveur :<ul>${AB.rejets.slice(0, 5).map(x => `<li>${fr(x.d)} — ${esc(x.erreur)}</li>`).join('')}</ul><button class="btn petit secondaire" id="vider-rejets">J'ai compris</button></div>` : ''}
       <div class="ligne"><div><label>Date</label><input type="date" id="a-date" value="${etat.d}" max="${auj}" ${prof ? `min="${ajouterJours(auj, -ref.params.fenetre)}"` : ''}></div>
         ${!prof ? `<div><label>Classe</label><select id="a-cls"><option value="">Toutes les classes</option>${toutesClasses.map(k => `<option ${k === etat.cls ? 'selected' : ''}>${esc(k)}</option>`).join('')}</select></div>` : ''}</div>
+      ${etat.d !== auj ? `<div class="alerte">⚠ Vous êtes sur l'appel du <b>${esc(jourLong(etat.d))}</b>, pas d'aujourd'hui. <button class="btn petit" id="a-auj">Revenir à aujourd'hui</button></div>` : ''}
       <p class="aide">${esc(jourLong(etat.d))}${l.length ? ` — ${faits} appel(s) fait(s) sur ${l.length} séance(s)` : ''}${prof ? ` · Vous pouvez faire ou corriger l'appel jusqu'à ${ref.params.fenetre} jours en arrière.` : ''}</p>
       ${cg ? `<div class="info">Jour non travaillé : ${esc(cg.l || 'congé')}.</div>` : ''}
       <div id="a-liste">${l.map(s => {
@@ -84,9 +87,10 @@ async function pageAppel(c, arg) {
         const nA = a ? a.abs.filter(x => x.t === 'A').length : 0, nR = a ? a.abs.filter(x => x.t === 'R').length : 0;
         return `<div class="carte seance-appel cliquable" data-s="${s.id}"><div><b>${esc(s.horaire)}</b> · ${esc(s.classes.join(' + '))}<div class="aide">${esc(s.matiere || '')}${!prof ? ' — ' + esc(s.prof) : ''} · ${nb(s.heures)} h</div></div>
           <div>${!a ? '<span class="badge attente">À faire</span>' : a.attente ? '<span class="badge bleu">En attente d\'envoi</span>' : `<span class="badge P">Fait</span>`}
-          ${a ? `<div class="aide" style="text-align:right">${nA} abs. · ${nR} ret.</div>` : ''}</div></div>`;
+          ${a ? `<div class="aide" style="text-align:right">${nA} abs. · ${nR} ret.</div>` : ''}${a && prof && typeof etatCahier === 'function' ? `<div class="aide" style="text-align:right">${etatCahier(etat.d, s.id) ? '📘 cahier rempli' : `<a href="#/cahier-seance/${etat.d}|${s.id}" onclick="event.stopPropagation()">📘 remplir le cahier</a>`}</div>` : ''}</div></div>`;
       }).join('') || (cg || jourSem(etat.d) > 4 ? '' : `<div class="info">Aucune séance${etat.cls ? ' pour cette classe' : ''} ce jour-là dans ${prof ? 'votre emploi du temps' : 'les emplois du temps'}.</div>`)}</div>`;
     $('#a-date').onchange = e => { const v = e.target.value; if (!v || v > auj) return; etat.d = v; dessinerListe(); };
+    if ($('#a-auj')) $('#a-auj').onclick = () => { etat.d = auj; dessinerListe(); };
     if ($('#a-cls')) $('#a-cls').onchange = e => { etat.cls = e.target.value; dessinerListe(); };
     if ($('#vider-rejets')) $('#vider-rejets').onclick = () => { AB.rejets = []; sauverAB(); dessinerListe(); };
     $$('.seance-appel', c).forEach(x => x.onclick = () => { etat.seance = x.dataset.s; dessinerAppel(); });
@@ -112,6 +116,7 @@ async function pageAppel(c, arg) {
     };
     c.innerHTML = `<p><a href="#/appel" id="a-retour">← Toutes les séances</a></p>
       <h1 style="margin-bottom:2px">${esc(s.classes.join(' + '))}</h1>
+      ${etat.d !== auj ? `<div class="alerte">⚠ Appel du <b>${esc(jourLong(etat.d))}</b> (pas d'aujourd'hui).</div>` : ''}
       <p class="aide" style="margin-top:0">${esc(jourLong(etat.d))} · ${esc(s.horaire)} · ${esc(s.matiere || '')} · ${nb(s.heures)} h${role() !== 'intervenant' ? ' · ' + esc(s.prof) : ''}</p>
       ${prec && !prec.attente ? `<div class="info">Appel déjà fait${prec.par ? ' par ' + esc(prec.par) : ''}${prec.le ? ' le ' + esc(prec.le) : ''}. Vous pouvez le corriger.</div>` : ''}
       ${ante ? `<div class="info">📋 Pré-rempli d'après l'appel de <b>${esc(ante.horaire)}</b>${ante.par ? ' (' + esc(ante.par) + ')' : ''} : <b>${Object.keys(repris).length}</b> absent(s) repris, les élèves en retard sont mis présents. Vérifiez puis enregistrez.</div>` : ''}
@@ -162,7 +167,9 @@ async function pageAppel(c, arg) {
       AB.file.push(Object.assign({ d: etat.d, s: s.id, abs, t: horo(), hl: !navigator.onLine }, pos ? { pos } : {}));
       sauverAB(); majReseau(); if (typeof AV !== 'undefined') AV.data = null;
       toast(navigator.onLine ? 'Appel enregistré, envoi en cours…' : 'Appel gardé sur le téléphone : il partira au retour du réseau.', 4000);
-      dessinerListe();
+      // v3.9 : l'enseignant enchaîne avec le cahier de textes de la séance
+      if (role() === 'intervenant' && typeof etatCahier === 'function' && !etatCahier(etat.d, s.id) && (CT.ref || navigator.onLine)) location.hash = `#/cahier-seance/${etat.d}|${s.id}`;
+      else dessinerListe();
       synchroniserAppels(false);
     };
   };

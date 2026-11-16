@@ -130,12 +130,12 @@ const bandeauAncien = t => t ? `<div class="alerte">Hors connexion : affichage d
 function majReseau(etat) {
   if (etat !== undefined) S.enLigne = etat;
   const b = $('#etat-reseau'); if (!b) return;
-  const n = S.file.length + (typeof nbAppelsEnAttente === 'function' ? nbAppelsEnAttente() : 0) + (typeof nbNotesEnAttente === 'function' ? nbNotesEnAttente() : 0);
+  const n = S.file.length + (typeof nbAppelsEnAttente === 'function' ? nbAppelsEnAttente() : 0) + (typeof nbNotesEnAttente === 'function' ? nbNotesEnAttente() : 0) + (typeof nbCahierEnAttente === 'function' ? nbCahierEnAttente() : 0);
   b.className = 'reseau ' + (!S.enLigne ? 'hors-ligne' : n ? 'attente' : 'en-ligne');
   b.textContent = !S.enLigne ? (n ? `Hors ligne · ${n} en attente` : 'Hors ligne') : n ? `${n} en attente…` : 'En ligne ✓';
   b.dataset.court = !S.enLigne ? (n ? '⚠ ' + n : '⚠') : n ? n + '…' : '✓';   // version courte pour les petits écrans
 }
-window.addEventListener('online', () => { majReseau(true); synchroniser(); setTimeout(() => preparerHorsLigne(true), 5000); if (typeof synchroniserAppels === 'function') synchroniserAppels(); if (typeof synchroniserNotes === 'function') synchroniserNotes(); });
+window.addEventListener('online', () => { majReseau(true); synchroniser(); setTimeout(() => preparerHorsLigne(true), 5000); if (typeof synchroniserAppels === 'function') synchroniserAppels(); if (typeof synchroniserNotes === 'function') synchroniserNotes(); if (typeof synchroniserCahier === 'function') synchroniserCahier(); });
 window.addEventListener('offline', () => majReseau(false));
 let syncEnCours = false;
 async function synchroniser(silencieux = true) {
@@ -168,7 +168,7 @@ async function synchroniser(silencieux = true) {
     if (!(e instanceof HorsLigne) && !silencieux) toast(e.message, 5000);
   } finally { syncEnCours = false; majReseau(); }
 }
-setInterval(() => { if (navigator.onLine) { preparerHorsLigne(); synchroniser(); if (typeof synchroniserAppels === 'function') synchroniserAppels(); if (typeof synchroniserNotes === 'function') synchroniserNotes(); } }, 60000);
+setInterval(() => { if (navigator.onLine) { preparerHorsLigne(); synchroniser(); if (typeof synchroniserAppels === 'function') synchroniserAppels(); if (typeof synchroniserNotes === 'function') synchroniserNotes(); if (typeof synchroniserCahier === 'function') synchroniserCahier(); } }, 60000);
 let delaiSync;
 const syncBientot = () => { clearTimeout(delaiSync); delaiSync = setTimeout(() => synchroniser(), 1500); };
 
@@ -273,7 +273,7 @@ function redimensionnerPhoto(fichier) {
 
 /* ================= BOÎTE À SUGGESTIONS (v2.5) ================= */
 let SUGG_PAGE = '';
-const VERSION_SITE = '3.8.1';
+const VERSION_SITE = '3.9';
 /* ================= NOTIFICATIONS SUR LE TÉLÉPHONE (v2.6, Firebase) ================= */
 // configuration publique du projet Firebase (faite pour être dans le site) ; la clé privée reste dans Apps Script
 const FIREBASE_CFG = { apiKey: 'AIzaSyDVRNmLz5ph73vf2a9vFhd2RVni8H9swt0', authDomain: 'lpdaoukro-notification.firebaseapp.com', projectId: 'lpdaoukro-notification',
@@ -563,12 +563,14 @@ async function afficherParent() {
 async function dessinerEnfant(z) {
   z.innerHTML = '<div class="chargement">Chargement…</div>';
   const D = await api('parentEleve', { id: PAR.enfant }), O = PAR.onglet;
-  const ong = [['notes', '📝 Notes'], ['absences', '⏰ Absences'], ['frais', '💰 Frais'], ['bulletins', '📄 Bulletins']];
+  const ong = [['notes', '📝 Notes'], ['cahier', '📘 Cahier de textes'], ['absences', '⏰ Absences'], ['frais', '💰 Frais'], ['bulletins', '📄 Bulletins']];
   let h = (D.distinctions || []).map(x => `<div class="par-distinction">🏆 <b>${esc(x.titre)}</b> <span>${esc(x.periode)} · moyenne ${n2(x.moy)}</span></div>`).join('') + `<div class="onglets">${ong.map(([k, l]) => `<button data-po="${k}" class="${O === k ? 'actif' : ''}">${l}</button>`).join('')}</div>`;
   if (O === 'notes') {
     h += [1, 2].map(sem => { const L = D.notes.filter(n => n.semestre === sem); return L.length ? `<h2>Semestre ${sem}</h2>${L.map(m => `<div class="carte par-mat"><div class="par-mat-t"><b>${esc(m.matiere)}</b><span>coef. ${nb(m.coef)}</span><b class="par-moy ${m.moyenne !== null && m.moyenne < 10 ? 'bas' : ''}">${m.moyenne === null ? '—' : n2(m.moyenne)}</b></div>
       ${m.notes.map(n => `<div class="par-note"><span>${esc(n.libelle)} <i>${fr(n.date)}</i>${n.ajustement ? `<div class="aide">${n.ajustement.details.map(d => (d.type === 'BONUS' ? '🙋 Bonus +' + d.points : d.type === 'ZERO' ? '🚫 Note ramenée à 0' : '⚠ Retrait ' + d.points) + ' : ' + esc(d.motif)).join('<br>')} (note obtenue : ${esc(n.ajustement.brute)})</div>` : ''}</span><b>${esc(n.note)}/${nb(n.bareme)}</b></div>`).join('')}</div>`).join('')}` : ''; }).join('') || '<div class="info">Aucune note approuvée pour le moment.</div>';
     h += '<p class="aide">Seules les notes approuvées par les professeurs apparaissent. La moyenne indiquée est celle de la matière, sur 20.</p>';
+  } else if (O === 'cahier') {
+    h += typeof cahierParentHtml === 'function' ? cahierParentHtml(D.cahier) : '';
   } else if (O === 'absences') {
     const nj = D.absences.filter(a => a.type !== 'RETARD' && !a.justifiee).reduce((t, a) => t + a.heures, 0);
     h += `<div class="kpis"><div class="kpi"><div class="lib">Absences</div><div class="val">${D.absences.filter(a => a.type !== 'RETARD').length}</div></div><div class="kpi rouge"><div class="lib">Heures non justifiées</div><div class="val">${nb(nj)}</div></div><div class="kpi"><div class="lib">Retards</div><div class="val">${D.absences.filter(a => a.type === 'RETARD').length}</div></div></div>
@@ -751,6 +753,11 @@ function formInscription() {
 const PAGES = {
   'direction':     { titre: 'Direction', roles: ['directeur', 'admin'], fn: c => pageDirection(c) },
   'ma-fiche':      { titre: 'Ma fiche', roles: ['intervenant', 'censeur', 'admin'], si: () => S.session.profil.intervenant || role() === 'intervenant', fn: pageMaFiche },
+  'cahier':        { titre: 'Cahier de textes', roles: ['intervenant', 'censeur', 'admin', 'directeur', 'educateur'], fn: (c, a) => pageCahier(c, a) },
+  'cahier-seance': { titre: 'Cahier de textes', roles: ['intervenant', 'censeur', 'admin'], cache: true, fn: (c, a) => pageCahierSeance(c, a) },
+  'cahier-classe': { titre: 'Cahier de textes', roles: ['intervenant', 'censeur', 'admin', 'directeur', 'educateur'], cache: true, fn: (c, a) => pageCahierClasse(c, a) },
+  'progression':   { titre: 'Progression', roles: ['intervenant', 'censeur', 'admin', 'directeur', 'educateur'], cache: true, fn: (c, a) => pageProgression(c, a) },
+  'import-progression': { titre: 'Importer une progression', roles: ['intervenant', 'censeur', 'admin', 'directeur'], cache: true, fn: c => pageImportProgression(c) },
   'appel':         { titre: 'Appel', roles: ['intervenant', 'educateur', 'admin'], fn: (c, a) => pageAppel(c, a) },
   'notes':         { titre: 'Notes', roles: ['intervenant', 'censeur', 'admin', 'directeur'], fn: c => pageNotes(c) },
   'bulletins':     { titre: 'Bulletins', mod: ['bulletins', 'CONSULTE'], roles: ['directeur', 'censeur', 'admin'], fn: (c, a) => pageBulletins(c, a) },
@@ -817,7 +824,7 @@ const GROUPES_MENU = [
   { id: 'atelier', titre: '🔧 Atelier', pages: ['atelier', 'inventaire', 'demandes-mo', 'stock-mo', 'prets', 'securite', 'rapports-atelier'] },
   { id: 'personnel', titre: '👨‍🏫 Personnel', pages: ['pointage', 'arrivees', 'tableau', 'intervenants', 'rattrapages', 'reclamations', 'paiement', 'personnel'] },
   { id: 'eleves', titre: '🎓 Élèves', pages: ['eleves', 'effectifs', 'appel', 'absences', 'discipline', 'stages', 'familles', 'archives'] },
-  { id: 'notes', titre: '📝 Notes', pages: ['notes', 'bulletins', 'calendrier-conseils'] },
+  { id: 'notes', titre: '📝 Notes', pages: ['notes', 'cahier', 'bulletins', 'calendrier-conseils'] },
   { id: 'finances', titre: '💰 Finances', pages: ['caisse', 'finances'] },
   { id: 'admin', titre: '⚙ Administration', pages: ['annonces', 'calendrier-scolaire', 'emplois', 'comptes', 'droits', 'suggestions', 'passage', 'etablissement', 'licence', 'journal'] }
 ];
@@ -876,7 +883,7 @@ function afficher() {
 }
 window.addEventListener('hashchange', afficher);
 document.addEventListener('DOMContentLoaded', () => {
-  $('#etat-reseau').onclick = () => { if (!navigator.onLine) return toast('Pas de connexion : les pointages, les appels et les notes saisis partiront automatiquement au retour du réseau.' + (stock.lire('pret_hors_ligne', '') ? ' (Données gardées sur ce téléphone le ' + stock.lire('pret_hors_ligne', '') + '.)' : ''), 7000); synchroniser(false); if (typeof synchroniserAppels === 'function') synchroniserAppels(false); if (typeof synchroniserNotes === 'function') synchroniserNotes(false); };
+  $('#etat-reseau').onclick = () => { if (!navigator.onLine) return toast('Pas de connexion : les pointages, les appels et les notes saisis partiront automatiquement au retour du réseau.' + (stock.lire('pret_hors_ligne', '') ? ' (Données gardées sur ce téléphone le ' + stock.lire('pret_hors_ligne', '') + '.)' : ''), 7000); synchroniser(false); if (typeof synchroniserAppels === 'function') synchroniserAppels(false); if (typeof synchroniserNotes === 'function') synchroniserNotes(false); if (typeof synchroniserCahier === 'function') synchroniserCahier(false); };
   $('#btn-moi').onclick = () => { location.hash = '#/mon-compte'; };
   $('#btn-actions').onclick = () => { location.hash = '#/actions'; };
   if (!$('#btn-sugg')) { const b = document.createElement('button'); b.id = 'btn-sugg'; b.className = 'btn-actions'; b.title = 'Suggestion ou problème : écrire à l\'administrateur'; b.textContent = '💡'; b.hidden = true;
@@ -889,6 +896,7 @@ document.addEventListener('DOMContentLoaded', () => {
   setTimeout(() => preparerHorsLigne(true), 3000);
   if (S.session && encadrement()) synchroniser();
   if (S.session && typeof synchroniserAppels === 'function') synchroniserAppels();
+  if (S.session && typeof synchroniserCahier === 'function') synchroniserCahier();
 });
 
 /* ================= PRÉPARATION HORS CONNEXION (v3.3) =================
@@ -912,6 +920,7 @@ async function preparerHorsLigne(forcer) {
         const k = stock.lire('notes_classe', ''); if (k && accesPage('notes')) t.push(essai(chargerRefNotes0(k)));
       }
     }
+    if (typeof chargerRefCahier === 'function' && role() === 'intervenant') t.push(essai(chargerRefCahier(true)));   // v3.9 : cahier de textes hors connexion
     const r = await Promise.all(t);
     if (r.length && r.every(x => x)) stock.ecrire('pret_hors_ligne', new Date().toLocaleString('fr-FR'));
   } finally { prepHLenCours = false; }
@@ -2043,7 +2052,7 @@ async function accueilVivant(z) {
     <div class="mj-l">${J.arrivee ? `✅ Arrivée pointée à <b>${esc(J.arrivee)}</b>${J.depart ? ` · 🚪 départ à <b>${esc(J.depart)}</b>` : ''}` : J.jourDeCours ? '⏱ Arrivée pas encore pointée aujourd\'hui' : '🌴 Pas de cours aujourd\'hui'}</div>
     ${J.departOublie ? `<div class="mj-l mj-oubli">⚠ Départ du <b>${fr(J.departOublie.date)}</b> non pointé (arrivé à ${esc(J.departOublie.arrivee)}).
       <div class="ligne" style="margin-top:6px"><div style="flex:0 0 110px"><input type="time" id="do-h" value="17:40"></div><div><input id="do-m" maxlength="150" placeholder="Pourquoi le départ n'a pas été pointé ?"></div><div style="flex:0 0 auto"><button class="btn petit" id="do-ok">Déclarer</button></div></div></div>` : ''}
-    ${cours.map(c => `<div class="mj-l">${c.etatAppel === 'fait' ? '✅' : c.etatAppel === 'attente' ? '⏳' : '📋'} <b>${esc(c.horaire)}</b> ${esc(c.matiere || '')} · ${esc(c.classe)}${c.salle ? ' · ' + esc(c.salle) : ''} ${c.etatAppel === 'fait' ? '<span class="aide">appel fait</span>' : c.etatAppel === 'attente' ? '<span class="aide">appel fait, envoi en attente</span>' : '<a href="#/appel">faire l\'appel</a>'}</div>`).join('')}
+    ${cours.map(c => `<div class="mj-l">${c.etatAppel === 'fait' ? '✅' : c.etatAppel === 'attente' ? '⏳' : '📋'} <b>${esc(c.horaire)}</b> ${esc(c.matiere || '')} · ${esc(c.classe)}${c.salle ? ' · ' + esc(c.salle) : ''} ${c.etatAppel === 'fait' ? '<span class="aide">appel fait</span>' : c.etatAppel === 'attente' ? '<span class="aide">appel fait, envoi en attente</span>' : `<a href="#/appel/${auj0}|${esc(c.id)}">faire l'appel</a>`}${lienCahierJour(auj0, c)}</div>`).join('')}
     ${J.signalements ? `<div class="mj-l">📍 <a href="#/signalements">${J.signalements} signalement(s) à traiter</a></div>` : ''}
     ${ACT.donnees && ACT.donnees.actions.length ? `<div class="mj-l">🔔 <a href="#/actions">${ACT.donnees.actions.length} action(s) en attente</a></div>` : ''}</div></div>`;
   z.innerHTML = h;
@@ -2681,4 +2690,11 @@ async function pageRapportsAtelier(c) {
   $('#ra-imp1', c).onclick = () => imprimer(`<div class="page">${entete('LISTE DU BESOIN EN MATIÈRE D\'ŒUVRE — ' + R.annee)}<p class="aide">Période du ${jma(R.du)} au ${jma(R.au)}</p>${tabBesoin()}<div class="signatures"><div>Le Chef de travaux</div><div>Le Chef d'établissement</div></div></div>`, 'Besoin matiere oeuvre ' + R.annee);
   $('#ra-imp2', c).onclick = () => imprimer(`<div class="page">${entete('COÛT DES TRAVAUX PRATIQUES — ' + R.annee)}<h3>Par classe</h3><table><thead><tr><th>Classe</th><th>Sorties</th><th>Coût</th></tr></thead><tbody>${R.parClasse.map(k => `<tr><td>${esc(k.classe)}</td><td>${k.sorties}</td><td>${fcfa(k.montant)}</td></tr>`).join('')}</tbody></table>
     <h3>Par TP</h3><table><thead><tr><th>Date</th><th>Classe</th><th>TP</th><th>Enseignant</th><th>Coût</th></tr></thead><tbody>${R.parTp.map(t => `<tr><td>${jma(t.date)}</td><td>${esc(t.classe)}</td><td>${esc(t.tp)}</td><td>${esc(t.demandeur)}</td><td>${fcfa(t.cout)}</td></tr>`).join('')}</tbody></table><p style="text-align:right"><b>Total : ${fcfa(R.totalCout)}</b></p></div>`, 'Couts TP ' + R.annee);
+}
+
+/* v3.9 : lien « remplir le cahier » dans Ma journée (enseignant, appel fait) */
+function lienCahierJour(d, c) {
+  if (role() !== 'intervenant' || typeof etatCahier !== 'function' || !c.etatAppel) return '';
+  const e = etatCahier(d, c.id);
+  return e ? ' · <span class="aide">📘 cahier rempli</span>' : ` · <a href="#/cahier-seance/${d}|${esc(c.id)}">📘 remplir le cahier</a>`;
 }

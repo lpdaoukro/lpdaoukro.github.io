@@ -849,3 +849,21 @@ tr.grp td { background: var(--gris-clair); }
 .aj-eleves label.sel { font-weight: 700; } .aj-eleves input { width: 20px; height: 20px; flex: 0 0 auto; }
 .par-note.barre span { text-decoration: line-through; opacity: .6; }
 .nom-appel .badge { white-space: normal; display: inline-block; line-height: 1.2; font-size: .72rem; } .nom-appel { min-width: 0; }
+
+/* --- v3.9 : cahier de textes et progressions --- */
+.grille-cartes { display: grid; grid-template-columns: repeat(auto-fill, minmax(140px, 1fr)); gap: 10px; }
+.grille-cartes .carte { margin: 0; }
+tr.ligne-alerte td { background: rgba(247,127,0,.08); }
+.ct-prevu { border-left: 4px solid var(--vert); }
+.ct-prevu-t { font-size: 1.05rem; margin: 4px 0; }
+.ct-prevu .btn { margin-top: 8px; }
+.ct-entree { padding: 10px 12px; }
+.ct-e-t { margin-bottom: 4px; }
+.ct-txt { white-space: pre-wrap; margin: 4px 0; color: var(--texte); }
+#impression .prog-ent, #impression .prog-t { width: 100%; border-collapse: collapse; font-size: 8.5pt; margin: 6px 0; }
+#impression .prog-ent th, #impression .prog-ent td, #impression .prog-t th, #impression .prog-t td { border: 1px solid #555; padding: 2px 4px; vertical-align: top; }
+#impression .prog-ent th, #impression .prog-t th { background: #E7EEF7; }
+#impression .prog-t td.c { text-align: center; }
+#impression .prog-obs { border: 1px solid #555; min-height: 22mm; margin-top: 8px; padding: 4px; font-size: 9pt; }
+#impression .ct-print .prog-t { font-size: 8pt; }
+#impression .prog-print .signatures div, #impression .ct-print .signatures div { height: 55px; }
