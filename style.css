@@ -986,3 +986,5 @@ html[data-theme=sombre] .bulle.moi { background: #1C2B3D; } html[data-theme=somb
 .cr-annot { background: var(--gris-clair); border-radius: 8px; padding: 6px 10px; margin-top: 6px; font-size: .9rem; }
 .ag-auj { color: var(--bleu2); } .ag-rdv { border-left: 4px solid var(--bleu2); } .ag-rdv.fait { border-left-color: var(--vert); opacity: .75; } .ag-rdv.reporte { border-left-color: var(--orange); }
 select.petit { padding: 4px 6px; font-size: .85rem; width: auto; }
+/* v3.16.1 : sur ordinateur, les menus passent à la ligne au lieu d'être cachés à droite */
+@media (min-width: 700px) { .menu-groupes { flex-wrap: wrap; overflow-x: visible; } }
