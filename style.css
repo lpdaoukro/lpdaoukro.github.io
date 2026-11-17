@@ -988,3 +988,6 @@ html[data-theme=sombre] .bulle.moi { background: #1C2B3D; } html[data-theme=somb
 select.petit { padding: 4px 6px; font-size: .85rem; width: auto; }
 /* v3.16.1 : sur ordinateur, les menus passent à la ligne au lieu d'être cachés à droite */
 @media (min-width: 700px) { .menu-groupes { flex-wrap: wrap; overflow-x: visible; } }
+/* v3.16.2 : choix de la colonne à importer */
+.imp-col { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; background: #EEF4FB; border: 1px solid var(--bord); border-radius: 10px; padding: 10px 12px; margin-bottom: 10px; }
+.imp-col select { min-width: 220px; }
