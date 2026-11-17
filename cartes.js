@@ -61,8 +61,11 @@ async function reglagesCartes(z) {
   $('#rg-ok').onclick = async () => { try { toast((await api('reglerCartes', { frais: $('#rg-f').checked, retards: $('#rg-r').checked, contact: $('#rg-c').value })).message); } catch (e) { toast(e.message, 6000); } };
 }
 function imprimerCartes(P) {
-  const perso = P.type === 'PERSO', armoiries = 'medias/armoiries.png', logo = logoNoir();
-  const recto = x => { const coul = perso ? '#5B2C83' : (COUL_NIVEAU[x.niveau] || '#1F4E78');
+  const perso = P.type === 'PERSO', visi = P.type === 'VISITEUR', armoiries = 'medias/armoiries.png', logo = logoNoir();
+  const rectoV = x => `<div class="cq cq-visi"><div class="cq-tete" style="border-bottom-color:#C00000"><img src="${armoiries}" alt=""><div><b>${esc(P.etab)}</b><span>BADGE VISITEUR</span></div><img src="${logo}" alt=""></div>
+      <div class="cq-corps"><div class="cq-vnum">${esc(x.id.slice(1))}</div><div class="cq-txt"><b class="cq-nom">VISITEUR</b><span>À porter de façon visible pendant toute la visite.</span><span>À rendre au portail en sortant.</span></div><div class="cq-qr">${qrSvg(urlCarte(x.jeton))}</div></div>
+      <div class="cq-bande" style="background:#C00000">VISITEUR · ${esc(x.id)}<i></i></div></div>`;
+  const recto = x => { if (visi) return rectoV(x); const coul = perso ? '#5B2C83' : (COUL_NIVEAU[x.niveau] || '#1F4E78');
     return `<div class="cq"><div class="cq-tete" style="border-bottom-color:${coul}"><img src="${armoiries}" alt=""><div><b>${esc(P.etab)}</b><span>${perso ? 'CARTE PROFESSIONNELLE' : 'CARTE SCOLAIRE'} ${esc(P.annee)}</span></div><img src="${logo}" alt=""></div>
       <div class="cq-corps"><div class="cq-photo">${x.photo ? `<img src="${esc(x.photo)}" alt="">` : ''}</div>
         <div class="cq-txt"><b class="cq-nom">${esc(x.nom)}</b>${x.prenoms ? `<b class="cq-pre">${esc(x.prenoms)}</b>` : ''}
@@ -70,7 +73,7 @@ function imprimerCartes(P) {
         <div class="cq-qr">${qrSvg(urlCarte(x.jeton))}</div></div>
       <div class="cq-bande" style="background:${coul}">${perso ? 'PERSONNEL' : esc(x.niveau || '')}<i></i></div></div>`; };
   const verso = () => `<div class="cq cq-verso"><div class="cq-v-t"><img src="${armoiries}" alt=""><b>${esc(P.etab)}</b></div>
-      <ul><li>Cette carte est strictement personnelle.</li><li>Elle doit être présentée à toute réquisition du personnel de l'établissement.</li><li>En cas de perte, prévenir immédiatement ${perso ? "l'administration" : 'la vie scolaire'}.</li><li>Toute carte trouvée doit être rapportée à l'établissement.</li></ul>
+      ${visi ? `<ul><li>Ce badge reste la propriété de l'établissement.</li><li>Il doit être porté de façon visible et présenté à toute demande du personnel.</li><li>Il est strictement réservé à la visite enregistrée au portail.</li><li>Il doit être rendu au portail à la sortie.</li></ul>` : `<ul><li>Cette carte est strictement personnelle.</li><li>Elle doit être présentée à toute réquisition du personnel de l'établissement.</li><li>En cas de perte, prévenir immédiatement ${perso ? "l'administration" : 'la vie scolaire'}.</li><li>Toute carte trouvée doit être rapportée à l'établissement.</li></ul>`}
       ${P.contact ? `<div class="cq-contact">${esc(P.contact)}</div>` : ''}<div class="cq-sign"><span>Le Directeur</span><b>${esc(P.directeur || '')}</b></div><div class="cq-tri"><i></i><i></i><i></i></div></div>`;
   const pages = [];
   for (let i = 0; i < P.cartes.length; i += 10) {
@@ -80,17 +83,17 @@ function imprimerCartes(P) {
     const v = []; for (let k = 0; k < lot.length; k += 2) { v.push(lot[k + 1] ? verso() : '<div class="cq cq-vide"></div>'); v.push(verso()); }
     pages.push(`<div class="page cq-page">${v.join('')}</div>`);
   }
-  imprimer(pages.join(''), `Cartes ${perso ? 'personnel' : P.cartes[0] ? P.cartes[0].detail : ''}`);
+  imprimer(pages.join(''), visi ? 'Badges visiteurs' : `Cartes ${perso ? 'personnel' : P.cartes[0] ? P.cartes[0].detail : ''}`);
 }
 
 /* ===================== CONTRÔLE (scan) ===================== */
 const CQ = { flux: null, actif: false, lieu: stock.lire('cq_lieu', 'Entrée') };
 function arreterCamera() { CQ.actif = false; if (CQ.flux) { CQ.flux.getTracks().forEach(t => t.stop()); CQ.flux = null; } }
 async function pageControle(c, jetonDirect) {
-  const peutJournal = ['admin', 'directeur', 'censeur', 'educateur'].includes(role());
+  const peutJournal = ['admin', 'directeur', 'censeur', 'educateur', 'gardien'].includes(role()), accueil = ['admin', 'directeur', 'censeur', 'educateur', 'gardien'].includes(role());
   c.innerHTML = `<h1>📷 Contrôle des cartes</h1>
     <div class="ligne"><div><label>Lieu</label><select id="cq-lieu">${['Entrée', 'Bibliothèque', 'Atelier', 'Examen', 'Caisse', 'Autre'].map(l => `<option ${l === CQ.lieu ? 'selected' : ''}>${l}</option>`).join('')}</select></div>
-      <div style="flex:0 0 auto;align-self:flex-end"><button class="btn vert" id="cq-cam">📷 Scanner</button></div></div>
+      <div style="flex:0 0 auto;align-self:flex-end"><button class="btn vert" id="cq-cam">📷 Scanner</button>${accueil ? ' <a class="btn" href="#/visiteurs/entree">➕ Visiteur</a>' : ''}</div></div>
     <div id="cq-video" hidden><video id="cq-v" playsinline muted></video><div class="cq-viseur"></div><button class="btn secondaire petit" id="cq-stop">Arrêter la caméra</button></div>
     <div id="cq-res"></div>
     <details class="carte"><summary><b>Carte oubliée ? Rechercher l'élève</b></summary><div class="ligne"><div><input id="cq-q" placeholder="Nom ou matricule"></div><div style="flex:0 0 auto"><button class="btn secondaire" id="cq-ch">Rechercher</button></div></div><div id="cq-ql"></div></details>
@@ -130,6 +133,7 @@ async function pageControle(c, jetonDirect) {
   journal();
 }
 function afficherScan(z, R, apres) {
+  if (R.type === 'VISITEUR') return afficherScanVisiteur(z, R, apres);
   const x = R.eleve || R.personne, ok = R.valide && !R.alertes.length, warn = R.valide && R.alertes.length;
   z.innerHTML = `<div class="cq-res ${ok ? 'ok' : warn ? 'warn' : 'non'}">
     <div class="cq-res-t">${ok ? '✅ Carte valide' : warn ? '⚠ Attention' : '⛔ Accès refusé'}</div>
@@ -138,7 +142,7 @@ function afficherScan(z, R, apres) {
         ${R.frais ? `<div class="aide">Frais : reste ${fcfa(R.frais.reste)}${R.frais.retard ? `, dont <b style="color:var(--rouge)">${fcfa(R.frais.retard)} en retard</b>` : ''}</div>` : ''}</div></div>` : ''}
     ${R.alertes.map(a => `<div class="cq-alerte">${esc(a)}</div>`).join('')}
     <div class="actions">${R.droits && R.droits.retard ? (R.retardAujourdhui ? '<span class="badge orange">retard déjà noté aujourd\'hui</span>' : `<button class="btn orange" id="cq-ret">⏰ Retard</button>`) : ''}
-      ${R.droits && R.droits.frais && R.eleve ? `<a class="btn secondaire" href="#/frais-eleve/${R.eleve.id}">💰 Frais</a>` : ''}${R.eleve ? `<a class="btn secondaire" href="#/eleve/${R.eleve.id}">📄 Fiche</a>` : ''}</div></div>`;
+      ${R.droits && R.droits.frais && R.eleve ? `<a class="btn secondaire" href="#/frais-eleve/${R.eleve.id}">💰 Frais</a>` : ''}${R.eleve && (!R.droits || R.droits.fiche !== false) ? `<a class="btn secondaire" href="#/eleve/${R.eleve.id}">📄 Fiche</a>` : ''}</div></div>`;
   if ($('#cq-ret')) $('#cq-ret').onclick = async () => { try { toast((await api('retardEntree', { id_eleve: R.eleve.id })).message, 5000); $('#cq-ret').outerHTML = '<span class="badge orange">retard noté</span>'; if (apres) apres(); } catch (e) { toast(e.message, 6000); } };
 }
 /** Carte scannée avec l'appareil photo par quelqu'un qui n'est pas connecté (parent, visiteur). */
@@ -154,4 +158,64 @@ async function pageCartePublique(jeton) {
       <button class="btn secondaire" id="cp-co">Personnel : se connecter</button></div>`;
     $('#cp-co').onclick = () => { stock.ecrire('hash_en_attente', '#/carte/' + jeton); location.href = location.pathname; };
   } catch (e) { c.innerHTML = `<div class="erreur">${esc(e.message)}</div>`; }
+}
+
+/* ===================== v3.14 : VISITEURS ===================== */
+function afficherScanVisiteur(z, R, apres) {
+  const V = R.visiteur || {}, ok = R.valide && !R.alertes.length;
+  z.innerHTML = `<div class="cq-res ${ok ? 'ok' : R.valide ? 'warn' : 'non'}"><div class="cq-res-t">${V.libre ? '⛔ Badge non attribué' : ok ? '✅ Visiteur enregistré' : '⚠ Attention'}</div>
+    <div class="cq-res-c"><div class="cq-res-vnum">${esc(String(V.badge || '').slice(1))}</div><div>${V.libre ? `<b class="cq-res-nom">Badge ${esc(V.badge)}</b><div class="aide">Ce badge n'a pas été remis à l'accueil.</div>`
+      : `<b class="cq-res-nom">${esc(V.nom)}</b><div>${esc(V.motif)}</div><div>Vient voir : <b>${esc(V.visite)}</b></div><div class="aide">Entré à ${esc(V.entree)}${V.telephone ? ' · ' + esc(V.telephone) : ''}${V.gardee ? ' · pièce (' + esc(V.piece) + ') gardée' : ''}</div>`}</div></div>
+    ${R.alertes.map(a => `<div class="cq-alerte">${esc(a)}</div>`).join('')}
+    ${R.droits && R.droits.visiteur ? `<div class="actions">${V.libre ? `<a class="btn" href="#/visiteurs/entree/${esc(V.badge)}">➕ Remettre ce badge à un visiteur</a>` : `${V.gardee ? '<label class="case" style="display:inline-flex"><input type="checkbox" id="vs-pr"> Pièce rendue</label>' : ''}<button class="btn vert" id="vs-out">👋 Sortie</button>`}</div>` : ''}</div>`;
+  if ($('#vs-out')) $('#vs-out').onclick = async () => { try { toast((await api('visiteSortie', { id: V.id, piece_rendue: $('#vs-pr') ? $('#vs-pr').checked : false })).message, 5000); z.innerHTML = ''; if (apres) apres(); } catch (e) { toast(e.message, 7000); } };
+}
+async function pageVisiteurs(c, arg) {
+  const [mode, badge0] = String(arg || '').split('/');
+  const R = await api('visiteursRef');
+  if (mode === 'entree') {
+    const libres = R.badges.filter(b => b.libre);
+    c.innerHTML = `<p><a href="#/visiteurs">← Visiteurs</a></p><h1>➕ Entrée d'un visiteur</h1>
+      ${!R.badges.length ? '<div class="alerte">Aucun badge visiteur : l\'éducateur ou l\'administrateur doit d\'abord les imprimer (page Visiteurs).</div>' : ''}
+      <form id="ve-f" class="carte"><div class="ligne"><div><label>Nom et prénoms *</label><input name="nom" maxlength="80" required></div><div><label>Téléphone</label><input name="tel" inputmode="tel" maxlength="20"></div></div>
+        <div class="ligne"><div><label>Motif</label><select name="motif">${R.motifs.map(m => `<option>${esc(m)}</option>`).join('')}</select></div><div><label>Précision</label><input name="detail" maxlength="120" placeholder="facultatif"></div></div>
+        <label>Vient voir *</label><select name="qui"><option value="">— choisir —</option><optgroup label="Service">${R.services.map(s => `<option value="S:${esc(s)}">${esc(s)}</option>`).join('')}</optgroup><optgroup label="Personne">${R.personnes.map(p => `<option value="P:${p.id}">${esc(p.nom)}${p.fonction ? ' — ' + esc(p.fonction) : ''}</option>`).join('')}</optgroup></select>
+        <div class="ligne"><div><label>Pièce d'identité</label><select name="piece">${R.pieces.map(p => `<option>${esc(p)}</option>`).join('')}</select></div><div style="align-self:flex-end"><label class="case"><input type="checkbox" name="gardee"> Pièce gardée au portail</label></div></div>
+        <label>Badge remis</label><select name="badge">${libres.map(b => `<option ${b.id === badge0 ? 'selected' : ''}>${esc(b.id)}</option>`).join('')}</select>${!libres.length && R.badges.length ? '<div class="alerte">Tous les badges sont sortis.</div>' : ''}
+        <div class="actions"><button class="btn vert large">✔ Enregistrer l'entrée</button></div></form>`;
+    $('#ve-f').onsubmit = async ev => { ev.preventDefault(); const f = ev.target, q = f.qui.value;
+      if (!q) return toast('Qui le visiteur vient-il voir ?');
+      try { toast((await api('visiteEntree', { nom: f.nom.value, telephone: f.tel.value, motif: f.motif.value, detail: f.detail.value, id_personne: q.startsWith('P:') ? q.slice(2) : '', service: q.startsWith('S:') ? q.slice(2) : '',
+        piece: f.piece.value, piece_gardee: f.gardee.checked, badge: f.badge.value })).message, 6000); location.hash = '#/visiteurs'; } catch (e) { toast(e.message, 7000); } };
+    return;
+  }
+  let du = dateLocale(), au = dateLocale();
+  const dessiner = async () => {
+    const G = await api('registreVisites', { du, au }), cours = G.liste.filter(v => v.enCours);
+    c.innerHTML = `<h1>🚪 Visiteurs</h1><div class="actions" style="margin-bottom:8px"><a class="btn vert" href="#/visiteurs/entree">➕ Entrée d'un visiteur</a><a class="btn secondaire" href="#/controle">📷 Scanner un badge</a></div>
+      <div class="kpis"><div class="kpi ${cours.length ? 'orange' : 'vert'}"><div class="lib">Visiteurs présents</div><div class="val">${cours.length}</div></div><div class="kpi"><div class="lib">Badges libres</div><div class="val">${R.badges.filter(b => b.libre).length}/${R.badges.length}</div></div><div class="kpi"><div class="lib">Visites sur la période</div><div class="val">${G.liste.length}</div></div></div>
+      ${cours.length ? `<h2>Présents en ce moment</h2>${cours.map(v => `<div class="carte par-mat"><div class="par-mat-t"><b>${esc(v.badge)} · ${esc(v.nom)}</b><span class="aide">entré à ${esc(v.entree)}${v.date !== dateLocale() ? ' le ' + fr(v.date) : ''}</span></div>
+        <div>${esc(v.motif)} · vient voir <b>${esc(v.visite)}</b>${v.telephone ? ' · ' + esc(v.telephone) : ''}${v.gardee ? ' · <b>pièce (' + esc(v.piece) + ') gardée</b>' : ''}</div>
+        <div class="actions">${v.gardee ? `<label class="case" style="display:inline-flex"><input type="checkbox" data-pr="${v.id}"> Pièce rendue</label>` : ''}<button class="btn petit vert" data-out="${v.id}">👋 Sortie</button></div></div>`).join('')}` : ''}
+      <h2>Registre</h2><div class="ligne"><div><label>Du</label><input type="date" id="vr-du" value="${du}"></div><div><label>Au</label><input type="date" id="vr-au" value="${au}"></div><div style="flex:0 0 auto;align-self:flex-end"><button class="btn secondaire" id="vr-imp">🖨 Imprimer le registre</button></div></div>
+      <div class="table-defil"><table><thead><tr><th>Date</th><th>Badge</th><th>Visiteur</th><th>Motif</th><th>Vient voir</th><th>Entrée</th><th>Sortie</th></tr></thead><tbody>
+      ${G.liste.map(v => `<tr><td>${frCourt(v.date)}</td><td>${esc(v.badge)}</td><td>${esc(v.nom)}<div class="aide">${esc(v.telephone)}</div></td><td>${esc(v.motif)}</td><td>${esc(v.visite)}</td><td>${esc(v.entree)}</td><td>${v.sortie ? esc(v.sortie) : '<span class="badge attente">présent</span>'}</td></tr>`).join('') || '<tr><td colspan="7" class="aide">Aucune visite.</td></tr>'}</tbody></table></div>
+      <h2>Badges</h2><div class="vb-grille">${R.badges.map(b => `<div class="vb ${b.libre ? 'libre' : b.statut !== 'ACTIVE' ? 'perdu' : 'pris'}" title="${b.visite ? esc(b.visite.nom) : ''}"><b>${esc(b.id)}</b><span>${b.libre ? 'libre' : b.statut !== 'ACTIVE' ? 'à refaire' : 'sorti'}</span></div>`).join('') || '<p class="aide">Aucun badge.</p>'}</div>
+      ${R.gerer ? `<div class="carte" style="margin-top:10px"><b>🖨 Imprimer des badges</b><p class="aide">Imprimés une fois, plastifiés et gardés au portail. Un badge perdu : déclarez-le, puis réimprimez-le.</p>
+        <div class="ligne"><div><label>Nombre de badges</label><input type="number" id="vb-n" min="1" max="60" value="${Math.max(20, R.badges.length)}"></div><div><label>Badge perdu</label><select id="vb-p"><option value="">—</option>${R.badges.filter(b => b.statut === 'ACTIVE').map(b => `<option>${esc(b.id)}</option>`).join('')}</select></div></div>
+        <div class="actions"><button class="btn" id="vb-imp">🖨 Imprimer tous les badges</button><button class="btn secondaire" id="vb-ref">Réimprimer les badges « à refaire »</button><button class="btn rouge" id="vb-perdu">Déclarer perdu</button></div></div>` : ''}`;
+    $('#vr-du').onchange = e => { du = e.target.value || du; dessiner(); }; $('#vr-au').onchange = e => { au = e.target.value || au; dessiner(); };
+    $('#vr-imp').onclick = () => imprimer(`<div class="page paysage">${entete('REGISTRE DES VISITEURS')}<p style="font-size:9.5pt">Du ${fr(du)} au ${fr(au)} · ${G.liste.length} visite(s)</p><table class="prog-t"><thead><tr><th>Date</th><th>Badge</th><th>Visiteur</th><th>Téléphone</th><th>Motif</th><th>Vient voir</th><th>Pièce</th><th>Entrée</th><th>Sortie</th></tr></thead><tbody>
+      ${G.liste.map(v => `<tr><td>${fr(v.date)}</td><td>${esc(v.badge)}</td><td>${esc(v.nom)}</td><td>${esc(v.telephone)}</td><td>${esc(v.motif)}${v.detail ? ' — ' + esc(v.detail) : ''}</td><td>${esc(v.visite)}</td><td>${esc(v.piece)}${v.gardee ? ' (gardée)' : ''}</td><td>${esc(v.entree)}</td><td>${esc(v.sortie)}</td></tr>`).join('')}</tbody></table></div>`, 'Registre des visiteurs');
+    $$('[data-out]', c).forEach(b => b.onclick = async () => { const pr = $(`[data-pr="${b.dataset.out}"]`, c);
+      try { toast((await api('visiteSortie', { id: b.dataset.out, piece_rendue: pr ? pr.checked : false })).message, 5000); const R2 = await api('visiteursRef'); R.badges = R2.badges; dessiner(); } catch (e) { toast(e.message, 7000); } });
+    if ($('#vb-imp')) {
+      const imp = async ids => { try { await preparerQR(); const P = await api('badgesVisiteurs', { nombre: +$('#vb-n').value, ids }); imprimerCartes(P); const R2 = await api('visiteursRef'); R.badges = R2.badges; } catch (e) { toast(e.message, 6000); } };
+      $('#vb-imp').onclick = () => imp(null);
+      $('#vb-ref').onclick = () => { const L = R.badges.filter(b => b.statut !== 'ACTIVE').map(b => b.id); if (!L.length) return toast('Aucun badge à refaire.'); imp(L); };
+      $('#vb-perdu').onclick = async () => { const id = $('#vb-p').value; if (!id) return toast('Choisissez le badge perdu.'); if (!confirm('Désactiver le badge ' + id + ' ?')) return;
+        try { toast((await api('cartePerdue', { type: 'VISITEUR', id })).message, 6000); const R2 = await api('visiteursRef'); R.badges = R2.badges; dessiner(); } catch (e) { toast(e.message, 6000); } };
+    }
+  };
+  await dessiner();
 }

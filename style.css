@@ -961,3 +961,10 @@ html[data-theme=sombre] .bulle.moi { background: #1C2B3D; } html[data-theme=somb
 /* v3.13.1 : cartes QR — 10 cartes tiennent sur une page (marges d'impression supprimées, cartes centrées) */
 @media print { @page cartes { size: A4; margin: 0; } #impression .page.cq-page { page: cartes; } }
 #impression .page.cq-page { padding: 13mm 0 0 !important; margin: 0 !important; height: 296mm; box-sizing: border-box; overflow: hidden; min-height: 0; }
+
+/* --- v3.14 : visiteurs --- */
+#impression .cq-vnum { width: 19mm; height: 24mm; display: flex; align-items: center; justify-content: center; font-size: 26pt; font-weight: 900; color: #C00000; border: .6mm solid #C00000; border-radius: 2mm; }
+.cq-res-vnum { width: 90px; height: 90px; border-radius: 12px; border: 4px solid #C00000; color: #C00000; font-size: 2.4rem; font-weight: 900; display: flex; align-items: center; justify-content: center; flex: none; }
+.vb-grille { display: grid; grid-template-columns: repeat(auto-fill, minmax(70px, 1fr)); gap: 6px; }
+.vb { border-radius: 10px; padding: 6px; text-align: center; border: 2px solid var(--bord); } .vb b { display: block; font-size: 1.05rem; } .vb span { font-size: .72rem; }
+.vb.libre { border-color: var(--vert); } .vb.pris { border-color: var(--orange); background: rgba(247,127,0,.08); } .vb.perdu { border-color: var(--rouge); opacity: .7; }

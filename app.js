@@ -273,7 +273,7 @@ function redimensionnerPhoto(fichier) {
 
 /* ================= BOÎTE À SUGGESTIONS (v2.5) ================= */
 let SUGG_PAGE = '';
-const VERSION_SITE = '3.13.1';
+const VERSION_SITE = '3.14';
 /* ================= NOTIFICATIONS SUR LE TÉLÉPHONE (v2.6, Firebase) ================= */
 // configuration publique du projet Firebase (faite pour être dans le site) ; la clé privée reste dans Apps Script
 const FIREBASE_CFG = { apiKey: 'AIzaSyDVRNmLz5ph73vf2a9vFhd2RVni8H9swt0', authDomain: 'lpdaoukro-notification.firebaseapp.com', projectId: 'lpdaoukro-notification',
@@ -762,8 +762,9 @@ const PAGES = {
   'ma-fiche':      { titre: 'Ma fiche', roles: ['intervenant', 'censeur', 'admin'], si: () => S.session.profil.intervenant || role() === 'intervenant', fn: pageMaFiche },
   'parents-com':   { titre: 'Parents', roles: ['admin', 'directeur', 'censeur', 'educateur', 'comptable', 'intervenant'], si: () => role() !== 'intervenant' || ((S.session.profil || {}).pp || []).length > 0, fn: (c, a) => pageParentsCom(c, a) },
   'cartes':        { titre: 'Cartes QR', roles: ['admin', 'directeur', 'censeur', 'educateur'], fn: (c, a) => pageCartes(c, a) },
-  'controle':      { titre: 'Contrôle des cartes', roles: ['admin', 'directeur', 'censeur', 'educateur', 'comptable'], fn: c => pageControle(c) },
-  'carte':         { titre: 'Contrôle des cartes', roles: ['admin', 'directeur', 'censeur', 'educateur', 'comptable', 'intervenant'], cache: true, fn: (c, a) => pageControle(c, a) },
+  'controle':      { titre: 'Contrôle des cartes', roles: ['admin', 'directeur', 'censeur', 'educateur', 'comptable', 'gardien'], fn: c => pageControle(c) },
+  'visiteurs':     { titre: 'Visiteurs', roles: ['admin', 'directeur', 'censeur', 'educateur', 'gardien'], fn: (c, a) => pageVisiteurs(c, a) },
+  'carte':         { titre: 'Contrôle des cartes', roles: ['admin', 'directeur', 'censeur', 'educateur', 'comptable', 'intervenant', 'gardien'], cache: true, fn: (c, a) => pageControle(c, a) },
   'cahier':        { titre: 'Cahier de textes', roles: ['intervenant', 'censeur', 'admin', 'directeur', 'educateur'], fn: (c, a) => pageCahier(c, a) },
   'cahier-seance': { titre: 'Cahier de textes', roles: ['intervenant', 'censeur', 'admin'], cache: true, fn: (c, a) => pageCahierSeance(c, a) },
   'cahier-passe':  { titre: 'Séances passées', roles: ['intervenant'], cache: true, fn: c => pageCahierPasse(c) },
@@ -807,12 +808,12 @@ const PAGES = {
   'passage':       { titre: 'Passage d\'année', roles: ['admin', 'directeur'], fn: c => pagePassage(c) },
   'archives':      { titre: 'Années précédentes', roles: ['admin', 'directeur', 'censeur', 'comptable', 'educateur'], fn: c => pageArchives(c) },
   'familles':      { titre: 'Espace parents', roles: ['admin', 'comptable', 'educateur', 'directeur'], fn: c => pageFamilles(c) },
-  'suggestion':    { titre: 'Suggestion', roles: ['intervenant', 'censeur', 'admin', 'educateur', 'comptable', 'directeur'], cache: true, fn: c => pageSuggestion(c) },
+  'suggestion':    { titre: 'Suggestion', roles: ['intervenant', 'censeur', 'admin', 'educateur', 'comptable', 'directeur', 'gardien'], cache: true, fn: c => pageSuggestion(c) },
   'suggestions':   { titre: 'Suggestions', roles: ['admin'], fn: c => pageSuggestions(c) },
   'etablissement': { titre: 'Établissement', roles: ['admin'], fn: c => pageEtablissement(c) },
   'licence':       { titre: 'Licence', roles: ['admin'], fn: c => pageLicence(c) },
   'calendrier-scolaire': { titre: 'Congés et jours fériés', roles: ['admin', 'censeur'], fn: c => pageCalendrierScolaire(c) },
-  'actions':       { titre: 'Mes actions', roles: ['intervenant', 'censeur', 'admin', 'educateur', 'comptable', 'directeur'], cache: true, fn: c => pageActions(c) },
+  'actions':       { titre: 'Mes actions', roles: ['intervenant', 'censeur', 'admin', 'educateur', 'comptable', 'directeur', 'gardien'], cache: true, fn: c => pageActions(c) },
   'annonces':      { titre: 'Annonces et échéances', mod: ['annonces', 'AGIT'], roles: ['admin', 'directeur', 'censeur'], fn: c => pageAnnonces(c) },
   'droits':        { titre: 'Droits et délégations', roles: ['admin'], fn: c => pageDroits(c) },
   'calendrier-conseils': { titre: 'Calendrier des conseils', roles: ['intervenant', 'censeur', 'admin', 'directeur', 'educateur'], fn: c => pageCalendrierConseils(c) },
@@ -821,7 +822,7 @@ const PAGES = {
   'journal':       { titre: 'Journal', mod: ['comptes', 'CONSULTE'], roles: ['admin'], fn: pageJournal },
   'conseil':       { titre: 'Conseil de classe', roles: ['intervenant', 'censeur', 'admin', 'directeur', 'educateur'], cache: true, fn: (c, a) => pageConseil(c, a) },
   'matieres':      { titre: 'Matières et coefficients', roles: ['admin'], cache: true, fn: c => pageMatieres(c) },
-  'mon-compte':    { titre: 'Mon compte', roles: ['intervenant', 'censeur', 'admin', 'educateur', 'comptable', 'directeur'], cache: true, fn: pageMonCompte },
+  'mon-compte':    { titre: 'Mon compte', roles: ['intervenant', 'censeur', 'admin', 'educateur', 'comptable', 'directeur', 'gardien'], cache: true, fn: pageMonCompte },
   'eleve':         { titre: 'Fiche élève', roles: ['educateur', 'comptable', 'censeur', 'admin', 'intervenant', 'directeur'], cache: true, fn: (c, a) => pageEleve(c, a) },
   'import-eleves': { titre: 'Importer des élèves', roles: ['educateur', 'admin'], cache: true, fn: c => pageImportEleves(c) },
   'param-eleves':  { titre: 'Classes et montants', roles: ['admin'], cache: true, fn: c => pageParamEleves(c) },
@@ -837,7 +838,7 @@ const GROUPES_MENU = [
   { id: 'accueil', titre: '🏠 Accueil', pages: ['direction', 'ma-fiche', 'vie', 'agent-mois', 'honneur', 'sondages', 'signalements'] },
   { id: 'atelier', titre: '🔧 Atelier', pages: ['atelier', 'inventaire', 'demandes-mo', 'stock-mo', 'prets', 'securite', 'rapports-atelier'] },
   { id: 'personnel', titre: '👨‍🏫 Personnel', pages: ['pointage', 'arrivees', 'tableau', 'intervenants', 'rattrapages', 'reclamations', 'paiement', 'personnel'] },
-  { id: 'eleves', titre: '🎓 Élèves', pages: ['eleves', 'effectifs', 'appel', 'absences', 'controle', 'cartes', 'discipline', 'parents-com', 'stages', 'familles', 'archives'] },
+  { id: 'eleves', titre: '🎓 Élèves', pages: ['eleves', 'effectifs', 'appel', 'absences', 'controle', 'visiteurs', 'cartes', 'discipline', 'parents-com', 'stages', 'familles', 'archives'] },
   { id: 'notes', titre: '📝 Notes', pages: ['notes', 'cahier', 'bulletins', 'calendrier-conseils'] },
   { id: 'finances', titre: '💰 Finances', pages: ['caisse', 'finances'] },
   { id: 'admin', titre: '⚙ Administration', pages: ['annonces', 'calendrier-scolaire', 'emplois', 'comptes', 'droits', 'suggestions', 'passage', 'etablissement', 'licence', 'journal'] }
@@ -867,7 +868,7 @@ function menu() {
 function afficher() {
   const pg0 = (location.hash.slice(2) || '').split('/');
   if (pg0[0] === 'signaler' || pg0[0] === 'suivi') return pageSignalPublic(pg0[0], decodeURIComponent(pg0[1] || ''));
-  if (pg0[0] === 'carte' && (!S.session || S.session.parent || !['admin', 'directeur', 'censeur', 'educateur', 'comptable', 'intervenant'].includes(role()))) return pageCartePublique(decodeURIComponent(pg0[1] || ''));   // v3.12
+  if (pg0[0] === 'carte' && (!S.session || S.session.parent || !['admin', 'directeur', 'censeur', 'educateur', 'comptable', 'intervenant', 'gardien'].includes(role()))) return pageCartePublique(decodeURIComponent(pg0[1] || ''));   // v3.12
   if (pg0[0] === 'equipement' && !S.session) stock.ecrire('hash_en_attente', location.hash);
   if (pg0[0] === 'pointer') {
     if (!S.session) { stock.ecrire('pointage_en_attente', pg0[1] || ''); return ecranConnexion(); }
@@ -882,7 +883,7 @@ function afficher() {
   $('#moi-nom').textContent = p.nom;
   $('#moi-photo').outerHTML = avatar(p.matricule, p.nom, 'petit').replace('class="avatar', 'id="moi-photo" class="avatar');
   let [page, arg] = (location.hash.slice(2) || '').split('/');
-  let def = role() === 'intervenant' ? 'ma-fiche' : role() === 'directeur' ? 'direction' : role() === 'comptable' ? 'caisse' : role() === 'educateur' ? 'eleves' : 'pointage';
+  let def = role() === 'intervenant' ? 'ma-fiche' : role() === 'directeur' ? 'direction' : role() === 'comptable' ? 'caisse' : role() === 'educateur' ? 'eleves' : role() === 'gardien' ? 'controle' : 'pointage';
   if (!accesPage(def)) def = 'actions';
   if (!PAGES[page] || !accesPage(page)) { page = def; history.replaceState(null, '', '#/' + def); }
   afficher.accueil = page === def;
@@ -1732,7 +1733,7 @@ const ENCOURAGEMENTS = ['Bonne journée de travail !', 'Ensemble, formons les pr
   'Le savoir-faire se transmet un jour à la fois.', 'Merci de faire vivre notre établissement.'];
 function encouragement() { const d = new Date(), n = d.getFullYear() * 400 + d.getMonth() * 31 + d.getDate(); return ENCOURAGEMENTS[n % ENCOURAGEMENTS.length]; }
 const nomAppel = p => `${civ(p.civilite) ? civ(p.civilite) + ' ' : ''}${p.nom}`;
-const LIB_ROLE = { admin: 'Administrateur', directeur: 'Directeur', censeur: 'Censeur', intervenant: 'Enseignant', educateur: 'Éducateur', comptable: 'Comptable' };
+const LIB_ROLE = { admin: 'Administrateur', directeur: 'Directeur', censeur: 'Censeur', intervenant: 'Enseignant', educateur: 'Éducateur', comptable: 'Comptable', gardien: 'Gardien' };
 function ligneSalut() { const p = S.session.profil; return `<div class="salut">${salutation()} <b>${esc(nomAppel(p))}</b>, ${encouragement().replace(/^./, x => x.toLowerCase())}</div>`; }
 async function carteBienvenue() {
   if (!stock.lire('bienvenue', 0) || !S.session) return; stock.ecrire('bienvenue', 0);
@@ -1851,7 +1852,7 @@ async function pageAnnonces(c) {
 }
 async function pageDroits(c) {
   const [D, CP] = await Promise.all([api('droits'), api('comptes')]);
-  const NOMR = { directeur: 'Directeur', censeur: 'Censeur', educateur: 'Éducateur', comptable: 'Comptable', intervenant: 'Enseignant' };
+  const NOMR = { directeur: 'Directeur', censeur: 'Censeur', educateur: 'Éducateur', comptable: 'Comptable', intervenant: 'Enseignant', gardien: 'Gardien' };
   const NIV = { AGIT: '✏️ Agit', CONSULTE: '👁 Consulte', AUCUN: '— Aucun accès' };
   const actifs = (CP.comptes || []).filter(x => x.statut === 'ACTIF' && x.role !== 'admin').sort((a, b) => a.nom.localeCompare(b.nom));
   const nomMod = {}; D.modules.forEach(m => nomMod[m.code] = m.libelle);
