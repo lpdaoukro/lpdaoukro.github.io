@@ -947,3 +947,14 @@ html[data-theme=sombre] .badge.orange { background: #3A2614; color: #FFC894; }
 .cq-res-nom { font-size: 1.15rem; display: block; margin-bottom: 4px; }
 .cq-alerte { background: var(--rouge-clair); color: var(--rouge); border-radius: 8px; padding: 6px 10px; margin-top: 8px; font-weight: 700; }
 html[data-theme=sombre] .cq-alerte { color: #FF9A9A; }
+
+/* --- v3.13 : espace parents étape 2 --- */
+.fil { display: flex; flex-direction: column; gap: 8px; margin: 10px 0; }
+.bulle { max-width: 85%; padding: 8px 12px; border-radius: 14px 14px 14px 4px; background: var(--gris-clair); white-space: pre-wrap; align-self: flex-start; }
+.bulle.moi { align-self: flex-end; background: var(--bleu-clair); border-radius: 14px 14px 4px 14px; }
+.bulle-a { font-size: .72rem; color: var(--gris); margin-bottom: 2px; white-space: normal; }
+.par-conv { display: flex; justify-content: space-between; align-items: center; gap: 10px; text-decoration: none; color: inherit; }
+.pastille-n { display: inline-block; min-width: 20px; padding: 0 6px; border-radius: 999px; background: var(--rouge); color: #fff; font-size: .75rem; font-weight: 700; text-align: center; }
+.par-convoc { border-left: 5px solid var(--orange); } .par-info { border-left: 5px solid var(--bleu2); }
+#impression .convoc-print p { font-size: 11pt; line-height: 1.5; } #impression .convoc-coupon { margin-top: 18mm; font-size: 10pt; }
+html[data-theme=sombre] .bulle.moi { background: #1C2B3D; } html[data-theme=sombre] .bulle { background: #232B36; }

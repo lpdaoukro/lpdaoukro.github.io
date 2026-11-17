@@ -123,10 +123,10 @@ async function pageAppel(c, arg) {
       <div class="aide">${ante ? '' : 'Tout le monde est présent par défaut : '}touchez <b>A</b> pour un absent, <b>R</b> pour un retard, <b>E</b> pour un élève exclu du cours. Un retard de plus de ${ref.params.seuilRetard} min compte comme une absence.</div>
       <div class="barre-appel"><div id="a-compte"></div><button class="btn petit secondaire" id="a-tous">Tous présents</button></div>
       <div id="a-eleves">${eleves.map((e, i) => {
-        const so = sortieDe(e.id), j = justifDe(e.id);
+        const so = sortieDe(e.id), j = justifDe(e.id), pv = !j && (ref.prevenus || []).find(x => x.e === e.id && etat.d >= x.du && etat.d <= x.au);   // v3.13
         return `<div class="ligne-appel" data-e="${e.id}"><span class="num">${i + 1}</span>${avatarEleve(e)}
           <div class="nom-appel"><b>${esc(e.nom)}</b> ${esc(e.prenoms)}${s.classes.length > 1 ? ` <span class="aide">${esc(e.classe)}</span>` : ''}
-            ${so ? `<div><span class="badge bleu">Sorti(e) à ${esc(so.h)}</span></div>` : ''}${j ? `<div><span class="badge P">Justifié : ${esc(j.m)}</span></div>` : ''}
+            ${so ? `<div><span class="badge bleu">Sorti(e) à ${esc(so.h)}</span></div>` : ''}${j ? `<div><span class="badge P">Justifié : ${esc(j.m)}</span></div>` : ''}${pv ? `<div><span class="badge bleu">📩 Absence prévenue par les parents : ${esc(pv.m)}</span></div>` : ''}
             ${repris[e.id] ? `<div><span class="badge attente">${repris[e.id] === 'X' ? 'exclu' : 'absent'} au cours précédent</span></div>` : ''}<div class="motif-excl aide" hidden></div>
             <div class="min-retard" hidden><input type="number" min="1" max="240" inputmode="numeric" placeholder="min"> min de retard</div></div>
           <div class="choix-appel"><button type="button" data-v="P">P</button><button type="button" data-v="A">A</button><button type="button" data-v="R">R</button><button type="button" data-v="X" title="Exclu du cours">E</button></div></div>`;

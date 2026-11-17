@@ -273,7 +273,7 @@ function redimensionnerPhoto(fichier) {
 
 /* ================= BOÎTE À SUGGESTIONS (v2.5) ================= */
 let SUGG_PAGE = '';
-const VERSION_SITE = '3.12';
+const VERSION_SITE = '3.13';
 /* ================= NOTIFICATIONS SUR LE TÉLÉPHONE (v2.6, Firebase) ================= */
 // configuration publique du projet Firebase (faite pour être dans le site) ; la clé privée reste dans Apps Script
 const FIREBASE_CFG = { apiKey: 'AIzaSyDVRNmLz5ph73vf2a9vFhd2RVni8H9swt0', authDomain: 'lpdaoukro-notification.firebaseapp.com', projectId: 'lpdaoukro-notification',
@@ -546,11 +546,13 @@ async function afficherParent() {
         <p>Un seul abonnement pour <b>tous vos enfants</b> inscrits dans l'établissement. Il ouvre les notes, les absences, les frais, les bulletins et les notifications sur votre téléphone.</p>
         ${A.wave ? '<button class="btn vert large" id="par-wave">Payer avec Wave</button>' : ''}${A.attente ? '<p class="aide">Un paiement Wave est en cours : <a href="#" id="par-verif">vérifier maintenant</a>.</p>' : ''}
         <p class="aide">Vous pouvez aussi régler à la caisse de l'établissement : l'abonnement sera activé aussitôt.</p></div>`}
+      ${A.actif && typeof blocParent313 === 'function' ? blocParent313(M) : ''}
       ${M.annonces.length || M.calendrier.length ? `<div class="carte"><b>📢 Informations de l'établissement</b>${M.annonces.map(a => `<div class="par-ann"><b>${esc(a.titre)}</b> ${esc(a.texte || '')}</div>`).join('')}${M.calendrier.map(a => `<div class="par-ann">${esc(a.titre)} — ${esc(a.texte)}</div>`).join('')}</div>` : ''}
       <div id="par-corps"></div>
       <div class="carte"><b>🔔 Notifications sur ce téléphone</b>${blocPush('par-push')}</div>
       <div class="actions"><button class="btn secondaire" id="par-code">Changer mon code</button><button class="btn secondaire" id="par-sortir">Se déconnecter</button></div>`;
     $$('[data-enf]', c).forEach(b => b.onclick = () => { PAR.enfant = b.dataset.enf; afficherParent(); });
+    if (typeof brancherParent313 === 'function') brancherParent313(c);
     const pz = () => { const z = $('#par-push'); if (z) { z.outerHTML = blocPush('par-push'); brancherPush($('#par-push'), pz); } }; brancherPush($('#par-push'), pz);
     if ($('#par-wave')) $('#par-wave').onclick = async () => { try { const r = await api('parentWave', { retour: location.origin + location.pathname }); if (r.url) location.href = r.url; else { toast(r.message); afficherParent(); } } catch (e) { toast(e.message, 7000); } };
     if ($('#par-verif')) $('#par-verif').onclick = async ev => { ev.preventDefault(); const v = await api('parentVerifier'); toast(v.abonnement.actif ? 'Paiement confirmé : merci !' : 'Paiement pas encore confirmé par Wave.'); afficherParent(); };
@@ -563,7 +565,8 @@ async function afficherParent() {
 async function dessinerEnfant(z) {
   z.innerHTML = '<div class="chargement">Chargement…</div>';
   const D = await api('parentEleve', { id: PAR.enfant }), O = PAR.onglet;
-  const ong = [['notes', '📝 Notes'], ['cahier', '📘 Cahier de textes'], ['absences', '⏰ Absences'], ['frais', '💰 Frais'], ['bulletins', '📄 Bulletins']];
+  const nm = ((PAR.moi || {}).v313 || {}).messagesNonLus || 0;
+  const ong = [['notes', '📝 Notes'], ['cahier', '📘 Cahier de textes'], ['absences', '⏰ Absences'], ['messages', '✉ Messages' + (nm ? ` <span class="pastille-n">${nm}</span>` : '')], ['frais', '💰 Frais'], ['bulletins', '📄 Bulletins']];
   let h = (D.distinctions || []).map(x => `<div class="par-distinction">🏆 <b>${esc(x.titre)}</b> <span>${esc(x.periode)} · moyenne ${n2(x.moy)}</span></div>`).join('') + `<div class="onglets">${ong.map(([k, l]) => `<button data-po="${k}" class="${O === k ? 'actif' : ''}">${l}</button>`).join('')}</div>`;
   if (O === 'notes') {
     h += [1, 2].map(sem => { const L = D.notes.filter(n => n.semestre === sem); return L.length ? `<h2>Semestre ${sem}</h2>${L.map(m => `<div class="carte par-mat"><div class="par-mat-t"><b>${esc(m.matiere)}</b><span>coef. ${nb(m.coef)}</span><b class="par-moy ${m.moyenne !== null && m.moyenne < 10 ? 'bas' : ''}">${m.moyenne === null ? '—' : n2(m.moyenne)}</b></div>
@@ -571,11 +574,13 @@ async function dessinerEnfant(z) {
     h += '<p class="aide">Seules les notes approuvées par les professeurs apparaissent. La moyenne indiquée est celle de la matière, sur 20.</p>';
   } else if (O === 'cahier') {
     h += typeof cahierParentHtml === 'function' ? cahierParentHtml(D.cahier) : '';
+  } else if (O === 'messages') {
+    h += '<div id="par-msg"></div>';
   } else if (O === 'absences') {
     const nj = D.absences.filter(a => a.type !== 'RETARD' && !a.justifiee).reduce((t, a) => t + a.heures, 0);
     h += `<div class="kpis"><div class="kpi"><div class="lib">Absences</div><div class="val">${D.absences.filter(a => a.type !== 'RETARD').length}</div></div><div class="kpi rouge"><div class="lib">Heures non justifiées</div><div class="val">${nb(nj)}</div></div><div class="kpi"><div class="lib">Retards</div><div class="val">${D.absences.filter(a => a.type === 'RETARD').length}</div></div></div>
       <div class="table-defil"><table><thead><tr><th>Date</th><th>Cours</th><th>Type</th><th></th></tr></thead><tbody>${D.absences.map(a => `<tr><td>${fr(a.date)}</td><td>${esc(a.matiere || '')} <span class="aide">${esc(a.horaire || '')}</span></td><td>${a.type === 'RETARD' ? 'Retard' + (a.minutes ? ' ' + a.minutes + ' min' : '') : 'Absence (' + nb(a.heures) + ' h)'}</td><td>${a.justifiee ? '<span class="badge P">justifiée</span>' : a.type === 'RETARD' ? '' : '<span class="badge A">non justifiée</span>'}</td></tr>`).join('') || '<tr><td colspan="4" class="vide">Aucune absence. Bravo !</td></tr>'}</tbody></table></div>
-      <p class="aide">Pour justifier une absence, présentez le justificatif à l'éducateur.</p>`;
+      ${typeof blocJustifParent === 'function' ? blocJustifParent(PAR.moi) : '<p class="aide">Pour justifier une absence, présentez le justificatif à l\'éducateur.</p>'}`;
   } else if (O === 'frais') {
     const F = D.frais;
     h += `<div class="kpis"><div class="kpi"><div class="lib">Total dû</div><div class="val">${fcfa(F.du)}</div></div><div class="kpi vert"><div class="lib">Payé</div><div class="val">${fcfa(F.paye)}</div></div><div class="kpi ${F.retard ? 'rouge' : ''}"><div class="lib">Reste${F.retard ? ' (dont ' + fcfa(F.retard) + ' en retard)' : ''}</div><div class="val">${fcfa(F.reste)}</div></div></div>
@@ -586,6 +591,8 @@ async function dessinerEnfant(z) {
   }
   z.innerHTML = h;
   $$('[data-po]', z).forEach(b => b.onclick = () => { PAR.onglet = b.dataset.po; dessinerEnfant(z); });
+  if (O === 'messages' && typeof ongletMessagesParent === 'function') ongletMessagesParent($('#par-msg'), PAR.enfant);
+  if (O === 'absences' && typeof brancherJustifParent === 'function') brancherJustifParent(z, PAR.enfant, ((PAR.moi || {}).v313 || {}).motifsJustif || ['Maladie', 'Cas familial', 'Convocation', 'Autre']);
   $$('[data-recu]', z).forEach(b => b.onclick = async () => { try { imprimerRecu(await api('parentRecu', { numero: b.dataset.recu })); } catch (e) { toast(e.message, 6000); } });
   $$('[data-bul]', z).forEach(b => b.onclick = async () => {
     try { const R = await api('parentBulletin', { id: PAR.enfant, semestre: +b.dataset.bul }); const e = R.K.eleves[0];
@@ -753,6 +760,7 @@ function formInscription() {
 const PAGES = {
   'direction':     { titre: 'Tableau de bord', roles: ['directeur', 'admin', 'censeur', 'comptable'], fn: (c, a) => pageTableauBord(c, a) },
   'ma-fiche':      { titre: 'Ma fiche', roles: ['intervenant', 'censeur', 'admin'], si: () => S.session.profil.intervenant || role() === 'intervenant', fn: pageMaFiche },
+  'parents-com':   { titre: 'Parents', roles: ['admin', 'directeur', 'censeur', 'educateur', 'comptable', 'intervenant'], si: () => role() !== 'intervenant' || ((S.session.profil || {}).pp || []).length > 0, fn: (c, a) => pageParentsCom(c, a) },
   'cartes':        { titre: 'Cartes QR', roles: ['admin', 'directeur', 'censeur', 'educateur'], fn: (c, a) => pageCartes(c, a) },
   'controle':      { titre: 'Contrôle des cartes', roles: ['admin', 'directeur', 'censeur', 'educateur', 'comptable'], fn: c => pageControle(c) },
   'carte':         { titre: 'Contrôle des cartes', roles: ['admin', 'directeur', 'censeur', 'educateur', 'comptable', 'intervenant'], cache: true, fn: (c, a) => pageControle(c, a) },
@@ -829,7 +837,7 @@ const GROUPES_MENU = [
   { id: 'accueil', titre: '🏠 Accueil', pages: ['direction', 'ma-fiche', 'vie', 'agent-mois', 'honneur', 'sondages', 'signalements'] },
   { id: 'atelier', titre: '🔧 Atelier', pages: ['atelier', 'inventaire', 'demandes-mo', 'stock-mo', 'prets', 'securite', 'rapports-atelier'] },
   { id: 'personnel', titre: '👨‍🏫 Personnel', pages: ['pointage', 'arrivees', 'tableau', 'intervenants', 'rattrapages', 'reclamations', 'paiement', 'personnel'] },
-  { id: 'eleves', titre: '🎓 Élèves', pages: ['eleves', 'effectifs', 'appel', 'absences', 'controle', 'cartes', 'discipline', 'stages', 'familles', 'archives'] },
+  { id: 'eleves', titre: '🎓 Élèves', pages: ['eleves', 'effectifs', 'appel', 'absences', 'controle', 'cartes', 'discipline', 'parents-com', 'stages', 'familles', 'archives'] },
   { id: 'notes', titre: '📝 Notes', pages: ['notes', 'cahier', 'bulletins', 'calendrier-conseils'] },
   { id: 'finances', titre: '💰 Finances', pages: ['caisse', 'finances'] },
   { id: 'admin', titre: '⚙ Administration', pages: ['annonces', 'calendrier-scolaire', 'emplois', 'comptes', 'droits', 'suggestions', 'passage', 'etablissement', 'licence', 'journal'] }
