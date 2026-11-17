@@ -103,7 +103,7 @@ tr.cliquable { cursor: pointer; } tr.cliquable:hover td { background: #F0F6FC; }
 .badge.P { background: var(--vert-clair); color: #075E3A; } .badge.A { background: var(--rouge-clair); color: var(--rouge); }
 .badge.C { background: #E5E7EB; color: #374151; } .badge.attente { background: #FFF3C4; color: #6B5300; }
 .badge.bleu { background: var(--bleu-clair); color: var(--bleu); } .badge.qr { background: #E0E7FF; color: #3730A3; }
-.badge.BTS { background: #FDE2CC; color: #8A4500; } .badge.BT { background: var(--bleu-clair); color: var(--bleu); } .badge.CAP { background: #E5E7EB; color: #374151; }
+.badge.orange { background: #FDE2CC; color: #8A4500; } .badge.BTS { background: #FDE2CC; color: #8A4500; } .badge.BT { background: var(--bleu-clair); color: var(--bleu); } .badge.CAP { background: #E5E7EB; color: #374151; }
 
 /* --- barres --- */
 .barres { display: flex; align-items: flex-end; gap: 6px; height: 140px; padding: 6px 0; }
@@ -894,3 +894,26 @@ tr.ligne-alerte td { background: rgba(247,127,0,.08); }
 .se-t td { vertical-align: top; } .se-t select { min-width: 200px; max-width: 100%; }
 .se-t tr.se-deja td { opacity: .65; }
 .se-t input[type=checkbox] { width: 22px; height: 22px; }
+
+/* --- v3.11.1 : mode sombre, fenêtre d'accueil lisible --- */
+html[data-theme=sombre] .bv-jour { background: #232B36; color: var(--texte); }
+html[data-theme=sombre] .bv-jour a { color: #8DB8E8; }
+html[data-theme=sombre] .bv-civ { background: #3A2E17; color: var(--texte); }
+html[data-theme=sombre] .bv-init { background: #1C2B3D; color: #8DB8E8; }
+html[data-theme=sombre] .bv-photo { border-color: var(--carte); }
+html[data-theme=sombre] .bv-nom { color: #8DB8E8; }
+html[data-theme=sombre] .bv-sal, html[data-theme=sombre] .bv-fct { color: #A0A8B5; }
+html[data-theme=sombre] .bv-enc { color: #4CC38A; }
+html[data-theme=sombre] .bv-barre { background: #2E3642; }
+@media screen {
+html[data-theme=sombre] .menu-pages { background: #141A22; }
+html[data-theme=sombre] .menu-pages a.actif { background: #2D6AA3; border-color: #2D6AA3; color: #fff; }
+html[data-theme=sombre] .badge.P, html[data-theme=sombre] .reseau.en-ligne { background: #12342A; color: #6EE0A8; }
+html[data-theme=sombre] .badge.A { background: #3E1D1D; color: #FF9A9A; }
+html[data-theme=sombre] .badge.C, html[data-theme=sombre] .badge.CAP { background: #2A313B; color: #D1D5DB; }
+html[data-theme=sombre] .badge.attente, html[data-theme=sombre] .reseau.attente { background: #3A3214; color: #F5D76E; }
+html[data-theme=sombre] .reseau.hors-ligne, html[data-theme=sombre] .badge.BTS { background: #3A2614; color: #FFC894; }
+html[data-theme=sombre] .badge.bleu, html[data-theme=sombre] .badge.BT { background: #1C2B3D; color: #8DB8E8; }
+html[data-theme=sombre] .badge.qr { background: #232A4A; color: #B4BEFF; }
+html[data-theme=sombre] .badge.orange { background: #3A2614; color: #FFC894; }
+}

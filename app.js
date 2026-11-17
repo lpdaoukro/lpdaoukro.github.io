@@ -273,7 +273,7 @@ function redimensionnerPhoto(fichier) {
 
 /* ================= BOÎTE À SUGGESTIONS (v2.5) ================= */
 let SUGG_PAGE = '';
-const VERSION_SITE = '3.11';
+const VERSION_SITE = '3.11.1';
 /* ================= NOTIFICATIONS SUR LE TÉLÉPHONE (v2.6, Firebase) ================= */
 // configuration publique du projet Firebase (faite pour être dans le site) ; la clé privée reste dans Apps Script
 const FIREBASE_CFG = { apiKey: 'AIzaSyDVRNmLz5ph73vf2a9vFhd2RVni8H9swt0', authDomain: 'lpdaoukro-notification.firebaseapp.com', projectId: 'lpdaoukro-notification',
