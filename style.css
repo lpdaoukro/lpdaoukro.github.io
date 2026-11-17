@@ -917,3 +917,33 @@ html[data-theme=sombre] .badge.bleu, html[data-theme=sombre] .badge.BT { backgro
 html[data-theme=sombre] .badge.qr { background: #232A4A; color: #B4BEFF; }
 html[data-theme=sombre] .badge.orange { background: #3A2614; color: #FFC894; }
 }
+
+/* --- v3.12 : cartes QR --- */
+#impression .cq-page { display: grid; grid-template-columns: 85.6mm 85.6mm; grid-auto-rows: 54mm; gap: 0; justify-content: center; align-content: start; padding-top: 6mm; page-break-after: always; }
+#impression .cq { width: 85.6mm; height: 54mm; box-sizing: border-box; border: .2mm dashed #bbb; position: relative; overflow: hidden; font-family: Arial, sans-serif; color: #111; background: #fff; -webkit-print-color-adjust: exact; print-color-adjust: exact; }
+#impression .cq-tete { display: flex; align-items: center; gap: 1.5mm; padding: 1.5mm 2mm 1mm; border-bottom: 1.2mm solid #009E60; background: linear-gradient(90deg, #FFF4E6, #fff 45%, #EAF7F0); }
+#impression .cq-tete img { height: 8mm; width: auto; } #impression .cq-tete div { flex: 1; text-align: center; line-height: 1.1; }
+#impression .cq-tete b { display: block; font-size: 6.4pt; text-transform: uppercase; } #impression .cq-tete span { font-size: 5.6pt; font-weight: 700; letter-spacing: .3px; color: #444; }
+#impression .cq-corps { display: grid; grid-template-columns: 19mm 1fr 19mm; gap: 1.6mm; padding: 1.8mm 2mm; align-items: center; }
+#impression .cq-photo { width: 19mm; height: 24mm; border: .3mm solid #888; background: #f3f3f3; overflow: hidden; } #impression .cq-photo img { width: 100%; height: 100%; object-fit: cover; }
+#impression .cq-txt { display: flex; flex-direction: column; gap: .5mm; font-size: 6.3pt; line-height: 1.15; min-width: 0; }
+#impression .cq-nom { font-size: 8.3pt; text-transform: uppercase; } #impression .cq-pre { font-size: 7.3pt; font-weight: 600; margin-bottom: .6mm; }
+#impression .cq-qr svg { width: 19mm !important; height: 19mm !important; }
+#impression .cq-bande { position: absolute; left: 0; right: 0; bottom: 0; height: 4.5mm; color: #fff; font-size: 6.5pt; font-weight: 800; letter-spacing: 1.5px; display: flex; align-items: center; justify-content: center; }
+#impression .cq-verso { padding: 2.5mm 3mm; font-size: 6pt; line-height: 1.25; }
+#impression .cq-v-t { display: flex; align-items: center; gap: 2mm; border-bottom: .3mm solid #ccc; padding-bottom: 1mm; } #impression .cq-v-t img { height: 7mm; } #impression .cq-v-t b { font-size: 6.5pt; text-transform: uppercase; }
+#impression .cq-verso ul { margin: 1.5mm 0; padding-left: 3.5mm; } #impression .cq-contact { font-weight: 700; text-align: center; }
+#impression .cq-sign { position: absolute; right: 4mm; bottom: 6mm; text-align: center; font-size: 6pt; } #impression .cq-sign b { display: block; margin-top: 7mm; }
+#impression .cq-tri { position: absolute; left: 0; right: 0; bottom: 0; height: 2.5mm; display: flex; } #impression .cq-tri i { flex: 1; } #impression .cq-tri i:nth-child(1) { background: #F77F00; } #impression .cq-tri i:nth-child(2) { background: #fff; } #impression .cq-tri i:nth-child(3) { background: #009E60; }
+#impression .cq-vide { border-color: transparent; }
+#cq-video { position: relative; margin: 8px 0; } #cq-v { width: 100%; max-height: 60vh; border-radius: 12px; background: #000; display: block; object-fit: cover; }
+.cq-viseur { position: absolute; left: 50%; top: 45%; width: 55%; aspect-ratio: 1; transform: translate(-50%, -50%); border: 3px solid rgba(255,255,255,.85); border-radius: 14px; box-shadow: 0 0 0 999px rgba(0,0,0,.25); pointer-events: none; }
+#cq-stop { margin-top: 6px; }
+.cq-res { border-radius: 14px; padding: 14px; margin: 10px 0; border: 3px solid; background: var(--carte, #fff); }
+.cq-res.ok { border-color: var(--vert); } .cq-res.warn { border-color: var(--orange); } .cq-res.non { border-color: var(--rouge); }
+.cq-res-t { font-size: 1.35rem; font-weight: 800; margin-bottom: 8px; } .cq-res.ok .cq-res-t { color: var(--vert); } .cq-res.warn .cq-res-t { color: var(--orange); } .cq-res.non .cq-res-t { color: var(--rouge); }
+.cq-res-c { display: flex; gap: 12px; align-items: center; } .cq-res-c img, .cq-res-sans { width: 110px; height: 140px; object-fit: cover; border-radius: 10px; flex: none; }
+.cq-res-sans { background: var(--gris-clair); display: flex; align-items: center; justify-content: center; color: var(--gris); font-size: .8rem; }
+.cq-res-nom { font-size: 1.15rem; display: block; margin-bottom: 4px; }
+.cq-alerte { background: var(--rouge-clair); color: var(--rouge); border-radius: 8px; padding: 6px 10px; margin-top: 8px; font-weight: 700; }
+html[data-theme=sombre] .cq-alerte { color: #FF9A9A; }
