@@ -991,3 +991,17 @@ select.petit { padding: 4px 6px; font-size: .85rem; width: auto; }
 /* v3.16.2 : choix de la colonne à importer */
 .imp-col { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; background: #EEF4FB; border: 1px solid var(--bord); border-radius: 10px; padding: 10px 12px; margin-bottom: 10px; }
 .imp-col select { min-width: 220px; }
+/* v3.17 : reprographie */
+.rp-c.rp-eval { border-left: 4px solid #B45309; }
+.rp-type { display: inline-block; font-size: .78rem; font-weight: 700; background: var(--bleu-clair); color: var(--bleu); border-radius: 999px; padding: 2px 9px; }
+.rp-det { margin: 4px 0; }
+.rp-cls { display: flex; flex-wrap: wrap; gap: 4px 14px; margin: 4px 0 8px; }
+.rp-cl { display: inline-flex !important; align-items: center; gap: 4px; }
+.rp-total { margin: 10px 0 4px; padding: 8px 12px; background: #EEF4FB; border-radius: 10px; min-height: 1em; }
+.rp-cop { display: inline-flex; align-items: center; gap: 6px; font-size: .85rem; } .rp-cop input { width: 80px; }
+.rp-stock { display: flex; flex-wrap: wrap; gap: 10px; margin: 8px 0 12px; }
+.rp-stock > div { flex: 1 1 150px; background: #fff; border: 1px solid var(--bord); border-radius: 12px; padding: 10px 14px; display: flex; flex-direction: column; }
+.rp-stock b { font-size: 1.6rem; color: var(--bleu); } .rp-stock span { font-size: .82rem; color: var(--texte-doux, #555); }
+.rp-stock .rp-bas b { color: #B91C1C; } .rp-stock .rp-att b { color: #B45309; }
+.rp-rem { border-top: 1px solid var(--bord); padding: 8px 0; } .rp-rem:first-of-type { border-top: 0; }
+html[data-theme=sombre] .rp-stock > div { background: #1B2533; } html[data-theme=sombre] .rp-total { background: #1C2B3D; }

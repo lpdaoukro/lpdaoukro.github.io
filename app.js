@@ -64,7 +64,7 @@ const droit = m => { if (!S.session || modeProf()) return undefined; if (role() 
 function accesPage(k) {
   const p = PAGES[k]; if (!p) return false;
   const base = p.roles.includes(role());
-  if (!p.mod || modeProf() || role() === 'admin' || role() === 'assistante' || role() === 'gardien') return base;
+  if (!p.mod || modeProf() || role() === 'admin' || role() === 'assistante' || role() === 'gardien' || role() === 'reprographe') return base;
   const plus = (S.session && S.session.profil || {}).droitsPlus;   // v3.16 : hors de son rôle, seulement si l'administrateur l'a ouvert
   if (!base && plus && !plus.includes(p.mod[0])) return false;
   const n = droit(p.mod[0]); if (n === undefined) return base;
@@ -275,7 +275,7 @@ function redimensionnerPhoto(fichier) {
 
 /* ================= BOÎTE À SUGGESTIONS (v2.5) ================= */
 let SUGG_PAGE = '';
-const VERSION_SITE = '3.16';
+const VERSION_SITE = '3.17';
 /* ================= NOTIFICATIONS SUR LE TÉLÉPHONE (v2.6, Firebase) ================= */
 // configuration publique du projet Firebase (faite pour être dans le site) ; la clé privée reste dans Apps Script
 const FIREBASE_CFG = { apiKey: 'AIzaSyDVRNmLz5ph73vf2a9vFhd2RVni8H9swt0', authDomain: 'lpdaoukro-notification.firebaseapp.com', projectId: 'lpdaoukro-notification',
@@ -763,6 +763,8 @@ const PAGES = {
   'direction':     { titre: 'Tableau de bord', roles: ['directeur', 'admin', 'censeur', 'comptable'], fn: (c, a) => pageTableauBord(c, a) },
   'ma-fiche':      { titre: 'Ma fiche', roles: ['intervenant', 'censeur', 'admin'], si: () => S.session.profil.intervenant || role() === 'intervenant', fn: pageMaFiche },
   'courrier':      { titre: 'Courrier', roles: ['admin', 'directeur', 'assistante', 'censeur', 'comptable', 'educateur'], fn: c => pageCourrier(c) },
+  'repro':         { titre: 'Reprographie', roles: ['admin', 'directeur', 'censeur', 'educateur', 'comptable', 'intervenant', 'assistante', 'reprographe'], fn: (c, a) => pageRepro(c, a) },
+  'rames':         { titre: 'Rames (reprographie)', roles: ['comptable'], fn: c => pageRepro(c, 'rames') },
   'agenda':        { titre: 'Agenda du directeur', roles: ['admin', 'directeur', 'assistante'], fn: c => pageAgenda(c) },
   'signature':     { titre: 'Signature et cachet', roles: ['admin', 'directeur'], fn: c => pageSignature(c) },
   'acces-atelier': { titre: 'Accès à l\'atelier', roles: ['admin'], fn: c => pageAccesAtelier(c) },
@@ -806,20 +808,20 @@ const PAGES = {
   'securite':      { titre: 'Sécurité', roles: ['admin', 'directeur', 'censeur', 'educateur', 'comptable', 'intervenant'], si: () => accesAtelierClient(['TOUT', 'CHEF', 'PROF']), fn: c => pageSecurite(c) },
   'rapports-atelier': { titre: 'Besoins et coûts', roles: ['admin', 'directeur', 'censeur', 'educateur', 'comptable', 'intervenant'], si: () => accesAtelierClient(['TOUT', 'CHEF', 'ECO']), fn: c => pageRapportsAtelier(c) },
   'arrivees':      { titre: 'Arrivées et départs', roles: ['admin', 'censeur', 'directeur'], fn: c => pageArrivees(c) },
-  'vie':           { titre: 'Vie du lycée', roles: ['admin', 'directeur', 'censeur', 'educateur', 'comptable', 'intervenant', 'assistante'], fn: c => pageVie(c) },
-  'sondages':      { titre: 'Sondages', roles: ['admin', 'directeur', 'censeur', 'educateur', 'comptable', 'intervenant', 'assistante'], fn: c => pageSondages(c) },
-  'agent-mois':    { titre: 'Agent du mois', roles: ['admin', 'directeur', 'censeur', 'educateur', 'comptable', 'intervenant', 'assistante'], fn: c => pageAgentMois(c) },
-  'honneur':       { titre: 'Tableau d\'honneur', roles: ['admin', 'directeur', 'censeur', 'educateur', 'comptable', 'intervenant', 'assistante'], fn: c => pageHonneur(c) },
+  'vie':           { titre: 'Vie du lycée', roles: ['admin', 'directeur', 'censeur', 'educateur', 'comptable', 'intervenant', 'assistante', 'reprographe'], fn: c => pageVie(c) },
+  'sondages':      { titre: 'Sondages', roles: ['admin', 'directeur', 'censeur', 'educateur', 'comptable', 'intervenant', 'assistante', 'reprographe'], fn: c => pageSondages(c) },
+  'agent-mois':    { titre: 'Agent du mois', roles: ['admin', 'directeur', 'censeur', 'educateur', 'comptable', 'intervenant', 'assistante', 'reprographe'], fn: c => pageAgentMois(c) },
+  'honneur':       { titre: 'Tableau d\'honneur', roles: ['admin', 'directeur', 'censeur', 'educateur', 'comptable', 'intervenant', 'assistante', 'reprographe'], fn: c => pageHonneur(c) },
   'signalements':  { titre: 'Signalements', roles: ['admin', 'directeur', 'censeur', 'educateur', 'comptable', 'intervenant'], si: () => role() !== 'intervenant' || stock.lire('resp_signal', false), fn: c => pageSignalements(c) },
   'passage':       { titre: 'Passage d\'année', roles: ['admin', 'directeur'], fn: c => pagePassage(c) },
   'archives':      { titre: 'Années précédentes', roles: ['admin', 'directeur', 'censeur', 'comptable', 'educateur'], fn: c => pageArchives(c) },
   'familles':      { titre: 'Espace parents', roles: ['admin', 'comptable', 'educateur', 'directeur'], fn: c => pageFamilles(c) },
-  'suggestion':    { titre: 'Suggestion', roles: ['intervenant', 'censeur', 'admin', 'educateur', 'comptable', 'directeur', 'gardien', 'assistante'], cache: true, fn: c => pageSuggestion(c) },
+  'suggestion':    { titre: 'Suggestion', roles: ['intervenant', 'censeur', 'admin', 'educateur', 'comptable', 'directeur', 'gardien', 'assistante', 'reprographe'], cache: true, fn: c => pageSuggestion(c) },
   'suggestions':   { titre: 'Suggestions', roles: ['admin'], fn: c => pageSuggestions(c) },
   'etablissement': { titre: 'Établissement', roles: ['admin'], fn: c => pageEtablissement(c) },
   'licence':       { titre: 'Licence', roles: ['admin'], fn: c => pageLicence(c) },
   'calendrier-scolaire': { titre: 'Congés et jours fériés', roles: ['admin', 'censeur'], fn: c => pageCalendrierScolaire(c) },
-  'actions':       { titre: 'Mes actions', roles: ['intervenant', 'censeur', 'admin', 'educateur', 'comptable', 'directeur', 'gardien', 'assistante'], cache: true, fn: c => pageActions(c) },
+  'actions':       { titre: 'Mes actions', roles: ['intervenant', 'censeur', 'admin', 'educateur', 'comptable', 'directeur', 'gardien', 'assistante', 'reprographe'], cache: true, fn: c => pageActions(c) },
   'annonces':      { titre: 'Annonces et échéances', mod: ['annonces', 'AGIT'], roles: ['admin', 'directeur', 'censeur', 'assistante'], fn: c => pageAnnonces(c) },
   'droits':        { titre: 'Droits et délégations', roles: ['admin'], fn: c => pageDroits(c) },
   'calendrier-conseils': { titre: 'Calendrier des conseils', roles: ['intervenant', 'censeur', 'admin', 'directeur', 'educateur'], fn: c => pageCalendrierConseils(c) },
@@ -828,7 +830,7 @@ const PAGES = {
   'journal':       { titre: 'Journal', mod: ['comptes', 'CONSULTE'], roles: ['admin'], fn: pageJournal },
   'conseil':       { titre: 'Conseil de classe', roles: ['intervenant', 'censeur', 'admin', 'directeur', 'educateur'], cache: true, fn: (c, a) => pageConseil(c, a) },
   'matieres':      { titre: 'Matières et coefficients', roles: ['admin'], cache: true, fn: c => pageMatieres(c) },
-  'mon-compte':    { titre: 'Mon compte', roles: ['intervenant', 'censeur', 'admin', 'educateur', 'comptable', 'directeur', 'gardien', 'assistante'], cache: true, fn: pageMonCompte },
+  'mon-compte':    { titre: 'Mon compte', roles: ['intervenant', 'censeur', 'admin', 'educateur', 'comptable', 'directeur', 'gardien', 'assistante', 'reprographe'], cache: true, fn: pageMonCompte },
   'eleve':         { titre: 'Fiche élève', roles: ['educateur', 'comptable', 'censeur', 'admin', 'intervenant', 'directeur'], cache: true, fn: (c, a) => pageEleve(c, a) },
   'import-eleves': { titre: 'Importer des élèves', roles: ['educateur', 'admin'], cache: true, fn: c => pageImportEleves(c) },
   'param-eleves':  { titre: 'Classes et montants', roles: ['admin'], cache: true, fn: c => pageParamEleves(c) },
@@ -844,13 +846,13 @@ const GROUPES_MENU = [   // v3.16 : un menu par grand domaine
   { id: 'accueil', titre: '🏠 Accueil', pages: ['direction', 'ma-fiche', 'vie', 'agent-mois', 'honneur', 'sondages'] },
   { id: 'secretariat', titre: '📬 Secrétariat', pages: ['courrier', 'agenda'] },
   { id: 'eleves', titre: '🎓 Élèves', pages: ['eleves', 'effectifs', 'appel', 'absences', 'discipline', 'archives'] },
-  { id: 'notes', titre: '📝 Pédagogie', pages: ['notes', 'cahier', 'bulletins', 'calendrier-conseils'] },
+  { id: 'notes', titre: '📝 Pédagogie', pages: ['notes', 'cahier', 'repro', 'bulletins', 'calendrier-conseils'] },
   { id: 'parents', titre: '👨‍👩‍👧 Parents', pages: ['parents-com', 'familles'] },
   { id: 'securite', titre: '🛡 Accueil et sécurité', pages: ['controle', 'visiteurs', 'cartes', 'signalements'] },
   { id: 'personnel', titre: '👨‍🏫 Personnel', pages: ['pointage', 'arrivees', 'tableau', 'intervenants', 'rattrapages', 'reclamations', 'paiement', 'personnel'] },
   { id: 'atelier', titre: '🔧 Atelier', pages: ['atelier', 'inventaire', 'demandes-mo', 'stock-mo', 'prets', 'securite', 'rapports-atelier'] },
   { id: 'stages', titre: '🤝 Stages et entreprises', pages: ['stages'] },
-  { id: 'finances', titre: '💰 Finances', pages: ['caisse', 'finances'] },
+  { id: 'finances', titre: '💰 Finances', pages: ['caisse', 'finances', 'rames'] },
   { id: 'admin', titre: '⚙ Administration', pages: ['annonces', 'calendrier-scolaire', 'emplois', 'comptes', 'droits', 'acces-atelier', 'signature', 'suggestions', 'passage', 'etablissement', 'licence', 'journal'] }
 ];
 let groupeOuvert = null;
@@ -893,7 +895,7 @@ function afficher() {
   $('#moi-nom').textContent = p.nom;
   $('#moi-photo').outerHTML = avatar(p.matricule, p.nom, 'petit').replace('class="avatar', 'id="moi-photo" class="avatar');
   let [page, arg] = (location.hash.slice(2) || '').split('/');
-  let def = role() === 'intervenant' ? 'ma-fiche' : role() === 'directeur' ? 'direction' : role() === 'comptable' ? 'caisse' : role() === 'educateur' ? 'eleves' : role() === 'gardien' ? 'controle' : role() === 'assistante' ? 'courrier' : 'pointage';
+  let def = role() === 'intervenant' ? 'ma-fiche' : role() === 'directeur' ? 'direction' : role() === 'comptable' ? 'caisse' : role() === 'educateur' ? 'eleves' : role() === 'gardien' ? 'controle' : role() === 'assistante' ? 'courrier' : role() === 'reprographe' ? 'repro' : 'pointage';
   if (!accesPage(def)) def = 'actions';
   if (!PAGES[page] || !accesPage(page)) { page = def; history.replaceState(null, '', '#/' + def); }
   afficher.accueil = page === def;
@@ -1747,7 +1749,7 @@ const ENCOURAGEMENTS = ['Bonne journée de travail !', 'Ensemble, formons les pr
   'Le savoir-faire se transmet un jour à la fois.', 'Merci de faire vivre notre établissement.'];
 function encouragement() { const d = new Date(), n = d.getFullYear() * 400 + d.getMonth() * 31 + d.getDate(); return ENCOURAGEMENTS[n % ENCOURAGEMENTS.length]; }
 const nomAppel = p => `${civ(p.civilite) ? civ(p.civilite) + ' ' : ''}${p.nom}`;
-const LIB_ROLE = { admin: 'Administrateur', directeur: 'Directeur', censeur: 'Censeur', intervenant: 'Enseignant', educateur: 'Éducateur', comptable: 'Comptable', gardien: 'Gardien', assistante: 'Assistante de direction' };
+const LIB_ROLE = { admin: 'Administrateur', directeur: 'Directeur', censeur: 'Censeur', intervenant: 'Enseignant', educateur: 'Éducateur', comptable: 'Comptable', gardien: 'Gardien', assistante: 'Assistante de direction', reprographe: 'Reprographe' };
 function ligneSalut() { const p = S.session.profil; return `<div class="salut">${salutation()} <b>${esc(nomAppel(p))}</b>, ${encouragement().replace(/^./, x => x.toLowerCase())}</div>`; }
 async function carteBienvenue() {
   if (!stock.lire('bienvenue', 0) || !S.session) return; stock.ecrire('bienvenue', 0);
@@ -1866,7 +1868,7 @@ async function pageAnnonces(c) {
 }
 async function pageDroits(c) {
   const [D, CP] = await Promise.all([api('droits'), api('comptes')]);
-  const NOMR = { directeur: 'Directeur', censeur: 'Censeur', educateur: 'Éducateur', comptable: 'Comptable', intervenant: 'Enseignant', gardien: 'Gardien', assistante: 'Assistante de direction' };
+  const NOMR = { directeur: 'Directeur', censeur: 'Censeur', educateur: 'Éducateur', comptable: 'Comptable', intervenant: 'Enseignant', gardien: 'Gardien', assistante: 'Assistante de direction', reprographe: 'Reprographe' };
   const NIV = { AGIT: '✏️ Agit', CONSULTE: '👁 Consulte', AUCUN: '— Aucun accès' };
   const actifs = (CP.comptes || []).filter(x => x.statut === 'ACTIF' && x.role !== 'admin').sort((a, b) => a.nom.localeCompare(b.nom));
   const nomMod = {}; D.modules.forEach(m => nomMod[m.code] = m.libelle);
