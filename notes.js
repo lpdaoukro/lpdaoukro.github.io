@@ -735,7 +735,7 @@ function bulletinHtml(K, e) {
       <div><div class="bul-t2">Résultat annuel</div><div class="bul-mga">MGA : <b>${n2(e.annuelle) || '—'}</b><br>Rang : <b>${rangTxt(e.rangAn, e.rangAnEx, e.sexe) || '—'}</b></div></div>
       <div><div class="bul-t2">Décision de fin d'année</div><div class="bul-fin">${esc(e.fin || e.finPropose || '')}</div></div></div>` : ''}
     <div class="bul-bas2"><div><div class="bul-t">Appréciations du Conseil de Classe</div><div class="bul-appc">${esc(e.appG || '')}</div><div class="bul-pp">Le Professeur Principal${K.pp ? ' : ' + esc(K.pp) : ''}</div></div>
-      <div><div class="bul-t bul-t-clair">VISA DU CHEF D'ÉTABLISSEMENT</div><div class="bul-visa"><div>${lieuLe(true)} ${dateVisa}<div class="bul-dir">${esc(P.directeur || '')}</div></div>${s2 ? `<div class="bul-qr">${qr}</div>` : ''}</div></div></div>
+      <div><div class="bul-t bul-t-clair">VISA DU CHEF D'ÉTABLISSEMENT</div><div class="bul-visa"><div>${lieuLe(true)} ${dateVisa}${K.signDir ? `<div class="bul-sg">${K.signDir.cachet ? `<img class="bul-cachet" src="${K.signDir.cachet}" alt="">` : ''}${K.signDir.signature ? `<img class="bul-signature" src="${K.signDir.signature}" alt="">` : ''}</div>` : ''}<div class="bul-dir">${esc(P.directeur || '')}</div></div>${s2 ? `<div class="bul-qr">${qr}</div>` : ''}</div></div></div>
     <p class="bul-note">Bulletin à conserver soigneusement. Il n'en sera pas délivré de duplicata.${provisoire ? ' — Document provisoire, non validé par le directeur.' : ''}</p>
     ${piedOfficiel()}</div>`;
 }

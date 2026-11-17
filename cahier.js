@@ -99,7 +99,7 @@ const badgeEcart = e => e === null || e === undefined ? '' : e > 0 ? `<span clas
 /* ===================== PAGE PRINCIPALE ===================== */
 async function pageCahier(c, onglet) {
   const r = role();
-  const ongs = r === 'intervenant' ? [['moi', '📘 Mes séances'], ['progressions', '📈 Mes progressions'], ['classes', '🏫 Cahier d\'une classe']]
+  const ongs = r === 'intervenant' ? [['moi', '📘 Mes séances'], ['progressions', '📈 Mes progressions'], ['classes', '🏫 Cahier d\'une classe']].concat((S.session.profil || {}).chefTravaux ? [['suivi', '📊 Suivi des matières pro']] : [])
     : r === 'educateur' ? [['classes', '🏫 Cahier d\'une classe']]
     : [['suivi', '📊 Suivi'], ['classes', '🏫 Cahier d\'une classe'], ['progressions', '📈 Progressions']];
   if (!ongs.some(o => o[0] === onglet)) onglet = ongs[0][0];
@@ -430,14 +430,14 @@ async function ongletSuiviCahier(z) {
       ${M.map(m => `<tr><td>${esc(m.classe)}</td><td><b>${esc(m.matiere)}</b>${m.enCours ? `<div class="aide">en cours : ${esc(m.enCours)}</div>` : ''}</td><td>${esc(m.profs)}</td>
         ${m.charge ? `<td class="n">${m.faites}/${m.total}</td><td class="n">${m.prevues}</td><td>${badgeEcart(m.ecart)}</td><td class="n">${nb(m.heures)} h${m.te !== null ? ` (${nb(m.te)} %)` : ''}</td><td class="n" title="${esc(Object.entries(m.motifs || {}).map(([k, v]) => k + ' : ' + v).join(', '))}">${m.nonTenues || m.rattrapages ? `${m.nonTenues || 0} / ${m.rattrapages || 0}` : ''}</td><td><a class="btn petit secondaire" href="#/progression/${m.id}">${m.verrou ? '🔒 ' : ''}Voir</a></td>`
           : `<td colspan="4"><span class="badge attente">progression non chargée</span></td><td class="n">${m.nonTenues || m.rattrapages ? `${m.nonTenues || 0} / ${m.rattrapages || 0}` : ''}</td><td></td>`}</tr>`).join('')}</tbody></table></div>
-      <h2>Reprise des séances passées</h2><div class="ligne"><div><label>Les enseignants peuvent remplir les séances depuis le</label><input type="date" id="ct-rep" value="${R.reprise}"></div><div style="flex:0 0 auto;align-self:flex-end"><button class="btn petit secondaire" id="ct-rep-ok">Enregistrer</button></div></div>
-      <p class="aide">Les séances d'avant la mise en ligne (${fr(R.miseEnLigne)}) sont notées « reprise » : pas de retard, pas d'alerte.</p>
+      ${R.proSeul ? '<p class="aide">Chef de travaux : suivi des matières professionnelles, en consultation.</p>' : `<h2>Reprise des séances passées</h2><div class="ligne"><div><label>Les enseignants peuvent remplir les séances depuis le</label><input type="date" id="ct-rep" value="${R.reprise}"></div><div style="flex:0 0 auto;align-self:flex-end"><button class="btn petit secondaire" id="ct-rep-ok">Enregistrer</button></div></div>
+      <p class="aide">Les séances d'avant la mise en ligne (${fr(R.miseEnLigne)}) sont notées « reprise » : pas de retard, pas d'alerte.</p>`}
       <h2>Remplissage par enseignant</h2>
       ${R.enseignants.length ? `<div class="table-defil"><table><thead><tr><th>Enseignant</th><th class="n">À remplir (dans le délai)</th><th class="n">Non remplies après ${R.delai} h</th><th class="n">Remplies en retard</th></tr></thead><tbody>
         ${R.enseignants.map(e => `<tr><td>${esc(e.nom)}</td><td class="n">${e.aRemplir || ''}</td><td class="n">${e.enRetard ? `<b style="color:#C00000">${e.enRetard}</b>` : ''}</td><td class="n">${e.rempliesRetard || ''}</td></tr>`).join('')}</tbody></table></div>` : '<div class="info">✅ Tous les cahiers de textes sont à jour.</div>'}
       ${R.retards.length ? `<details><summary><b>Détail des séances non remplies (${R.retards.length})</b></summary>${R.retards.map(x => `<div class="par-note"><span>${fr(x.d)} · ${esc(x.horaire)} · ${esc(x.classe)} · ${esc(x.matiere)}</span><span>${esc(x.prof)}</span></div>`).join('')}</details>` : ''}`;
     $('#ct-f').onchange = e => { filtre = e.target.value; stock.ecrire('ct_filtre', filtre); dessiner(); };
-    $('#ct-rep-ok').onclick = async () => { try { toast((await api('reglerReprise', { date: $('#ct-rep').value })).message); R.reprise = $('#ct-rep').value; } catch (e) { toast(e.message, 6000); } };
+    if ($('#ct-rep-ok')) $('#ct-rep-ok').onclick = async () => { try { toast((await api('reglerReprise', { date: $('#ct-rep').value })).message); R.reprise = $('#ct-rep').value; } catch (e) { toast(e.message, 6000); } };
   };
   dessiner();
 }

@@ -64,7 +64,9 @@ const droit = m => { if (!S.session || modeProf()) return undefined; if (role() 
 function accesPage(k) {
   const p = PAGES[k]; if (!p) return false;
   const base = p.roles.includes(role());
-  if (!p.mod || modeProf() || role() === 'admin') return base;
+  if (!p.mod || modeProf() || role() === 'admin' || role() === 'assistante' || role() === 'gardien') return base;
+  const plus = (S.session && S.session.profil || {}).droitsPlus;   // v3.16 : hors de son rôle, seulement si l'administrateur l'a ouvert
+  if (!base && plus && !plus.includes(p.mod[0])) return false;
   const n = droit(p.mod[0]); if (n === undefined) return base;
   return RANG_DROIT[n] >= RANG_DROIT[p.mod[1]];
 }
@@ -273,7 +275,7 @@ function redimensionnerPhoto(fichier) {
 
 /* ================= BOÎTE À SUGGESTIONS (v2.5) ================= */
 let SUGG_PAGE = '';
-const VERSION_SITE = '3.14';
+const VERSION_SITE = '3.16';
 /* ================= NOTIFICATIONS SUR LE TÉLÉPHONE (v2.6, Firebase) ================= */
 // configuration publique du projet Firebase (faite pour être dans le site) ; la clé privée reste dans Apps Script
 const FIREBASE_CFG = { apiKey: 'AIzaSyDVRNmLz5ph73vf2a9vFhd2RVni8H9swt0', authDomain: 'lpdaoukro-notification.firebaseapp.com', projectId: 'lpdaoukro-notification',
@@ -760,11 +762,15 @@ function formInscription() {
 const PAGES = {
   'direction':     { titre: 'Tableau de bord', roles: ['directeur', 'admin', 'censeur', 'comptable'], fn: (c, a) => pageTableauBord(c, a) },
   'ma-fiche':      { titre: 'Ma fiche', roles: ['intervenant', 'censeur', 'admin'], si: () => S.session.profil.intervenant || role() === 'intervenant', fn: pageMaFiche },
+  'courrier':      { titre: 'Courrier', roles: ['admin', 'directeur', 'assistante', 'censeur', 'comptable', 'educateur'], fn: c => pageCourrier(c) },
+  'agenda':        { titre: 'Agenda du directeur', roles: ['admin', 'directeur', 'assistante'], fn: c => pageAgenda(c) },
+  'signature':     { titre: 'Signature et cachet', roles: ['admin', 'directeur'], fn: c => pageSignature(c) },
+  'acces-atelier': { titre: 'Accès à l\'atelier', roles: ['admin'], fn: c => pageAccesAtelier(c) },
   'parents-com':   { titre: 'Parents', roles: ['admin', 'directeur', 'censeur', 'educateur', 'comptable', 'intervenant'], si: () => role() !== 'intervenant' || ((S.session.profil || {}).pp || []).length > 0, fn: (c, a) => pageParentsCom(c, a) },
   'cartes':        { titre: 'Cartes QR', roles: ['admin', 'directeur', 'censeur', 'educateur'], fn: (c, a) => pageCartes(c, a) },
-  'controle':      { titre: 'Contrôle des cartes', roles: ['admin', 'directeur', 'censeur', 'educateur', 'comptable', 'gardien'], fn: c => pageControle(c) },
-  'visiteurs':     { titre: 'Visiteurs', roles: ['admin', 'directeur', 'censeur', 'educateur', 'gardien'], fn: (c, a) => pageVisiteurs(c, a) },
-  'carte':         { titre: 'Contrôle des cartes', roles: ['admin', 'directeur', 'censeur', 'educateur', 'comptable', 'intervenant', 'gardien'], cache: true, fn: (c, a) => pageControle(c, a) },
+  'controle':      { titre: 'Contrôle des cartes', roles: ['admin', 'directeur', 'censeur', 'educateur', 'comptable', 'gardien', 'assistante'], fn: c => pageControle(c) },
+  'visiteurs':     { titre: 'Visiteurs', roles: ['admin', 'directeur', 'censeur', 'educateur', 'gardien', 'assistante'], fn: (c, a) => pageVisiteurs(c, a) },
+  'carte':         { titre: 'Contrôle des cartes', roles: ['admin', 'directeur', 'censeur', 'educateur', 'comptable', 'intervenant', 'gardien', 'assistante'], cache: true, fn: (c, a) => pageControle(c, a) },
   'cahier':        { titre: 'Cahier de textes', roles: ['intervenant', 'censeur', 'admin', 'directeur', 'educateur'], fn: (c, a) => pageCahier(c, a) },
   'cahier-seance': { titre: 'Cahier de textes', roles: ['intervenant', 'censeur', 'admin'], cache: true, fn: (c, a) => pageCahierSeance(c, a) },
   'cahier-passe':  { titre: 'Séances passées', roles: ['intervenant'], cache: true, fn: c => pageCahierPasse(c) },
@@ -777,44 +783,44 @@ const PAGES = {
   'notes':         { titre: 'Notes', roles: ['intervenant', 'censeur', 'admin', 'directeur'], fn: c => pageNotes(c) },
   'bulletins':     { titre: 'Bulletins', mod: ['bulletins', 'CONSULTE'], roles: ['directeur', 'censeur', 'admin'], fn: (c, a) => pageBulletins(c, a) },
   'caisse':        { titre: 'Caisse', mod: ['caisse', 'AGIT'], roles: ['comptable', 'admin'], fn: c => pageCaisse(c) },
-  'finances':      { titre: 'Finances', mod: ['caisse', 'CONSULTE'], roles: ['comptable', 'admin', 'directeur', 'censeur'], fn: (c, a) => pageFinances(c, a) },
+  'finances':      { titre: 'Finances', mod: ['caisse', 'CONSULTE'], roles: ['comptable', 'admin', 'directeur'], fn: (c, a) => pageFinances(c, a) },
   'stages':        { titre: 'Stages', roles: ['intervenant', 'educateur', 'censeur', 'admin', 'directeur', 'comptable'], si: () => accesStages(), fn: (c, a) => pageStages(c, a) },
   'discipline':    { titre: 'Discipline', roles: ['intervenant', 'educateur', 'censeur', 'admin', 'directeur'], fn: (c, a) => pageDiscipline(c, a) },
   'absences':      { titre: 'Absences élèves', mod: ['absences', 'CONSULTE'], roles: ['educateur', 'censeur', 'admin', 'directeur'], fn: (c, a) => pageAbsences(c, a) },
-  'eleves':        { titre: 'Élèves', roles: ['educateur', 'comptable', 'censeur', 'admin', 'intervenant', 'directeur'], fn: (c, a) => pageEleves(c, a) },
-  'effectifs':     { titre: 'Effectifs', roles: ['educateur', 'comptable', 'censeur', 'admin', 'directeur'], fn: c => pageEffectifs(c) },
+  'eleves':        { titre: 'Élèves', roles: ['educateur', 'comptable', 'censeur', 'admin', 'intervenant', 'directeur', 'assistante'], fn: (c, a) => pageEleves(c, a) },
+  'effectifs':     { titre: 'Effectifs', roles: ['educateur', 'comptable', 'censeur', 'admin', 'directeur', 'assistante'], fn: c => pageEffectifs(c) },
   'pointage':      { titre: 'Pointage du jour', mod: ['pointage', 'AGIT'], roles: ['censeur', 'admin'], fn: pagePointage },
   'tableau':       { titre: 'Heures supp.', mod: ['pointage', 'CONSULTE'], roles: ['censeur', 'admin', 'directeur'], fn: pageTableau },
   'intervenants':  { titre: 'Intervenants', mod: ['pointage', 'CONSULTE'], roles: ['censeur', 'admin', 'directeur'], fn: pageIntervenants },
   'rattrapages':   { titre: 'Rattrapages', roles: ['intervenant', 'censeur', 'admin'], fn: pageRattrapages, pastille: 'rattrapagesAValider' },
   'reclamations':  { titre: 'Réclamations', roles: ['intervenant', 'censeur', 'admin'], fn: pageReclamations, pastille: 'reclamations' },
   'paiement':      { titre: 'État de paiement', mod: ['pointage', 'CONSULTE'], roles: ['censeur', 'admin', 'directeur'], fn: pagePaiement },
-  'personnel':     { titre: 'Personnel', mod: ['pointage', 'CONSULTE'], roles: ['censeur', 'admin', 'directeur'], fn: pagePersonnel },
+  'personnel':     { titre: 'Personnel', mod: ['pointage', 'CONSULTE'], roles: ['censeur', 'admin', 'directeur', 'assistante'], fn: pagePersonnel },
   'emplois':       { titre: 'Emplois du temps', mod: ['edt', 'CONSULTE'], roles: ['admin', 'censeur'], fn: (c, a) => pageEmploisV2(c, a) },
-  'atelier':       { titre: 'Tableau de bord', roles: ['admin', 'directeur', 'censeur', 'educateur', 'comptable', 'intervenant'], fn: c => pageAtelier(c) },
-  'inventaire':    { titre: 'Inventaire', roles: ['admin', 'directeur', 'censeur', 'educateur', 'comptable', 'intervenant'], fn: c => pageInventaire(c) },
+  'atelier':       { titre: 'Tableau de bord', roles: ['admin', 'directeur', 'censeur', 'educateur', 'comptable', 'intervenant'], si: () => accesAtelierClient(['TOUT', 'CHEF', 'PROF']), fn: c => pageAtelier(c) },
+  'inventaire':    { titre: 'Inventaire', roles: ['admin', 'directeur', 'censeur', 'educateur', 'comptable', 'intervenant'], si: () => accesAtelierClient(['TOUT', 'CHEF', 'PROF']), fn: c => pageInventaire(c) },
   'equipement':    { titre: 'Équipement', roles: ['admin', 'directeur', 'censeur', 'educateur', 'comptable', 'intervenant'], fn: (c, a) => pageEquipement(c, a) },
-  'demandes-mo':   { titre: 'Matière d\'œuvre', roles: ['admin', 'directeur', 'censeur', 'educateur', 'comptable', 'intervenant'], fn: c => pageDemandesMo(c) },
-  'stock-mo':      { titre: 'Stock', roles: ['admin', 'directeur', 'censeur', 'educateur', 'comptable', 'intervenant'], si: () => stock.lire('atelier_lecteur', false), fn: c => pageStockMo(c) },
-  'prets':         { titre: 'Prêts d\'outillage', roles: ['admin', 'directeur', 'censeur', 'educateur', 'comptable', 'intervenant'], fn: c => pagePrets(c) },
-  'securite':      { titre: 'Sécurité', roles: ['admin', 'directeur', 'censeur', 'educateur', 'comptable', 'intervenant'], fn: c => pageSecurite(c) },
-  'rapports-atelier': { titre: 'Besoins et coûts', roles: ['admin', 'directeur', 'censeur', 'educateur', 'comptable', 'intervenant'], si: () => stock.lire('atelier_lecteur', false), fn: c => pageRapportsAtelier(c) },
+  'demandes-mo':   { titre: 'Matière d\'œuvre', roles: ['admin', 'directeur', 'censeur', 'educateur', 'comptable', 'intervenant'], si: () => accesAtelierClient(['TOUT', 'CHEF', 'PROF']), fn: c => pageDemandesMo(c) },
+  'stock-mo':      { titre: 'Stock', roles: ['admin', 'directeur', 'censeur', 'educateur', 'comptable', 'intervenant'], si: () => accesAtelierClient(['TOUT', 'CHEF', 'ECO']), fn: c => pageStockMo(c) },
+  'prets':         { titre: 'Prêts d\'outillage', roles: ['admin', 'directeur', 'censeur', 'educateur', 'comptable', 'intervenant'], si: () => accesAtelierClient(['TOUT', 'CHEF', 'PROF']), fn: c => pagePrets(c) },
+  'securite':      { titre: 'Sécurité', roles: ['admin', 'directeur', 'censeur', 'educateur', 'comptable', 'intervenant'], si: () => accesAtelierClient(['TOUT', 'CHEF', 'PROF']), fn: c => pageSecurite(c) },
+  'rapports-atelier': { titre: 'Besoins et coûts', roles: ['admin', 'directeur', 'censeur', 'educateur', 'comptable', 'intervenant'], si: () => accesAtelierClient(['TOUT', 'CHEF', 'ECO']), fn: c => pageRapportsAtelier(c) },
   'arrivees':      { titre: 'Arrivées et départs', roles: ['admin', 'censeur', 'directeur'], fn: c => pageArrivees(c) },
-  'vie':           { titre: 'Vie du lycée', roles: ['admin', 'directeur', 'censeur', 'educateur', 'comptable', 'intervenant'], fn: c => pageVie(c) },
-  'sondages':      { titre: 'Sondages', roles: ['admin', 'directeur', 'censeur', 'educateur', 'comptable', 'intervenant'], fn: c => pageSondages(c) },
-  'agent-mois':    { titre: 'Agent du mois', roles: ['admin', 'directeur', 'censeur', 'educateur', 'comptable', 'intervenant'], fn: c => pageAgentMois(c) },
-  'honneur':       { titre: 'Tableau d\'honneur', roles: ['admin', 'directeur', 'censeur', 'educateur', 'comptable', 'intervenant'], fn: c => pageHonneur(c) },
+  'vie':           { titre: 'Vie du lycée', roles: ['admin', 'directeur', 'censeur', 'educateur', 'comptable', 'intervenant', 'assistante'], fn: c => pageVie(c) },
+  'sondages':      { titre: 'Sondages', roles: ['admin', 'directeur', 'censeur', 'educateur', 'comptable', 'intervenant', 'assistante'], fn: c => pageSondages(c) },
+  'agent-mois':    { titre: 'Agent du mois', roles: ['admin', 'directeur', 'censeur', 'educateur', 'comptable', 'intervenant', 'assistante'], fn: c => pageAgentMois(c) },
+  'honneur':       { titre: 'Tableau d\'honneur', roles: ['admin', 'directeur', 'censeur', 'educateur', 'comptable', 'intervenant', 'assistante'], fn: c => pageHonneur(c) },
   'signalements':  { titre: 'Signalements', roles: ['admin', 'directeur', 'censeur', 'educateur', 'comptable', 'intervenant'], si: () => role() !== 'intervenant' || stock.lire('resp_signal', false), fn: c => pageSignalements(c) },
   'passage':       { titre: 'Passage d\'année', roles: ['admin', 'directeur'], fn: c => pagePassage(c) },
   'archives':      { titre: 'Années précédentes', roles: ['admin', 'directeur', 'censeur', 'comptable', 'educateur'], fn: c => pageArchives(c) },
   'familles':      { titre: 'Espace parents', roles: ['admin', 'comptable', 'educateur', 'directeur'], fn: c => pageFamilles(c) },
-  'suggestion':    { titre: 'Suggestion', roles: ['intervenant', 'censeur', 'admin', 'educateur', 'comptable', 'directeur', 'gardien'], cache: true, fn: c => pageSuggestion(c) },
+  'suggestion':    { titre: 'Suggestion', roles: ['intervenant', 'censeur', 'admin', 'educateur', 'comptable', 'directeur', 'gardien', 'assistante'], cache: true, fn: c => pageSuggestion(c) },
   'suggestions':   { titre: 'Suggestions', roles: ['admin'], fn: c => pageSuggestions(c) },
   'etablissement': { titre: 'Établissement', roles: ['admin'], fn: c => pageEtablissement(c) },
   'licence':       { titre: 'Licence', roles: ['admin'], fn: c => pageLicence(c) },
   'calendrier-scolaire': { titre: 'Congés et jours fériés', roles: ['admin', 'censeur'], fn: c => pageCalendrierScolaire(c) },
-  'actions':       { titre: 'Mes actions', roles: ['intervenant', 'censeur', 'admin', 'educateur', 'comptable', 'directeur', 'gardien'], cache: true, fn: c => pageActions(c) },
-  'annonces':      { titre: 'Annonces et échéances', mod: ['annonces', 'AGIT'], roles: ['admin', 'directeur', 'censeur'], fn: c => pageAnnonces(c) },
+  'actions':       { titre: 'Mes actions', roles: ['intervenant', 'censeur', 'admin', 'educateur', 'comptable', 'directeur', 'gardien', 'assistante'], cache: true, fn: c => pageActions(c) },
+  'annonces':      { titre: 'Annonces et échéances', mod: ['annonces', 'AGIT'], roles: ['admin', 'directeur', 'censeur', 'assistante'], fn: c => pageAnnonces(c) },
   'droits':        { titre: 'Droits et délégations', roles: ['admin'], fn: c => pageDroits(c) },
   'calendrier-conseils': { titre: 'Calendrier des conseils', roles: ['intervenant', 'censeur', 'admin', 'directeur', 'educateur'], fn: c => pageCalendrierConseils(c) },
   'demandes-notes': { titre: 'Demandes sur les notes', roles: ['intervenant', 'censeur', 'admin', 'directeur'], cache: true, fn: c => pageDemandesNotes(c) },
@@ -822,26 +828,30 @@ const PAGES = {
   'journal':       { titre: 'Journal', mod: ['comptes', 'CONSULTE'], roles: ['admin'], fn: pageJournal },
   'conseil':       { titre: 'Conseil de classe', roles: ['intervenant', 'censeur', 'admin', 'directeur', 'educateur'], cache: true, fn: (c, a) => pageConseil(c, a) },
   'matieres':      { titre: 'Matières et coefficients', roles: ['admin'], cache: true, fn: c => pageMatieres(c) },
-  'mon-compte':    { titre: 'Mon compte', roles: ['intervenant', 'censeur', 'admin', 'educateur', 'comptable', 'directeur', 'gardien'], cache: true, fn: pageMonCompte },
+  'mon-compte':    { titre: 'Mon compte', roles: ['intervenant', 'censeur', 'admin', 'educateur', 'comptable', 'directeur', 'gardien', 'assistante'], cache: true, fn: pageMonCompte },
   'eleve':         { titre: 'Fiche élève', roles: ['educateur', 'comptable', 'censeur', 'admin', 'intervenant', 'directeur'], cache: true, fn: (c, a) => pageEleve(c, a) },
   'import-eleves': { titre: 'Importer des élèves', roles: ['educateur', 'admin'], cache: true, fn: c => pageImportEleves(c) },
   'param-eleves':  { titre: 'Classes et montants', roles: ['admin'], cache: true, fn: c => pageParamEleves(c) },
   'absences-eleve': { titre: "Absences d'un élève", mod: ['absences', 'CONSULTE'], roles: ['educateur', 'censeur', 'admin', 'directeur'], cache: true, fn: (c, a) => pageAbsencesEleve(c, a) },
   'fiche':         { titre: 'Fiche', mod: ['pointage', 'CONSULTE'], roles: ['censeur', 'admin', 'directeur'], cache: true, fn: pageFicheIntervenant },
-  'frais-eleve':   { titre: "Frais d'un élève", roles: ['comptable', 'admin', 'directeur', 'censeur', 'educateur'], cache: true, fn: (c, a) => pageFraisEleve(c, a) },
+  'frais-eleve':   { titre: "Frais d'un élève", roles: ['comptable', 'admin', 'directeur', 'educateur'], cache: true, fn: (c, a) => pageFraisEleve(c, a) },
   'stagiaire':     { titre: 'Stagiaire', roles: ['intervenant', 'educateur', 'censeur', 'admin', 'directeur', 'comptable'], cache: true, fn: (c, a) => pageStagiaire(c, a) },
   'incident':      { titre: 'Incident', roles: ['intervenant', 'educateur', 'censeur', 'admin', 'directeur'], cache: true, fn: (c, a) => pageIncident(c, a) },
   'discipline-eleve': { titre: 'Fiche disciplinaire', roles: ['intervenant', 'educateur', 'censeur', 'admin', 'directeur'], cache: true, fn: (c, a) => pageDisciplineEleve(c, a) }
 };
 let pastilles = stock.lire('pastilles', {});
-const GROUPES_MENU = [
-  { id: 'accueil', titre: '🏠 Accueil', pages: ['direction', 'ma-fiche', 'vie', 'agent-mois', 'honneur', 'sondages', 'signalements'] },
-  { id: 'atelier', titre: '🔧 Atelier', pages: ['atelier', 'inventaire', 'demandes-mo', 'stock-mo', 'prets', 'securite', 'rapports-atelier'] },
+const GROUPES_MENU = [   // v3.16 : un menu par grand domaine
+  { id: 'accueil', titre: '🏠 Accueil', pages: ['direction', 'ma-fiche', 'vie', 'agent-mois', 'honneur', 'sondages'] },
+  { id: 'secretariat', titre: '📬 Secrétariat', pages: ['courrier', 'agenda'] },
+  { id: 'eleves', titre: '🎓 Élèves', pages: ['eleves', 'effectifs', 'appel', 'absences', 'discipline', 'archives'] },
+  { id: 'notes', titre: '📝 Pédagogie', pages: ['notes', 'cahier', 'bulletins', 'calendrier-conseils'] },
+  { id: 'parents', titre: '👨‍👩‍👧 Parents', pages: ['parents-com', 'familles'] },
+  { id: 'securite', titre: '🛡 Accueil et sécurité', pages: ['controle', 'visiteurs', 'cartes', 'signalements'] },
   { id: 'personnel', titre: '👨‍🏫 Personnel', pages: ['pointage', 'arrivees', 'tableau', 'intervenants', 'rattrapages', 'reclamations', 'paiement', 'personnel'] },
-  { id: 'eleves', titre: '🎓 Élèves', pages: ['eleves', 'effectifs', 'appel', 'absences', 'controle', 'visiteurs', 'cartes', 'discipline', 'parents-com', 'stages', 'familles', 'archives'] },
-  { id: 'notes', titre: '📝 Notes', pages: ['notes', 'cahier', 'bulletins', 'calendrier-conseils'] },
+  { id: 'atelier', titre: '🔧 Atelier', pages: ['atelier', 'inventaire', 'demandes-mo', 'stock-mo', 'prets', 'securite', 'rapports-atelier'] },
+  { id: 'stages', titre: '🤝 Stages et entreprises', pages: ['stages'] },
   { id: 'finances', titre: '💰 Finances', pages: ['caisse', 'finances'] },
-  { id: 'admin', titre: '⚙ Administration', pages: ['annonces', 'calendrier-scolaire', 'emplois', 'comptes', 'droits', 'suggestions', 'passage', 'etablissement', 'licence', 'journal'] }
+  { id: 'admin', titre: '⚙ Administration', pages: ['annonces', 'calendrier-scolaire', 'emplois', 'comptes', 'droits', 'acces-atelier', 'signature', 'suggestions', 'passage', 'etablissement', 'licence', 'journal'] }
 ];
 let groupeOuvert = null;
 function menu() {
@@ -883,11 +893,15 @@ function afficher() {
   $('#moi-nom').textContent = p.nom;
   $('#moi-photo').outerHTML = avatar(p.matricule, p.nom, 'petit').replace('class="avatar', 'id="moi-photo" class="avatar');
   let [page, arg] = (location.hash.slice(2) || '').split('/');
-  let def = role() === 'intervenant' ? 'ma-fiche' : role() === 'directeur' ? 'direction' : role() === 'comptable' ? 'caisse' : role() === 'educateur' ? 'eleves' : role() === 'gardien' ? 'controle' : 'pointage';
+  let def = role() === 'intervenant' ? 'ma-fiche' : role() === 'directeur' ? 'direction' : role() === 'comptable' ? 'caisse' : role() === 'educateur' ? 'eleves' : role() === 'gardien' ? 'controle' : role() === 'assistante' ? 'courrier' : 'pointage';
   if (!accesPage(def)) def = 'actions';
   if (!PAGES[page] || !accesPage(page)) { page = def; history.replaceState(null, '', '#/' + def); }
   afficher.accueil = page === def;
   menu(); majReseau(); majEnteteMode(); majActions();
+  if (!afficher.profilFrais && navigator.onLine) {   // v3.16 : profil remis à jour une fois par ouverture (droits, atelier, professeur principal…)
+    afficher.profilFrais = true;
+    api('moi').then(r => { if (!S.session || !r.profil) return; S.session.profil = r.profil; stock.ecrire('session', S.session); cacheVue('moi', r); menu(); }).catch(() => { afficher.profilFrais = false; });
+  }
   c.innerHTML = '<div class="chargement">Chargement…</div>';
   window.scrollTo(0, 0);
   const tour = afficher.tour = (afficher.tour || 0) + 1;
@@ -1733,7 +1747,7 @@ const ENCOURAGEMENTS = ['Bonne journée de travail !', 'Ensemble, formons les pr
   'Le savoir-faire se transmet un jour à la fois.', 'Merci de faire vivre notre établissement.'];
 function encouragement() { const d = new Date(), n = d.getFullYear() * 400 + d.getMonth() * 31 + d.getDate(); return ENCOURAGEMENTS[n % ENCOURAGEMENTS.length]; }
 const nomAppel = p => `${civ(p.civilite) ? civ(p.civilite) + ' ' : ''}${p.nom}`;
-const LIB_ROLE = { admin: 'Administrateur', directeur: 'Directeur', censeur: 'Censeur', intervenant: 'Enseignant', educateur: 'Éducateur', comptable: 'Comptable', gardien: 'Gardien' };
+const LIB_ROLE = { admin: 'Administrateur', directeur: 'Directeur', censeur: 'Censeur', intervenant: 'Enseignant', educateur: 'Éducateur', comptable: 'Comptable', gardien: 'Gardien', assistante: 'Assistante de direction' };
 function ligneSalut() { const p = S.session.profil; return `<div class="salut">${salutation()} <b>${esc(nomAppel(p))}</b>, ${encouragement().replace(/^./, x => x.toLowerCase())}</div>`; }
 async function carteBienvenue() {
   if (!stock.lire('bienvenue', 0) || !S.session) return; stock.ecrire('bienvenue', 0);
@@ -1797,7 +1811,7 @@ async function majActions(forcer) {
   try {
     ACT.donnees = await api('mesActions'); chargerMarque();
     const p = S.session.profil, D = ACT.donnees;
-    if (D.droits && !modeProf() && (JSON.stringify(D.droits) !== JSON.stringify(p.droits) || D.serfe !== p.serfe)) { p.droits = D.droits; p.serfe = D.serfe; stock.ecrire('session', S.session); menu(); }
+    if (D.droits && !modeProf() && (JSON.stringify(D.droits) !== JSON.stringify(p.droits) || JSON.stringify(D.droitsPlus) !== JSON.stringify(p.droitsPlus) || D.serfe !== p.serfe)) { p.droits = D.droits; p.droitsPlus = D.droitsPlus; p.serfe = D.serfe; stock.ecrire('session', S.session); menu(); }
   } catch (e) { /* rien */ }
   dessinerBande();
 }
@@ -1852,7 +1866,7 @@ async function pageAnnonces(c) {
 }
 async function pageDroits(c) {
   const [D, CP] = await Promise.all([api('droits'), api('comptes')]);
-  const NOMR = { directeur: 'Directeur', censeur: 'Censeur', educateur: 'Éducateur', comptable: 'Comptable', intervenant: 'Enseignant', gardien: 'Gardien' };
+  const NOMR = { directeur: 'Directeur', censeur: 'Censeur', educateur: 'Éducateur', comptable: 'Comptable', intervenant: 'Enseignant', gardien: 'Gardien', assistante: 'Assistante de direction' };
   const NIV = { AGIT: '✏️ Agit', CONSULTE: '👁 Consulte', AUCUN: '— Aucun accès' };
   const actifs = (CP.comptes || []).filter(x => x.statut === 'ACTIF' && x.role !== 'admin').sort((a, b) => a.nom.localeCompare(b.nom));
   const nomMod = {}; D.modules.forEach(m => nomMod[m.code] = m.libelle);
@@ -2713,4 +2727,11 @@ function lienCahierJour(d, c) {
   if (role() !== 'intervenant' || typeof etatCahier !== 'function' || !c.etatAppel) return '';
   const e = etatCahier(d, c.id);
   return e ? ' · <span class="aide">📘 cahier rempli</span>' : ` · <a href="#/cahier-seance/${d}|${esc(c.id)}">📘 remplir le cahier</a>`;
+}
+
+/* v3.16 : accès à l'atelier selon le profil (enseignants des matières professionnelles, chefs de travaux, direction, économe) */
+function accesAtelierClient(niveaux) {
+  const a = (S.session && S.session.profil || {}).atelier;
+  if (a === undefined) return role() !== 'educateur';   // session ouverte avant la mise à jour
+  return niveaux.includes(a);
 }

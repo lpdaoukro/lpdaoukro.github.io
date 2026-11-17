@@ -968,3 +968,21 @@ html[data-theme=sombre] .bulle.moi { background: #1C2B3D; } html[data-theme=somb
 .vb-grille { display: grid; grid-template-columns: repeat(auto-fill, minmax(70px, 1fr)); gap: 6px; }
 .vb { border-radius: 10px; padding: 6px; text-align: center; border: 2px solid var(--bord); } .vb b { display: block; font-size: 1.05rem; } .vb span { font-size: .72rem; }
 .vb.libre { border-color: var(--vert); } .vb.pris { border-color: var(--orange); background: rgba(247,127,0,.08); } .vb.perdu { border-color: var(--rouge); opacity: .7; }
+
+/* --- v3.15 : signature et cachet --- */
+.sg-zone { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; margin: 8px 0; }
+.sg-case { border: 1px dashed var(--bord); border-radius: 10px; padding: 8px; text-align: center; }
+.sg-ap { height: 90px; display: flex; align-items: center; justify-content: center; margin: 6px 0; background: repeating-conic-gradient(#eee 0 25%, #fff 0 50%) 50% / 14px 14px; border-radius: 6px; }
+.sg-ap img { max-height: 84px; max-width: 100%; }
+#impression .cq-sign { width: 34mm; } #impression .cq-sg { position: relative; height: 13mm; margin: .5mm 0; }
+#impression .cq-sg img { position: absolute; left: 50%; top: 50%; transform: translate(-50%, -50%); }
+#impression .cq-cachet { height: 13mm; opacity: .85; } #impression .cq-signature { max-height: 10mm; max-width: 30mm; }
+#impression .cq-sign b { margin-top: .5mm !important; }
+.bul-sg { position: relative; height: 18mm; margin-top: 1mm; } .bul-sg img { position: absolute; left: 50%; top: 50%; transform: translate(-50%, -50%); }
+.bul-cachet { height: 20mm; opacity: .85; } .bul-signature { max-height: 15mm; max-width: 45mm; }
+.bul-sg + .bul-dir { margin-top: 1mm !important; }
+
+/* --- v3.16 : secrétariat --- */
+.cr-annot { background: var(--gris-clair); border-radius: 8px; padding: 6px 10px; margin-top: 6px; font-size: .9rem; }
+.ag-auj { color: var(--bleu2); } .ag-rdv { border-left: 4px solid var(--bleu2); } .ag-rdv.fait { border-left-color: var(--vert); opacity: .75; } .ag-rdv.reporte { border-left-color: var(--orange); }
+select.petit { padding: 4px 6px; font-size: .85rem; width: auto; }

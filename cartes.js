@@ -7,12 +7,13 @@ const COUL_NIVEAU = { CAP: '#009E60', BT: '#1F4E78', BTS: '#F77F00' };
 /* ===================== GESTION ET IMPRESSION ===================== */
 async function pageCartes(c, onglet) {
   const peutRegler = ['admin', 'directeur', 'censeur'].includes(role());
-  const ongs = [['eleves', '🎓 Élèves'], ['personnel', '👨‍🏫 Personnel']].concat(peutRegler ? [['reglages', '⚙ Réglages']] : []);
+  const ongs = [['eleves', '🎓 Élèves'], ['personnel', '👨‍🏫 Personnel'], ['visiteurs', '🚪 Badges visiteurs']].concat(peutRegler ? [['reglages', '⚙ Réglages']] : []);
   if (!ongs.some(o => o[0] === onglet)) onglet = 'eleves';
   c.innerHTML = `<h1>🪪 Cartes avec QR</h1><div class="onglets">${ongs.map(([k, l]) => `<a href="#/cartes/${k}" class="${k === onglet ? 'actif' : ''}">${l}</a>`).join('')}</div>
     <div class="actions" style="margin:8px 0"><a class="btn vert" href="#/controle">📷 Contrôle des cartes</a></div><div id="ca-z"><div class="chargement">Chargement…</div></div>`;
   const z = $('#ca-z');
   if (onglet === 'reglages') return reglagesCartes(z);
+  if (onglet === 'visiteurs') { z.innerHTML = '<div class="carte"><p style="margin-top:0">Les badges visiteurs (V01, V02…) s\'impriment, se déclarent perdus et se réimpriment depuis la page Visiteurs, en bas, avec l\'état de chaque badge.</p><a class="btn" href="#/visiteurs">🚪 Ouvrir la page Visiteurs</a></div>'; return; }
   const type = onglet === 'personnel' ? 'PERSO' : 'ELEVE';
   let classe = stock.lire('ca_classe', '');
   const charger = async () => {
@@ -59,6 +60,56 @@ async function reglagesCartes(z) {
     <h2>Verso des cartes</h2><label>Contact du lycée (adresse, BP, téléphone)</label><input id="rg-c" maxlength="120" value="${esc(R.contact)}" placeholder="ex. BP 12 Daoukro — Tél. 27 35 00 00 00">
     <div class="actions"><button class="btn" id="rg-ok">Enregistrer</button></div></div>`;
   $('#rg-ok').onclick = async () => { try { toast((await api('reglerCartes', { frais: $('#rg-f').checked, retards: $('#rg-r').checked, contact: $('#rg-c').value })).message); } catch (e) { toast(e.message, 6000); } };
+  z.insertAdjacentHTML('beforeend', '<div id="rg-sign"></div>'); blocSignature($('#rg-sign'));
+}
+/* ----- v3.15 : signature et cachet du directeur ----- */
+async function blocSignature(z) {
+  const E = await api('signatureEtat'), A = E.apercu || {};
+  z.innerHTML = `<div class="carte"><h2 style="margin-top:0">✍ Signature et cachet du directeur</h2>
+    <p class="aide">Imprimés automatiquement au verso de chaque carte, à l'emplacement « Le Directeur ». ${E.peutModifier ? 'Signez sur une feuille blanche, posez le cachet à côté, puis prenez chacun en photo, bien à plat et bien éclairé : le fond blanc est retiré automatiquement.' : 'Seuls le directeur et l\'administrateur peuvent les déposer.'}</p>
+    <div class="sg-zone">${['SIGNATURE', 'CACHET'].map(t => { const img = t === 'CACHET' ? A.cachet : A.signature, ok = t === 'CACHET' ? E.cachet : E.signature;
+      return `<div class="sg-case"><b>${t === 'CACHET' ? '🔵 Cachet' : '✍ Signature'}</b><div class="sg-ap">${img ? `<img src="${img}" alt="">` : ok ? '✅ enregistré(e)' : '<span class="aide">aucun(e)</span>'}</div>
+        ${E.peutModifier ? `<input type="file" accept="image/*" capture="environment" hidden data-sg-f="${t}"><button class="btn petit" data-sg="${t}">📷 ${ok ? 'Remplacer' : 'Prendre en photo'}</button>${ok ? ` <button class="btn petit secondaire" data-sg-x="${t}">Retirer</button>` : ''}` : ''}</div>`; }).join('')}</div>
+    ${E.peutModifier ? `<label class="case"><input type="checkbox" id="sg-bul" ${E.bulletins ? 'checked' : ''}> Imprimer aussi la signature et le cachet sur les <b>bulletins validés</b></label>` : E.bulletins ? '<p class="aide">Également imprimés sur les bulletins validés.</p>' : ''}
+    ${E.historique.length ? `<p class="aide">${E.historique.map(h => (h.type === 'CACHET' ? 'Cachet' : 'Signature') + ' déposé(e) le ' + esc(String(h.le).slice(0, 10).split('-').reverse().join('/')) + ' par ' + esc(h.par)).join(' · ')}</p>` : ''}</div>`;
+  $$('[data-sg]', z).forEach(b => b.onclick = () => $(`[data-sg-f="${b.dataset.sg}"]`, z).click());
+  $$('[data-sg-f]', z).forEach(inp => inp.onchange = async ev => {
+    const f = ev.target.files[0]; if (!f) return; const type = inp.dataset.sgF;
+    try { toast('Traitement de l\'image…'); const img = await detourerImage(f, type === 'CACHET' ? 420 : 560, type === 'CACHET');
+      if (!confirm('Vérifiez l\'aperçu : le fond doit être transparent. Enregistrer ?')) return;
+      toast((await api('signatureDeposer', { type, image: img })).message, 5000); blocSignature(z); } catch (e) { toast(e.message, 7000); } });
+  $$('[data-sg-x]', z).forEach(b => b.onclick = async () => { if (!confirm('Retirer ?')) return; try { toast((await api('signatureDeposer', { type: b.dataset.sgX, retirer: true })).message); blocSignature(z); } catch (e) { toast(e.message, 6000); } });
+  if ($('#sg-bul', z)) $('#sg-bul', z).onchange = async e => { try { toast((await api('signatureBulletins', { actif: e.target.checked })).message, 5000); } catch (er) { toast(er.message, 6000); e.target.checked = !e.target.checked; } };
+}
+/** Retire le fond clair d'une photo (signature ou cachet), recadre et réduit ; renvoie un PNG transparent. */
+async function detourerImage(fichier, largeurMax, couleur) {
+  const url = URL.createObjectURL(fichier);
+  const im = await new Promise((ok, ko) => { const i = new Image(); i.onload = () => ok(i); i.onerror = () => ko(new Error('Image illisible.')); i.src = url; });
+  let W = im.naturalWidth, H = im.naturalHeight; const r0 = Math.min(1, 1600 / Math.max(W, H)); W = Math.round(W * r0); H = Math.round(H * r0);
+  const cv = document.createElement('canvas'); cv.width = W; cv.height = H; const cx = cv.getContext('2d'); cx.drawImage(im, 0, 0, W, H); URL.revokeObjectURL(url);
+  const d = cx.getImageData(0, 0, W, H), p = d.data;
+  // seuil d'après la clarté moyenne du papier
+  let som = 0, nb = 0; for (let i = 0; i < p.length; i += 4 * 16) { som += (p[i] + p[i + 1] + p[i + 2]) / 3; nb++; }
+  const fond = Math.min(235, som / nb), seuil = fond - 45;
+  let x0 = W, y0 = H, x1 = 0, y1 = 0;
+  for (let y = 0; y < H; y++) for (let x = 0; x < W; x++) {
+    const i = (y * W + x) * 4, l = (p[i] + p[i + 1] + p[i + 2]) / 3, sat = Math.max(p[i], p[i + 1], p[i + 2]) - Math.min(p[i], p[i + 1], p[i + 2]);
+    const encre = l < seuil || (couleur && sat > 60 && l < fond - 15);
+    if (!encre) { p[i + 3] = 0; continue; }
+    const a = Math.min(255, Math.round((fond - l) / (fond - seuil + 1) * 255 + (couleur ? sat : 0))); p[i + 3] = Math.max(120, a);
+    if (!couleur) { p[i] = Math.min(p[i], 40); p[i + 1] = Math.min(p[i + 1], 40); p[i + 2] = Math.min(p[i + 2], 90); }   // encre bien noire/bleue
+    if (x < x0) x0 = x; if (x > x1) x1 = x; if (y < y0) y0 = y; if (y > y1) y1 = y;
+  }
+  if (x1 <= x0 || y1 <= y0) throw new Error('Rien de lisible sur la photo : reprenez-la sur fond blanc, bien éclairée.');
+  cx.putImageData(d, 0, 0);
+  const m = 6; x0 = Math.max(0, x0 - m); y0 = Math.max(0, y0 - m); x1 = Math.min(W - 1, x1 + m); y1 = Math.min(H - 1, y1 + m);
+  let lw = Math.min(largeurMax, x1 - x0 + 1), out = '';
+  for (let k = 0; k < 6; k++) {
+    const r = lw / (x1 - x0 + 1), c2 = document.createElement('canvas'); c2.width = Math.round((x1 - x0 + 1) * r); c2.height = Math.round((y1 - y0 + 1) * r);
+    c2.getContext('2d').drawImage(cv, x0, y0, x1 - x0 + 1, y1 - y0 + 1, 0, 0, c2.width, c2.height);
+    out = c2.toDataURL('image/png'); if (out.length < 300000) break; lw = Math.round(lw * 0.75);
+  }
+  return out;
 }
 function imprimerCartes(P) {
   const perso = P.type === 'PERSO', visi = P.type === 'VISITEUR', armoiries = 'medias/armoiries.png', logo = logoNoir();
@@ -74,7 +125,7 @@ function imprimerCartes(P) {
       <div class="cq-bande" style="background:${coul}">${perso ? 'PERSONNEL' : esc(x.niveau || '')}<i></i></div></div>`; };
   const verso = () => `<div class="cq cq-verso"><div class="cq-v-t"><img src="${armoiries}" alt=""><b>${esc(P.etab)}</b></div>
       ${visi ? `<ul><li>Ce badge reste la propriété de l'établissement.</li><li>Il doit être porté de façon visible et présenté à toute demande du personnel.</li><li>Il est strictement réservé à la visite enregistrée au portail.</li><li>Il doit être rendu au portail à la sortie.</li></ul>` : `<ul><li>Cette carte est strictement personnelle.</li><li>Elle doit être présentée à toute réquisition du personnel de l'établissement.</li><li>En cas de perte, prévenir immédiatement ${perso ? "l'administration" : 'la vie scolaire'}.</li><li>Toute carte trouvée doit être rapportée à l'établissement.</li></ul>`}
-      ${P.contact ? `<div class="cq-contact">${esc(P.contact)}</div>` : ''}<div class="cq-sign"><span>Le Directeur</span><b>${esc(P.directeur || '')}</b></div><div class="cq-tri"><i></i><i></i><i></i></div></div>`;
+      ${P.contact ? `<div class="cq-contact">${esc(P.contact)}</div>` : ''}<div class="cq-sign"><span>Le Directeur</span>${P.signDir && (P.signDir.signature || P.signDir.cachet) ? `<div class="cq-sg">${P.signDir.cachet ? `<img class="cq-cachet" src="${P.signDir.cachet}" alt="">` : ''}${P.signDir.signature ? `<img class="cq-signature" src="${P.signDir.signature}" alt="">` : ''}</div>` : ''}<b>${esc(P.directeur || '')}</b></div><div class="cq-tri"><i></i><i></i><i></i></div></div>`;
   const pages = [];
   for (let i = 0; i < P.cartes.length; i += 10) {
     const lot = P.cartes.slice(i, i + 10);

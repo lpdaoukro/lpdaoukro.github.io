@@ -157,7 +157,7 @@ async function pageEleve(c, id) {
              : `<div class="ident"><dl>${champs.map(([k, lib, type]) => champLecture(k, lib, type, e)).join('')}</dl></div>`}</div>`).join('')}
     ${edit ? `<div id="msg"></div><button class="btn vert large" id="enr">${nouveau ? '✔ Inscrire l\'élève' : '✔ Enregistrer les modifications'}</button>` : ''}
     </form>
-    ${!nouveau && ['admin', 'comptable', 'directeur', 'censeur', 'educateur'].includes(role()) ? `<div class="carte" style="margin-top:12px"><h2 style="margin-top:0">💰 Frais de scolarité</h2>
+    ${!nouveau && ['admin', 'comptable', 'directeur', 'educateur'].includes(role()) ? `<div class="carte" style="margin-top:12px"><h2 style="margin-top:0">💰 Frais de scolarité</h2>
       <p class="aide">Inscription en ligne, paquet de rames, scolarité, frais d'examen, reçus et reste à payer.</p><a class="btn" href="#/frais-eleve/${e.id}">💰 Voir les frais de l'élève</a></div>` : ''}
     ${!nouveau && edit ? `<div class="carte"><h2 style="margin-top:0">Situation de l'élève</h2>
       <form id="fs" class="ligne"><div><label>Situation</label><select name="situation">${D.situations.map(s => `<option ${s === e.situation ? 'selected' : ''}>${s}</option>`).join('')}</select></div>
