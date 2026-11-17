@@ -958,3 +958,6 @@ html[data-theme=sombre] .cq-alerte { color: #FF9A9A; }
 .par-convoc { border-left: 5px solid var(--orange); } .par-info { border-left: 5px solid var(--bleu2); }
 #impression .convoc-print p { font-size: 11pt; line-height: 1.5; } #impression .convoc-coupon { margin-top: 18mm; font-size: 10pt; }
 html[data-theme=sombre] .bulle.moi { background: #1C2B3D; } html[data-theme=sombre] .bulle { background: #232B36; }
+/* v3.13.1 : cartes QR — 10 cartes tiennent sur une page (marges d'impression supprimées, cartes centrées) */
+@media print { @page cartes { size: A4; margin: 0; } #impression .page.cq-page { page: cartes; } }
+#impression .page.cq-page { padding: 13mm 0 0 !important; margin: 0 !important; height: 296mm; box-sizing: border-box; overflow: hidden; min-height: 0; }
