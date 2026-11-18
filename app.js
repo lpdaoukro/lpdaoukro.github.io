@@ -277,7 +277,7 @@ function redimensionnerPhoto(fichier) {
 
 /* ================= BOÎTE À SUGGESTIONS (v2.5) ================= */
 let SUGG_PAGE = '';
-const VERSION_SITE = '3.18';
+const VERSION_SITE = '3.19.1';
 /* ================= NOTIFICATIONS SUR LE TÉLÉPHONE (v2.6, Firebase) ================= */
 // configuration publique du projet Firebase (faite pour être dans le site) ; la clé privée reste dans Apps Script
 const FIREBASE_CFG = { apiKey: 'AIzaSyDVRNmLz5ph73vf2a9vFhd2RVni8H9swt0', authDomain: 'lpdaoukro-notification.firebaseapp.com', projectId: 'lpdaoukro-notification',
@@ -459,6 +459,7 @@ async function pageEtablissement(c) {
       <div class="ligne"><div>${champ('code', 'Code établissement')}</div><div>${champ('statut', 'Statut', 'Public / Privé')}</div><div>${champ('dretfpa', 'Direction régionale')}</div></div>
       ${champ('adresse', 'Adresse postale')}<div class="ligne"><div>${champ('tel', 'Téléphone')}</div><div>${champ('email', 'E-mail')}</div></div>
       ${champ('ministere', 'Ministère (en-tête des bulletins)')}
+      <label>Abonnement annuel de l'espace parents (FCFA)</label><input name="prixParents" type="number" min="0" step="50" value="${esc(E.prixParents)}"><div class="aide">Prix par famille et par année scolaire. 0 = gratuit. Les familles déjà abonnées cette année ne paient pas la différence.</div>
       <label>Logo de l'établissement</label><div class="ligne" style="align-items:center"><img id="et-logo" src="${E.logo || logoCouleur()}" alt="" style="height:70px;width:auto;background:#fff;border:1px solid #ddd;border-radius:8px;padding:4px">
         <div><input type="file" id="et-f" accept="image/*"><div class="aide">Image carrée de préférence (PNG). Elle est réduite automatiquement.</div>${E.logo ? '<button type="button" class="btn petit secondaire" id="et-sans">Retirer le logo</button>' : ''}</div></div>
       <div id="et-msg"></div><button class="btn vert large">Enregistrer</button></form>`;
@@ -806,6 +807,8 @@ const PAGES = {
   'paiement':      { titre: 'État de paiement', mod: ['pointage', 'CONSULTE'], roles: ['censeur', 'admin', 'directeur'], fn: pagePaiement },
   'personnel':     { titre: 'Personnel', mod: ['pointage', 'CONSULTE'], roles: ['censeur', 'admin', 'directeur', 'assistante'], fn: pagePersonnel },
   'emplois':       { titre: 'Emplois du temps', mod: ['edt', 'CONSULTE'], roles: ['admin', 'censeur'], fn: (c, a) => pageEmploisV2(c, a) },
+  'tp':            { titre: 'Séances de TP', roles: ['admin', 'directeur', 'censeur', 'intervenant'], si: () => accesAtelierClient(['TOUT', 'CHEF', 'PROF']), fn: (c, a) => pageTp(c, a) },
+  'mallette':      { titre: 'Mallette', roles: ['admin', 'directeur', 'censeur', 'intervenant'], cache: true, fn: (c, a) => pageMallette(c, a) },
   'atelier':       { titre: 'Tableau de bord', roles: ['admin', 'directeur', 'censeur', 'educateur', 'comptable', 'intervenant'], si: () => accesAtelierClient(['TOUT', 'CHEF', 'PROF']), fn: c => pageAtelier(c) },
   'inventaire':    { titre: 'Inventaire', roles: ['admin', 'directeur', 'censeur', 'educateur', 'comptable', 'intervenant'], si: () => accesAtelierClient(['TOUT', 'CHEF', 'PROF']), fn: c => pageInventaire(c) },
   'equipement':    { titre: 'Équipement', roles: ['admin', 'directeur', 'censeur', 'educateur', 'comptable', 'intervenant'], fn: (c, a) => pageEquipement(c, a) },
@@ -857,7 +860,7 @@ const GROUPES_MENU = [   // v3.16 : un menu par grand domaine
   { id: 'parents', titre: '👨‍👩‍👧 Parents', pages: ['parents-com', 'familles'] },
   { id: 'securite', titre: '🛡 Accueil et sécurité', pages: ['controle', 'visiteurs', 'cartes', 'signalements'] },
   { id: 'personnel', titre: '👨‍🏫 Personnel', pages: ['pointage', 'arrivees', 'tableau', 'intervenants', 'rattrapages', 'reclamations', 'paiement', 'personnel'] },
-  { id: 'atelier', titre: '🔧 Atelier', pages: ['atelier', 'inventaire', 'demandes-mo', 'stock-mo', 'prets', 'securite', 'rapports-atelier'] },
+  { id: 'atelier', titre: '🔧 Atelier', pages: ['tp', 'atelier', 'inventaire', 'demandes-mo', 'stock-mo', 'prets', 'securite', 'rapports-atelier'] },
   { id: 'stages', titre: '🤝 Stages et entreprises', pages: ['stages'] },
   { id: 'finances', titre: '💰 Finances', pages: ['caisse', 'finances', 'rames'] },
   { id: 'admin', titre: '⚙ Administration', pages: ['annonces', 'calendrier-scolaire', 'emplois', 'comptes', 'droits', 'rubriques', 'acces-atelier', 'signature', 'suggestions', 'passage', 'etablissement', 'licence', 'journal'] }
@@ -888,7 +891,7 @@ function afficher() {
   const pg0 = (location.hash.slice(2) || '').split('/');
   if (pg0[0] === 'signaler' || pg0[0] === 'suivi') return pageSignalPublic(pg0[0], decodeURIComponent(pg0[1] || ''));
   if (pg0[0] === 'carte' && (!S.session || S.session.parent || !['admin', 'directeur', 'censeur', 'educateur', 'comptable', 'intervenant', 'gardien'].includes(role()))) return pageCartePublique(decodeURIComponent(pg0[1] || ''));   // v3.12
-  if (pg0[0] === 'equipement' && !S.session) stock.ecrire('hash_en_attente', location.hash);
+  if ((pg0[0] === 'equipement' || pg0[0] === 'mallette') && !S.session) stock.ecrire('hash_en_attente', location.hash);
   if (pg0[0] === 'pointer') {
     if (!S.session) { stock.ecrire('pointage_en_attente', pg0[1] || ''); return ecranConnexion(); }
     if (!S.session.parent) return pagePointerQr(decodeURIComponent(pg0[1] || ''));

@@ -1019,3 +1019,14 @@ html[data-theme=sombre] .rp-stock > div { background: #1B2533; } html[data-theme
 .interrupteur span::after { content: ''; position: absolute; top: 3px; left: 3px; width: 18px; height: 18px; border-radius: 50%; background: #fff; transition: transform .2s; }
 .interrupteur input:checked + span { background: #16A34A; } .interrupteur input:checked + span::after { transform: translateX(18px); }
 html[data-theme=sombre] .bandeau-desact, html[data-theme=sombre] .desact-m { background: #3B1515; color: #FCA5A5; }
+/* v3.19 : séances de TP */
+a.carte.tp-seance { display: block; color: inherit; text-decoration: none; }
+.tp-ouverte { border-left: 4px solid #DC2626; }
+.tp-t { width: 100%; border-collapse: collapse; margin: 6px 0; } .tp-t td, .tp-t th { padding: 4px 6px; border-bottom: 1px solid var(--bord); font-size: .9rem; text-align: left; }
+.tp-t select, .tp-t input { width: 100%; }
+.tp-ret select { min-width: 150px; }
+.tp-fil-c.tp-resolu { opacity: .7; }
+.tp-rep { margin: 4px 0 0 12px; padding: 4px 8px; border-left: 3px solid var(--bord); font-size: .9rem; }
+.tp-etiq { display: grid; grid-template-columns: 1fr 1fr; gap: 6mm; }
+.tp-et { display: flex; gap: 4mm; border: 1px dashed #999; border-radius: 3mm; padding: 4mm; break-inside: avoid; font-size: 9pt; }
+.tp-et-qr svg { width: 32mm; height: 32mm; } .tp-et b { font-size: 12pt; display: block; margin-bottom: 2mm; } .tp-et small { color: #666; display: block; margin-top: 2mm; }
