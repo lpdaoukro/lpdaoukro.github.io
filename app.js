@@ -63,6 +63,7 @@ const RANG_DROIT = { AUCUN: 0, CONSULTE: 1, AGIT: 2 };
 const droit = m => { if (!S.session || modeProf()) return undefined; if (role() === 'admin') return 'AGIT'; return (S.session.profil.droits || {})[m]; };
 function accesPage(k) {
   const p = PAGES[k]; if (!p) return false;
+  if (pageOff(k) && role() !== 'admin') return false;   // v3.18 : rubrique désactivée
   const base = p.roles.includes(role());
   if (!p.mod || modeProf() || role() === 'admin' || role() === 'assistante' || role() === 'gardien' || role() === 'reprographe') return base;
   const plus = (S.session && S.session.profil || {}).droitsPlus;   // v3.16 : hors de son rôle, seulement si l'administrateur l'a ouvert
@@ -70,6 +71,7 @@ function accesPage(k) {
   const n = droit(p.mod[0]); if (n === undefined) return base;
   return RANG_DROIT[n] >= RANG_DROIT[p.mod[1]];
 }
+const pageOff = k => { if (!S.session || S.session.parent) return false; const o = (S.session.profil || {}).rubOff; return !!(o && o.pages && o.pages.includes(k)); };
 const encadrement = () => ['admin', 'censeur'].includes(role());
 
 /* ================= SERVEUR ================= */
@@ -275,7 +277,7 @@ function redimensionnerPhoto(fichier) {
 
 /* ================= BOÎTE À SUGGESTIONS (v2.5) ================= */
 let SUGG_PAGE = '';
-const VERSION_SITE = '3.17';
+const VERSION_SITE = '3.18';
 /* ================= NOTIFICATIONS SUR LE TÉLÉPHONE (v2.6, Firebase) ================= */
 // configuration publique du projet Firebase (faite pour être dans le site) ; la clé privée reste dans Apps Script
 const FIREBASE_CFG = { apiKey: 'AIzaSyDVRNmLz5ph73vf2a9vFhd2RVni8H9swt0', authDomain: 'lpdaoukro-notification.firebaseapp.com', projectId: 'lpdaoukro-notification',
@@ -569,6 +571,10 @@ async function dessinerEnfant(z) {
   const D = await api('parentEleve', { id: PAR.enfant }), O = PAR.onglet;
   const nm = ((PAR.moi || {}).v313 || {}).messagesNonLus || 0;
   const ong = [['notes', '📝 Notes'], ['cahier', '📘 Cahier de textes'], ['absences', '⏰ Absences'], ['messages', '✉ Messages' + (nm ? ` <span class="pastille-n">${nm}</span>` : '')], ['frais', '💰 Frais'], ['bulletins', '📄 Bulletins']];
+  { const OF = D.off || {}, cache = { notes: OF.notes, cahier: OF.cahier, absences: OF.absences, messages: OF.messages, frais: OF.finances && OF.recus, bulletins: OF.bulletins };   // v3.18
+    for (let i = ong.length - 1; i >= 0; i--) if (cache[ong[i][0]]) ong.splice(i, 1);
+    if (!ong.length) { z.innerHTML = '<div class="info">Aucune information disponible pour le moment.</div>'; return; }
+    if (!ong.some(o => o[0] === O)) { PAR.onglet = ong[0][0]; return dessinerEnfant(z); } }
   let h = (D.distinctions || []).map(x => `<div class="par-distinction">🏆 <b>${esc(x.titre)}</b> <span>${esc(x.periode)} · moyenne ${n2(x.moy)}</span></div>`).join('') + `<div class="onglets">${ong.map(([k, l]) => `<button data-po="${k}" class="${O === k ? 'actif' : ''}">${l}</button>`).join('')}</div>`;
   if (O === 'notes') {
     h += [1, 2].map(sem => { const L = D.notes.filter(n => n.semestre === sem); return L.length ? `<h2>Semestre ${sem}</h2>${L.map(m => `<div class="carte par-mat"><div class="par-mat-t"><b>${esc(m.matiere)}</b><span>coef. ${nb(m.coef)}</span><b class="par-moy ${m.moyenne !== null && m.moyenne < 10 ? 'bas' : ''}">${m.moyenne === null ? '—' : n2(m.moyenne)}</b></div>
@@ -763,6 +769,7 @@ const PAGES = {
   'direction':     { titre: 'Tableau de bord', roles: ['directeur', 'admin', 'censeur', 'comptable'], fn: (c, a) => pageTableauBord(c, a) },
   'ma-fiche':      { titre: 'Ma fiche', roles: ['intervenant', 'censeur', 'admin'], si: () => S.session.profil.intervenant || role() === 'intervenant', fn: pageMaFiche },
   'courrier':      { titre: 'Courrier', roles: ['admin', 'directeur', 'assistante', 'censeur', 'comptable', 'educateur'], fn: c => pageCourrier(c) },
+  'rubriques':     { titre: 'Rubriques', roles: ['admin'], fn: c => pageRubriques(c) },
   'repro':         { titre: 'Reprographie', roles: ['admin', 'directeur', 'censeur', 'educateur', 'comptable', 'intervenant', 'assistante', 'reprographe'], fn: (c, a) => pageRepro(c, a) },
   'rames':         { titre: 'Rames (reprographie)', roles: ['comptable'], fn: c => pageRepro(c, 'rames') },
   'agenda':        { titre: 'Agenda du directeur', roles: ['admin', 'directeur', 'assistante'], fn: c => pageAgenda(c) },
@@ -853,7 +860,7 @@ const GROUPES_MENU = [   // v3.16 : un menu par grand domaine
   { id: 'atelier', titre: '🔧 Atelier', pages: ['atelier', 'inventaire', 'demandes-mo', 'stock-mo', 'prets', 'securite', 'rapports-atelier'] },
   { id: 'stages', titre: '🤝 Stages et entreprises', pages: ['stages'] },
   { id: 'finances', titre: '💰 Finances', pages: ['caisse', 'finances', 'rames'] },
-  { id: 'admin', titre: '⚙ Administration', pages: ['annonces', 'calendrier-scolaire', 'emplois', 'comptes', 'droits', 'acces-atelier', 'signature', 'suggestions', 'passage', 'etablissement', 'licence', 'journal'] }
+  { id: 'admin', titre: '⚙ Administration', pages: ['annonces', 'calendrier-scolaire', 'emplois', 'comptes', 'droits', 'rubriques', 'acces-atelier', 'signature', 'suggestions', 'passage', 'etablissement', 'licence', 'journal'] }
 ];
 let groupeOuvert = null;
 function menu() {
@@ -865,9 +872,9 @@ function menu() {
   const ouvert = groupes.find(g => g.id === (groupeOuvert || gAct));
   $('#menu').innerHTML = `<div class="menu-groupes">${groupes.map(g => {
       const n = g.pages.reduce((a, k) => a + past(k), 0), seul = g.pages.length === 1;
-      return `<a href="${seul ? '#/' + g.pages[0] : '#'}" data-g="${g.id}" class="${g.id === gAct ? 'actif' : ''} ${ouvert && g.id === ouvert.id && !seul ? 'ouvert' : ''}">${g.titre}${!seul ? ' <span class="fleche">▾</span>' : ''}${n ? `<span class="pastille">${n}</span>` : ''}</a>`;
+      return `<a href="${seul ? '#/' + g.pages[0] : '#'}" data-g="${g.id}" class="${g.id === gAct ? 'actif' : ''} ${ouvert && g.id === ouvert.id && !seul ? 'ouvert' : ''} ${g.pages.every(pageOff) ? 'desact' : ''}" ${g.pages.every(pageOff) ? 'title="Rubrique désactivée"' : ''}>${g.titre}${!seul ? ' <span class="fleche">▾</span>' : ''}${n ? `<span class="pastille">${n}</span>` : ''}</a>`;
     }).join('')}</div>
-    ${ouvert && ouvert.pages.length > 1 ? `<div class="menu-pages">${ouvert.pages.map(k => `<a href="#/${k}" class="${k === act ? 'actif' : ''}">${PAGES[k].titre}${past(k) ? `<span class="pastille">${past(k)}</span>` : ''}</a>`).join('')}</div>` : ''}`;
+    ${ouvert && ouvert.pages.length > 1 ? `<div class="menu-pages">${ouvert.pages.map(k => `<a href="#/${k}" class="${k === act ? 'actif' : ''} ${pageOff(k) ? 'desact' : ''}">${PAGES[k].titre}${pageOff(k) ? ' <span class="desact-m">désactivée</span>' : ''}${past(k) ? `<span class="pastille">${past(k)}</span>` : ''}</a>`).join('')}</div>` : ''}`;
   $$('#menu [data-g]').forEach(a => a.onclick = e => {
     const g = groupes.find(x => x.id === a.dataset.g);
     if (g.pages.length === 1) { groupeOuvert = null; return; }
@@ -908,7 +915,7 @@ function afficher() {
   window.scrollTo(0, 0);
   const tour = afficher.tour = (afficher.tour || 0) + 1;
   const accueil = afficher.accueil;
-  Promise.resolve(PAGES[page].fn(c, decodeURIComponent(arg || ''))).then(() => { if (accueil && tour === afficher.tour && c.isConnected) { if (!$('.salut', c)) c.insertAdjacentHTML('afterbegin', ligneSalut()); if (!$('#av', c)) { $('.salut', c).insertAdjacentHTML('afterend', '<div id="av"></div>'); accueilVivant($('#av', c)); } } }).then(lancerCarrousels).catch(e => {
+  Promise.resolve(PAGES[page].fn(c, decodeURIComponent(arg || ''))).then(() => { if (pageOff(page) && c.isConnected && !$('.bandeau-desact', c)) c.insertAdjacentHTML('afterbegin', '<div class="bandeau-desact">⛔ Rubrique désactivée : elle est cachée pour tout le monde, sauf pour vous. <a href="#/rubriques">Réactiver</a></div>'); if (accueil && tour === afficher.tour && c.isConnected) { if (!$('.salut', c)) c.insertAdjacentHTML('afterbegin', ligneSalut()); if (!$('#av', c)) { $('.salut', c).insertAdjacentHTML('afterend', '<div id="av"></div>'); accueilVivant($('#av', c)); } } }).then(lancerCarrousels).catch(e => {
     if (tour !== afficher.tour) return;   // une autre page a été ouverte entre-temps
     c.innerHTML = `<div class="erreur">${esc(e.message)}</div>${e instanceof HorsLigne ? '<p class="aide">Cette page a besoin de la connexion. Le pointage, l\'appel et la saisie des notes fonctionnent hors connexion dès que l\'application a été ouverte une fois avec internet.</p>' : ''}`;
   }).then(appliquerPhotos);

@@ -86,3 +86,29 @@ async function pageAccesAtelier(c) {
   };
   await dessiner();
 }
+
+/* ===================== v3.18 : RUBRIQUES ACTIVÉES / DÉSACTIVÉES ===================== */
+async function pageRubriques(c) {
+  const R = await api('rubriques', {});
+  const off = new Set(); R.rubriques.forEach(r => { if (r.off) off.add(r.code); r.elements.forEach(e => { if (e.off) off.add(e.code); }); });
+  const dessiner = () => {
+    c.innerHTML = `<h1>🧩 Rubriques de l'établissement</h1>
+      <p class="aide">Désactivez une rubrique entière, ou seulement une de ses pages. Elle disparaît des menus de tout le monde (personnel et parents) et le serveur refuse son utilisation. Vous seul la voyez encore, grisée. <b>Rien n'est effacé</b> : en la réactivant, tout revient comme avant.</p>
+      ${R.profils.length ? `<div class="alerte">⛔ Connexion bloquée pour : ${R.profils.map(p => ({ gardien: 'le gardien', assistante: 'l\'assistante de direction', reprographe: 'le reprographe' })[p] || p).join(', ')} (plus aucune page active).</div>` : ''}
+      ${R.rubriques.map(r => { const tout = off.has(r.code);
+        return `<div class="carte rub ${tout ? 'rub-off' : ''}"><div class="rub-t"><b>${esc(r.lib)}</b>
+          <label class="interrupteur"><input type="checkbox" data-r="${r.code}" ${tout ? '' : 'checked'}><span></span> ${tout ? 'Désactivée' : 'Activée'}</label></div>
+          ${r.noyau ? `<div class="aide">${esc(r.noyau)}</div>` : ''}
+          <div class="rub-el">${r.elements.map(e => `<label class="case ${tout ? 'grise' : ''}"><input type="checkbox" data-e="${e.code}" ${!off.has(e.code) && !tout ? 'checked' : ''} ${tout ? 'disabled' : ''}> ${esc(e.lib)}</label>`).join('')}</div></div>`; }).join('')}
+      <div class="actions"><button class="btn vert large" id="rub-ok">✔ Enregistrer</button></div>`;
+    $$('[data-r]', c).forEach(i => i.onchange = () => { i.checked ? off.delete(i.dataset.r) : off.add(i.dataset.r); dessiner(); });
+    $$('[data-e]', c).forEach(i => i.onchange = () => { i.checked ? off.delete(i.dataset.e) : off.add(i.dataset.e); });
+    $('#rub-ok', c).onclick = async () => {
+      const b = $('#rub-ok', c); b.disabled = true;
+      try { const r = await api('reglerRubriques', { off: [...off] }); toast(r.message, 7000);
+        const m = await api('moi'); if (m.profil) { S.session.profil = m.profil; stock.ecrire('session', S.session); menu(); }
+        pageRubriques(c); } catch (e) { toast(e.message, 7000); b.disabled = false; }
+    };
+  };
+  dessiner();
+}
