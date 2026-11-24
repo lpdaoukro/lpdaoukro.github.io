@@ -277,7 +277,7 @@ function redimensionnerPhoto(fichier) {
 
 /* ================= BOÎTE À SUGGESTIONS (v2.5) ================= */
 let SUGG_PAGE = '';
-const VERSION_SITE = '3.21';
+const VERSION_SITE = '3.21.1';
 /* ================= NOTIFICATIONS SUR LE TÉLÉPHONE (v2.6, Firebase) ================= */
 // configuration publique du projet Firebase (faite pour être dans le site) ; la clé privée reste dans Apps Script
 const FIREBASE_CFG = { apiKey: 'AIzaSyDVRNmLz5ph73vf2a9vFhd2RVni8H9swt0', authDomain: 'lpdaoukro-notification.firebaseapp.com', projectId: 'lpdaoukro-notification',
@@ -1242,9 +1242,7 @@ function nommerSignataires(z) {
       else if (/professeur principal/.test(t)) nom = uneVal(N.pp);
       else if (/^\s*(signature de )?l.intervenant|^\s*l.enseignant|^\s*le formateur|^\s*l.int[ée]ress/.test(t)) nom = persNom;
       if (!nom || norm(b.textContent).includes(norm(nom))) return;
-      const br = [...b.childNodes].findIndex(x => x.nodeName === 'BR' && x.nextSibling && x.nextSibling.nodeName === 'BR');
-      const el = document.createElement('div'); el.className = 'sign-nom'; el.textContent = nom;
-      if (br >= 0) b.insertBefore(el, b.childNodes[br]); else b.appendChild(el);
+      const el = document.createElement('span'); el.className = 'sign-nom'; el.textContent = nom; b.appendChild(el);   // en bas de la case, la place de la signature au milieu
     });
   });
 }
