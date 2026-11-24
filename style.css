@@ -1037,3 +1037,17 @@ a.carte.tp-seance { display: block; color: inherit; text-decoration: none; }
 tr.sg-manque td:first-child { color: #B91C1C; }
 /* v3.21 : autorisations d'absence */
 .au-c.au-ok { border-left: 4px solid #16A34A; }
+/* v3.21.3 : fiche hebdomadaire sur une seule page, en-tête réduit, grandes cases de signature */
+#impression .fiche-hebdo .entete-doc { grid-template-columns: 36mm 1fr 14mm; gap: 3mm; margin-bottom: 1mm; }
+#impression .fiche-hebdo .ent-ministere { width: 36mm; } #impression .fiche-hebdo .ent-lycee { width: 14mm; height: auto; }
+#impression .fiche-hebdo .entete-doc { font-size: 9pt; } #impression .fiche-hebdo .bandeau { font-size: 10.5pt; }
+#impression .fiche-hebdo .bandeau { padding: 1.5mm 3mm; margin: 1mm 0 2mm; }
+#impression .fiche-hebdo .fh-sem { text-align: center; font-weight: 700; margin-bottom: 2px; font-size: 9.5pt; }
+#impression .fiche-hebdo .ident-print { font-size: 8.5pt; margin: 2px 0 4px; gap: 0 12px; }
+#impression .fiche-hebdo .photo-print { width: 52px; height: 66px; }
+#impression .fiche-hebdo table { font-size: 8.5pt; } #impression .fiche-hebdo td, #impression .fiche-hebdo th { padding: 2px 5px; }
+#impression .fiche-hebdo h3 { margin: 6px 0 3px; font-size: 10pt; }
+#impression .fiche-hebdo p { margin: 3px 0; font-size: 8.5pt !important; }
+#impression .fiche-hebdo .signatures { margin-top: 8px; break-inside: avoid; }
+#impression .fiche-hebdo .signatures > div { height: 34mm; }
+@media print { @page hebdo { size: A4; margin: 8mm; } #impression .page.fiche-hebdo { page: hebdo; } }

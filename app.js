@@ -277,7 +277,7 @@ function redimensionnerPhoto(fichier) {
 
 /* ================= BOÎTE À SUGGESTIONS (v2.5) ================= */
 let SUGG_PAGE = '';
-const VERSION_SITE = '3.21.1';
+const VERSION_SITE = '3.21.3';
 /* ================= NOTIFICATIONS SUR LE TÉLÉPHONE (v2.6, Firebase) ================= */
 // configuration publique du projet Firebase (faite pour être dans le site) ; la clé privée reste dans Apps Script
 const FIREBASE_CFG = { apiKey: 'AIzaSyDVRNmLz5ph73vf2a9vFhd2RVni8H9swt0', authDomain: 'lpdaoukro-notification.firebaseapp.com', projectId: 'lpdaoukro-notification',
@@ -1260,7 +1260,7 @@ function imprimer(html, titre) {
   // on attend que les logos et photos soient chargés (4 s au plus), sinon ils manquent sur la feuille
   const imgs = $$('img', z).filter(i => !i.complete);
   const pret = Promise.race([Promise.all(imgs.map(i => new Promise(ok => { i.onload = i.onerror = ok; }))), new Promise(ok => setTimeout(ok, 4000))]);
-  pret.then(() => setTimeout(() => { if (tour !== imprimer.tour) return; window.print(); setTimeout(() => { if (document.body.classList.contains('imprime') && !matchMedia('print').matches) fin(); }, 1500); }, 200));
+  pret.then(() => setTimeout(() => { if (tour !== imprimer.tour) return; try { ajusterPages(z); } catch (e) { /* mesure refaite après chargement des images */ } window.print(); setTimeout(() => { if (document.body.classList.contains('imprime') && !matchMedia('print').matches) fin(); }, 1500); }, 200));
 }
 const entete = titre => `<div class="entete-doc"><img src="medias/ministere.png" class="ent-ministere" alt=""><div class="ent-centre"><b>${esc(String(S.session.params.etablissement).toUpperCase())}</b><span>Année scolaire ${esc(S.session.params.annee)}</span><span class="ent-tri"><i></i><i></i><i></i></span></div><img src="${logoNoir()}" class="ent-lycee" alt=""></div><div class="bandeau">${esc(titre)}</div>`;
 function identPrint(F) {
@@ -1285,8 +1285,8 @@ function imprimerFicheHebdo(F, w) {
   }
   (F.rattrapages || []).filter(r => r.valide === 'OUI' && r.date >= s.lundi && r.date <= ajouterJours(s.lundi, 4)).forEach(r =>
     lignes.push(`<tr><td>${fr(r.date)}</td><td colspan="2">${esc(r.nature)} ${esc(r.horaire)}</td><td>—</td><td>${esc(r.classe)}</td><td>${esc(r.niveau)}</td><td class="n">${nb(r.heures)}</td><td><b>Présent</b></td><td>Validé</td></tr>`));
-  imprimer(`<div class="page">${entete("FICHE HEBDOMADAIRE D'ÉMARGEMENT ET D'HEURES SUPPLÉMENTAIRES")}
-    <div style="text-align:center;font-weight:700;margin-bottom:6px">${libSem(s.lundi)}</div>
+  imprimer(`<div class="page une-page fiche-hebdo">${entete("FICHE HEBDOMADAIRE D'ÉMARGEMENT ET D'HEURES SUPPLÉMENTAIRES")}
+    <div class="fh-sem">${libSem(s.lundi)}</div>
     ${identPrint(F)}
     <table><thead><tr><th>Date</th><th>Jour</th><th>Horaire</th><th>Matière</th><th>Classe</th><th>Niveau</th><th class="n">Heures</th><th>Statut</th><th>Motif</th></tr></thead>
     <tbody>${lignes.join('') || '<tr><td colspan="9">Aucune séance</td></tr>'}</tbody></table>
@@ -1300,7 +1300,7 @@ function imprimerFicheHebdo(F, w) {
     <p style="font-size:9.5pt">Service dû : <b>${nb(s.service)} h</b> · Cumul des heures supp. depuis octobre : <b>${nb(s.cumul)} h</b> · Heures d'absence : <b>${nb(s.absences)} h</b>${s.autorisees ? ` · Absence autorisée : <b>${nb(s.autorisees)} h</b>` : ''}${s.autService ? ` · Absence de service (comptée) : <b>${nb(s.autService)} h</b>` : ''}
       ${voit ? ` · Cumul du montant : <b>${fcfa(s.cumulMontant)}</b>` : ''} ${s.repere ? `<br><b style="color:#C00000">${esc(s.repere)}</b>` : ''}</p>
     <p style="font-size:9.5pt">${(F.certifications || []).find(x => x.w === w) ? `✓ Présences certifiées par l'intervenant dans l'application le ${esc(F.certifications.find(x => x.w === w).le)}.` : 'Présences non encore certifiées dans l\'application.'}</p>
-    <div class="signatures"><div>Signature de l'intervenant<br>(fin de semaine)</div><div>Visa du Censeur</div><div>Le Directeur</div></div></div>`);
+    <div class="signatures"><div>L'intervenant (fin de semaine)</div><div>Visa du Censeur</div><div>Le Directeur</div></div></div>`);
 }
 function imprimerBilan(F) {
   const K = F.calcul, voit = K.montant !== undefined, taux = S.session.params.taux;
