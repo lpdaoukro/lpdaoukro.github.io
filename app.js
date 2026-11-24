@@ -277,7 +277,7 @@ function redimensionnerPhoto(fichier) {
 
 /* ================= BOÎTE À SUGGESTIONS (v2.5) ================= */
 let SUGG_PAGE = '';
-const VERSION_SITE = '3.19.1';
+const VERSION_SITE = '3.21';
 /* ================= NOTIFICATIONS SUR LE TÉLÉPHONE (v2.6, Firebase) ================= */
 // configuration publique du projet Firebase (faite pour être dans le site) ; la clé privée reste dans Apps Script
 const FIREBASE_CFG = { apiKey: 'AIzaSyDVRNmLz5ph73vf2a9vFhd2RVni8H9swt0', authDomain: 'lpdaoukro-notification.firebaseapp.com', projectId: 'lpdaoukro-notification',
@@ -770,6 +770,8 @@ const PAGES = {
   'direction':     { titre: 'Tableau de bord', roles: ['directeur', 'admin', 'censeur', 'comptable'], fn: (c, a) => pageTableauBord(c, a) },
   'ma-fiche':      { titre: 'Ma fiche', roles: ['intervenant', 'censeur', 'admin'], si: () => S.session.profil.intervenant || role() === 'intervenant', fn: pageMaFiche },
   'courrier':      { titre: 'Courrier', roles: ['admin', 'directeur', 'assistante', 'censeur', 'comptable', 'educateur'], fn: c => pageCourrier(c) },
+  'autorisations': { titre: 'Autorisations d\'absence', roles: ['admin', 'directeur', 'censeur', 'educateur', 'comptable', 'intervenant', 'gardien', 'assistante', 'reprographe'], fn: (c, a) => pageAutorisations(c, a) },
+  'signataires':   { titre: 'Signataires', roles: ['admin'], fn: c => pageSignataires(c) },
   'rubriques':     { titre: 'Rubriques', roles: ['admin'], fn: c => pageRubriques(c) },
   'repro':         { titre: 'Reprographie', roles: ['admin', 'directeur', 'censeur', 'educateur', 'comptable', 'intervenant', 'assistante', 'reprographe'], fn: (c, a) => pageRepro(c, a) },
   'rames':         { titre: 'Rames (reprographie)', roles: ['comptable'], fn: c => pageRepro(c, 'rames') },
@@ -859,11 +861,11 @@ const GROUPES_MENU = [   // v3.16 : un menu par grand domaine
   { id: 'notes', titre: '📝 Pédagogie', pages: ['notes', 'cahier', 'repro', 'bulletins', 'calendrier-conseils'] },
   { id: 'parents', titre: '👨‍👩‍👧 Parents', pages: ['parents-com', 'familles'] },
   { id: 'securite', titre: '🛡 Accueil et sécurité', pages: ['controle', 'visiteurs', 'cartes', 'signalements'] },
-  { id: 'personnel', titre: '👨‍🏫 Personnel', pages: ['pointage', 'arrivees', 'tableau', 'intervenants', 'rattrapages', 'reclamations', 'paiement', 'personnel'] },
+  { id: 'personnel', titre: '👨‍🏫 Personnel', pages: ['pointage', 'arrivees', 'autorisations', 'tableau', 'intervenants', 'rattrapages', 'reclamations', 'paiement', 'personnel'] },
   { id: 'atelier', titre: '🔧 Atelier', pages: ['tp', 'atelier', 'inventaire', 'demandes-mo', 'stock-mo', 'prets', 'securite', 'rapports-atelier'] },
   { id: 'stages', titre: '🤝 Stages et entreprises', pages: ['stages'] },
   { id: 'finances', titre: '💰 Finances', pages: ['caisse', 'finances', 'rames'] },
-  { id: 'admin', titre: '⚙ Administration', pages: ['annonces', 'calendrier-scolaire', 'emplois', 'comptes', 'droits', 'rubriques', 'acces-atelier', 'signature', 'suggestions', 'passage', 'etablissement', 'licence', 'journal'] }
+  { id: 'admin', titre: '⚙ Administration', pages: ['annonces', 'calendrier-scolaire', 'emplois', 'comptes', 'droits', 'rubriques', 'acces-atelier', 'signataires', 'signature', 'suggestions', 'passage', 'etablissement', 'licence', 'journal'] }
 ];
 let groupeOuvert = null;
 function menu() {
@@ -912,6 +914,7 @@ function afficher() {
   menu(); majReseau(); majEnteteMode(); majActions();
   if (!afficher.profilFrais && navigator.onLine) {   // v3.16 : profil remis à jour une fois par ouverture (droits, atelier, professeur principal…)
     afficher.profilFrais = true;
+    api('signatairesNoms').then(r => { S.signNoms = r; stock.ecrire('signNoms', r); }).catch(() => { /* hors ligne : on garde les derniers noms */ });   // v3.20
     api('moi').then(r => { if (!S.session || !r.profil) return; S.session.profil = r.profil; stock.ecrire('session', S.session); cacheVue('moi', r); menu(); }).catch(() => { afficher.profilFrais = false; });
   }
   c.innerHTML = '<div class="chargement">Chargement…</div>';
@@ -1215,11 +1218,42 @@ function ajusterPages(z) {
 }
 /** Nom proposé quand on enregistre en PDF : le navigateur prend le titre de la page. */
 function nomFichier(t) { return String(t || '').replace(/[\\/:*?"<>|]+/g, '-').replace(/\s+/g, ' ').trim().slice(0, 120); }
+/** v3.20 : sous le titre de chaque case de signature, le nom du signataire (directeur, censeur de la classe, intendant…). */
+function nommerSignataires(z) {
+  const N = S.signNoms || stock.lire('signNoms'); if (!N || !S.session || S.session.parent) return;
+  const classes = Object.keys(Object.assign({}, N.censeurs || {}, N.educateurs || {}, N.pp || {})).sort((a, b) => b.length - a.length);
+  const norm = t => String(t || '').toUpperCase().replace(/\s+/g, '');
+  $$('.page', z).forEach(pg => {
+    const txt = pg.textContent || '', T = norm(txt), titre = norm(($('.entete-doc', pg) || {}).textContent || '');
+    const hs = /HEURESSUPPL|PRÉSENCESDUPERSONNEL|PRESENCESDUPERSONNEL/.test(titre);
+    let cls = pg.dataset.classe ? [pg.dataset.classe] : [];
+    if (!cls.length) { let rest = T; classes.forEach(k => { const c = norm(k); if (c.length >= 3 && rest.includes(c)) { cls.push(k); rest = rest.split(c).join('|'); } }); }
+    const uneVal = map => { const v = [...new Set(cls.map(k => (map || {})[k]).filter(Boolean))]; return v.length === 1 ? v[0] : ''; };
+    const idt = $('.ident-print', pg), persNom = pg.dataset.pers || (idt ? ((idt.textContent.match(/Nom et prénoms\s*:\s*([^\n]+?)\s*Matricule/) || [])[1] || '') : '');
+    $$('.signatures > div, .sign-2 > div, .off-sign > div', pg).forEach(b => {
+      if ($('.sign-nom', b)) return;
+      const t = (b.textContent || '').toLowerCase(); let nom = '';
+      if (/censeur/.test(t)) nom = pg.dataset.censeur || (hs ? N.censeurHS : (uneVal(N.censeurs) || N.censeurDefaut));
+      else if (/directeur|chef d.établissement/.test(t)) nom = N.directeur;
+      else if (/intendant|comptable|économe|econome/.test(t)) nom = N.intendant;
+      else if (/chef de travaux/.test(t)) nom = N.chefTravaux;
+      else if (/serfe/.test(t)) nom = N.serfe;
+      else if (/éducateur|educateur/.test(t)) nom = uneVal(N.educateurs) || N.educateurDefaut;
+      else if (/professeur principal/.test(t)) nom = uneVal(N.pp);
+      else if (/^\s*(signature de )?l.intervenant|^\s*l.enseignant|^\s*le formateur|^\s*l.int[ée]ress/.test(t)) nom = persNom;
+      if (!nom || norm(b.textContent).includes(norm(nom))) return;
+      const br = [...b.childNodes].findIndex(x => x.nodeName === 'BR' && x.nextSibling && x.nextSibling.nodeName === 'BR');
+      const el = document.createElement('div'); el.className = 'sign-nom'; el.textContent = nom;
+      if (br >= 0) b.insertBefore(el, b.childNodes[br]); else b.appendChild(el);
+    });
+  });
+}
 function imprimer(html, titre) {
   const z = $('#impression'); z.innerHTML = html;
   if (!titre) { const b = $('.bandeau, .off-titre', z); titre = b ? b.textContent.trim().toLowerCase().replace(/^./, x => x.toUpperCase()) : ''; }
   const titreAvant = imprimer.titreAvant || document.title; imprimer.titreAvant = titreAvant;
   if (titre) document.title = nomFichier(titre);
+  try { nommerSignataires(z); } catch (e) { /* sans noms */ }   // v3.20
   ajusterPages(z);
   const tour = imprimer.tour = (imprimer.tour || 0) + 1;
   document.body.classList.add('imprime');
@@ -1265,7 +1299,7 @@ function imprimerFicheHebdo(F, w) {
       ${voit ? `<tr><td>Heures supp. payées</td><td class="n">${nb(s.payeesNiv.BTS)}</td><td class="n">${nb(s.payeesNiv.BT)}</td><td class="n">${nb(s.payeesNiv.CAP)}</td><td class="n"><b>${nb(s.payees)}</b></td></tr>
       <tr class="total"><td>Montant de la semaine</td><td colspan="4" class="n">${fcfa(s.montant)}</td></tr>` : ''}
     </tbody></table>
-    <p style="font-size:9.5pt">Service dû : <b>${nb(s.service)} h</b> · Cumul des heures supp. depuis octobre : <b>${nb(s.cumul)} h</b> · Heures d'absence : <b>${nb(s.absences)} h</b>
+    <p style="font-size:9.5pt">Service dû : <b>${nb(s.service)} h</b> · Cumul des heures supp. depuis octobre : <b>${nb(s.cumul)} h</b> · Heures d'absence : <b>${nb(s.absences)} h</b>${s.autorisees ? ` · Absence autorisée : <b>${nb(s.autorisees)} h</b>` : ''}${s.autService ? ` · Absence de service (comptée) : <b>${nb(s.autService)} h</b>` : ''}
       ${voit ? ` · Cumul du montant : <b>${fcfa(s.cumulMontant)}</b>` : ''} ${s.repere ? `<br><b style="color:#C00000">${esc(s.repere)}</b>` : ''}</p>
     <p style="font-size:9.5pt">${(F.certifications || []).find(x => x.w === w) ? `✓ Présences certifiées par l'intervenant dans l'application le ${esc(F.certifications.find(x => x.w === w).le)}.` : 'Présences non encore certifiées dans l\'application.'}</p>
     <div class="signatures"><div>Signature de l'intervenant<br>(fin de semaine)</div><div>Visa du Censeur</div><div>Le Directeur</div></div></div>`);
@@ -1281,7 +1315,7 @@ function imprimerBilan(F) {
       Heures au-delà du plafond (non payées) : <b>${nb(K.hs - K.payees)} h</b></p>
     <h3>3. Répartition mensuelle</h3><table><thead><tr><th>Mois</th><th class="n">Heures supp.</th><th class="n">Payées</th>${voit ? '<th class="n">Montant</th>' : ''}</tr></thead><tbody>
     ${parMois.map(x => `<tr><td>${MOIS_LIB[x.m]}</td><td class="n">${nb(x.hs)}</td><td class="n">${nb(x.p)}</td>${voit ? `<td class="n">${fcfa(x.mt)}</td>` : ''}</tr>`).join('')}</tbody></table>
-    <h3>4. Présences</h3><p>Séances présentes : <b>${K.presences}</b> · Séances absentes : <b>${K.absences}</b> · Heures d'absence : <b>${nb(K.heuresAbsence)}</b> ·
+    <h3>4. Présences</h3><p>Séances présentes : <b>${K.presences}</b> · Séances absentes : <b>${K.absences}</b> · Heures d'absence : <b>${nb(K.heuresAbsence)}</b>${K.heuresAutorisees ? ` · Absences autorisées : <b>${nb(K.heuresAutorisees)} h</b>` : ''} ·
       Rattrapages validés : <b>${K.rattrapagesValides}</b> · Taux de présence : <b>${pct(K.taux)}</b></p>
     ${voit ? `<div class="bandeau">MONTANT TOTAL À PAYER POUR L'ANNÉE : ${fcfa(K.montant)}</div>` : ''}
     <p><b>Observations du Censeur :</b></p><div style="border:1px solid #999;height:60px"></div>

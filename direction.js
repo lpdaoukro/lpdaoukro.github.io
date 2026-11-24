@@ -112,3 +112,41 @@ async function pageRubriques(c) {
   };
   dessiner();
 }
+
+/* ===================== v3.20 : SIGNATAIRES DES DOCUMENTS ===================== */
+async function pageSignataires(c) {
+  const D = await api('signataires', {}), R = D.reglages;
+  const cl = D.classes.map(k => Object.assign({}, k));
+  const opt = (L, v, vide) => `<option value="">${vide}</option>` + L.map(p => `<option value="${esc(p.matricule)}" ${p.matricule === v ? 'selected' : ''}>${esc(p.nom)}</option>`).join('');
+  const persOpt = v => `<option value="">— personne —</option>` + D.personnel.map(p => `<option value="${esc(p.matricule)}" ${p.matricule === v ? 'selected' : ''}>${esc(p.nom)}${p.fonction ? ' — ' + esc(p.fonction) : ''}</option>`).join('');
+  const niveaux = [...new Set(cl.map(k => k.niveau).filter(Boolean))].sort();
+  const dessiner = () => {
+    const sansC = cl.filter(k => !k.censeur).length, sansE = cl.filter(k => !k.educateur).length;
+    c.innerHTML = `<h1>✍ Signataires des documents</h1>
+      <p class="aide">Ces noms s'impriment sous le titre de chaque case de signature (fiches, états, cahiers de textes, lettres…). Une case dont le signataire est inconnu reste sans nom.</p>
+      <div class="carte"><h3 style="margin-top:0">Direction et services</h3>
+        <div class="ligne"><div><label>Le Directeur / Chef d'établissement</label><select data-p="directeur">${persOpt(R.directeur)}</select></div>
+          <div><label>Censeur des heures supplémentaires</label><select data-p="censeurHS">${opt(D.censeurs, R.censeurHS, '— choisir —')}</select><div class="aide">Fiche hebdomadaire, état de paiement, bilans du personnel.</div></div></div>
+        <div class="ligne"><div><label>L'Intendant / Comptable / Économe</label><select data-p="intendant">${persOpt(R.intendant)}</select></div>
+          <div><label>Le Chef de travaux</label><select data-p="chefTravaux">${persOpt(R.chefTravaux)}</select></div>
+          <div><label>Le SERFE</label><select data-p="serfe">${persOpt(R.serfe)}</select></div></div>
+        <p class="aide">Repris de la liste du personnel par défaut ; vous pouvez choisir une autre personne (intérim…).</p></div>
+      <div class="carte"><h3 style="margin-top:0">Censeur et éducateur de chaque classe</h3>
+        ${sansC && D.censeurs.length > 1 ? `<div class="alerte">${sansC} classe(s) sans censeur attribué : leur case « Censeur » restera sans nom.</div>` : D.censeurs.length === 1 ? `<p class="aide">Un seul censeur : ${esc(D.censeurs[0].nom)} signe par défaut pour toutes les classes.</p>` : ''}
+        <div class="actions">${D.censeurs.map(p => `<span class="sg-rac"><b>${esc(p.nom)}</b> : ${niveaux.map(n => `<button class="btn petit secondaire" data-rc="${esc(p.matricule)}" data-niv="${esc(n)}">toutes les ${esc(n)}</button>`).join('')}</span>`).join('') || '<span class="aide">Aucun censeur dans la liste du personnel (fonction « Censeur »).</span>'}</div>
+        <div class="table-defil"><table><thead><tr><th>Classe</th><th>Niveau</th><th>Censeur</th><th>Éducateur</th></tr></thead><tbody>
+        ${cl.map((k, i) => `<tr class="${k.censeur ? '' : 'sg-manque'}"><td><b>${esc(k.code)}</b></td><td>${esc(k.niveau)}</td><td><select data-c="${i}">${opt(D.censeurs, k.censeur, '—')}</select></td><td><select data-e="${i}">${opt(D.educateurs, k.educateur, '—')}</select></td></tr>`).join('')}</tbody></table></div>
+        ${sansE && D.educateurs.length > 1 ? `<p class="aide">${sansE} classe(s) sans éducateur attribué.</p>` : ''}</div>
+      <div class="actions"><button class="btn vert large" id="sg-ok">✔ Enregistrer</button></div>`;
+    $$('[data-c]', c).forEach(s => s.onchange = () => { cl[+s.dataset.c].censeur = s.value; });
+    $$('[data-e]', c).forEach(s => s.onchange = () => { cl[+s.dataset.e].educateur = s.value; });
+    $$('[data-p]', c).forEach(s => s.onchange = () => { R[s.dataset.p] = s.value; R[s.dataset.p + 'Change'] = true; });
+    $$('[data-rc]', c).forEach(b => b.onclick = () => { cl.forEach(k => { if (k.niveau === b.dataset.niv) k.censeur = b.dataset.rc; }); dessiner(); });
+    $('#sg-ok', c).onclick = async () => {
+      const q = { classes: cl.map(k => ({ code: k.code, censeur: k.censeur, educateur: k.educateur })) };
+      ['directeur', 'censeurHS', 'intendant', 'chefTravaux', 'serfe'].forEach(k => { if (R[k + 'Change'] || !R[k + 'Defaut']) q[k] = R[k] || ''; });
+      try { const r = await api('reglerSignataires', q); toast(r.message, 5000); S.signNoms = await api('signatairesNoms'); stock.ecrire('signNoms', S.signNoms); pageSignataires(c); } catch (e) { toast(e.message, 7000); }
+    };
+  };
+  dessiner();
+}

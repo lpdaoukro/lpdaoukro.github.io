@@ -1030,3 +1030,9 @@ a.carte.tp-seance { display: block; color: inherit; text-decoration: none; }
 .tp-etiq { display: grid; grid-template-columns: 1fr 1fr; gap: 6mm; }
 .tp-et { display: flex; gap: 4mm; border: 1px dashed #999; border-radius: 3mm; padding: 4mm; break-inside: avoid; font-size: 9pt; }
 .tp-et-qr svg { width: 32mm; height: 32mm; } .tp-et b { font-size: 12pt; display: block; margin-bottom: 2mm; } .tp-et small { color: #666; display: block; margin-top: 2mm; }
+/* v3.20 : nom du signataire */
+.sign-nom { font-weight: 700; margin-top: 1mm; font-size: .95em; }
+.sg-rac { display: inline-flex; flex-wrap: wrap; gap: 4px; align-items: center; margin-right: 12px; }
+tr.sg-manque td:first-child { color: #B91C1C; }
+/* v3.21 : autorisations d'absence */
+.au-c.au-ok { border-left: 4px solid #16A34A; }
