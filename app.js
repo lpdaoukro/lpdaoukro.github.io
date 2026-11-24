@@ -277,7 +277,7 @@ function redimensionnerPhoto(fichier) {
 
 /* ================= BOÎTE À SUGGESTIONS (v2.5) ================= */
 let SUGG_PAGE = '';
-const VERSION_SITE = '3.21.4';
+const VERSION_SITE = '3.21.5';
 /* ================= NOTIFICATIONS SUR LE TÉLÉPHONE (v2.6, Firebase) ================= */
 // configuration publique du projet Firebase (faite pour être dans le site) ; la clé privée reste dans Apps Script
 const FIREBASE_CFG = { apiKey: 'AIzaSyDVRNmLz5ph73vf2a9vFhd2RVni8H9swt0', authDomain: 'lpdaoukro-notification.firebaseapp.com', projectId: 'lpdaoukro-notification',
@@ -1214,10 +1214,9 @@ function ajusterPages(z) {
       h = p.scrollHeight;
     }
     if (h < haut && p.classList.contains('fiche-hebdo')) {   // v3.21.4 : la fiche hebdomadaire occupe toute la feuille
-      const tr = $$('table:first-of-type tbody tr', p), sg = $$('.signatures > div', p);
-      let reste = haut - h - 2 * mm;
-      if (reste > 0 && sg.length) { const plus = Math.min(reste * 0.35, 25 * mm); sg.forEach(d => { d.style.height = (d.offsetHeight + plus) + 'px'; }); reste -= plus; }
-      if (reste > 0 && tr.length) { const ex = reste / tr.length; tr.forEach(t => { t.style.height = Math.min(t.offsetHeight + ex, 9 * mm) + 'px'; }); }
+      const tr = $$('table:first-of-type tbody tr', p);
+      const reste = haut - h - 2 * mm;   // les cases de signature gardent leur taille ; ce sont les lignes du tableau qui s'agrandissent
+      if (reste > 0 && tr.length) { const ex = reste / tr.length; tr.forEach(t => { t.style.height = Math.min(t.offsetHeight + ex, 14 * mm) + 'px'; }); }
       h = p.scrollHeight;
     }
     if (h > haut) p.style.zoom = String(Math.floor(haut / h * 1000) / 1000);
