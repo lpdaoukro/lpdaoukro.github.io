@@ -277,7 +277,7 @@ function redimensionnerPhoto(fichier) {
 
 /* ================= BOÎTE À SUGGESTIONS (v2.5) ================= */
 let SUGG_PAGE = '';
-const VERSION_SITE = '3.21.3';
+const VERSION_SITE = '3.21.4';
 /* ================= NOTIFICATIONS SUR LE TÉLÉPHONE (v2.6, Firebase) ================= */
 // configuration publique du projet Firebase (faite pour être dans le site) ; la clé privée reste dans Apps Script
 const FIREBASE_CFG = { apiKey: 'AIzaSyDVRNmLz5ph73vf2a9vFhd2RVni8H9swt0', authDomain: 'lpdaoukro-notification.firebaseapp.com', projectId: 'lpdaoukro-notification',
@@ -912,9 +912,11 @@ function afficher() {
   if (!PAGES[page] || !accesPage(page)) { page = def; history.replaceState(null, '', '#/' + def); }
   afficher.accueil = page === def;
   menu(); majReseau(); majEnteteMode(); majActions();
+  if (S.session && !S.session.parent && navigator.onLine && (!afficher.signLe || Date.now() - afficher.signLe > 600000)) {   // v3.21.4 : noms des signataires à jour
+    afficher.signLe = Date.now(); api('signatairesNoms').then(r => { S.signNoms = r; stock.ecrire('signNoms', r); }).catch(() => { afficher.signLe = 0; });
+  }
   if (!afficher.profilFrais && navigator.onLine) {   // v3.16 : profil remis à jour une fois par ouverture (droits, atelier, professeur principal…)
     afficher.profilFrais = true;
-    api('signatairesNoms').then(r => { S.signNoms = r; stock.ecrire('signNoms', r); }).catch(() => { /* hors ligne : on garde les derniers noms */ });   // v3.20
     api('moi').then(r => { if (!S.session || !r.profil) return; S.session.profil = r.profil; stock.ecrire('session', S.session); cacheVue('moi', r); menu(); }).catch(() => { afficher.profilFrais = false; });
   }
   c.innerHTML = '<div class="chargement">Chargement…</div>';
@@ -1211,6 +1213,13 @@ function ajusterPages(z) {
       if (reste > 4 * mm) $$('.bul-appc, .bul-visa', p).forEach(x => { x.style.minHeight = (x.offsetHeight + Math.min(reste / 2, 25 * mm)) + 'px'; });
       h = p.scrollHeight;
     }
+    if (h < haut && p.classList.contains('fiche-hebdo')) {   // v3.21.4 : la fiche hebdomadaire occupe toute la feuille
+      const tr = $$('table:first-of-type tbody tr', p), sg = $$('.signatures > div', p);
+      let reste = haut - h - 2 * mm;
+      if (reste > 0 && sg.length) { const plus = Math.min(reste * 0.35, 25 * mm); sg.forEach(d => { d.style.height = (d.offsetHeight + plus) + 'px'; }); reste -= plus; }
+      if (reste > 0 && tr.length) { const ex = reste / tr.length; tr.forEach(t => { t.style.height = Math.min(t.offsetHeight + ex, 9 * mm) + 'px'; }); }
+      h = p.scrollHeight;
+    }
     if (h > haut) p.style.zoom = String(Math.floor(haut / h * 1000) / 1000);
     p.style.width = '';
   });
@@ -1224,7 +1233,7 @@ function nommerSignataires(z) {
   const classes = Object.keys(Object.assign({}, N.censeurs || {}, N.educateurs || {}, N.pp || {})).sort((a, b) => b.length - a.length);
   const norm = t => String(t || '').toUpperCase().replace(/\s+/g, '');
   $$('.page', z).forEach(pg => {
-    const txt = pg.textContent || '', T = norm(txt), titre = norm(($('.entete-doc', pg) || {}).textContent || '');
+    const txt = pg.textContent || '', T = norm(txt), titre = norm((($('.entete-doc', pg) || {}).textContent || '') + ' ' + (($('.bandeau', pg) || {}).textContent || ''));
     const hs = /HEURESSUPPL|PRÉSENCESDUPERSONNEL|PRESENCESDUPERSONNEL/.test(titre);
     let cls = pg.dataset.classe ? [pg.dataset.classe] : [];
     if (!cls.length) { let rest = T; classes.forEach(k => { const c = norm(k); if (c.length >= 3 && rest.includes(c)) { cls.push(k); rest = rest.split(c).join('|'); } }); }
