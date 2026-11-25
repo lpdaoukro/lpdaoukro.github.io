@@ -57,7 +57,17 @@ const S = {
   enLigne: navigator.onLine
 };
 const modeProf = () => !!(S.session && S.session.profil && S.session.profil.double && stock.lire('mode', 'admin') === 'professeur');
-const role = () => S.session && (S.session.parent ? 'parent' : S.session.profil.double ? (modeProf() ? 'intervenant' : 'admin') : S.session.profil.role);
+const roleFonction = () => { const p = (S.session && S.session.profil) || {}; return p.roleFonction || (p.role && p.role !== 'intervenant' ? p.role : 'admin'); };   // v3.22
+const role = () => S.session && (S.session.parent ? 'parent' : S.session.profil.double ? (modeProf() ? 'intervenant' : roleFonction()) : S.session.profil.role);
+const LIB_FONCTION = { admin: 'Administrateur', directeur: 'Directeur', censeur: 'Censeur', educateur: 'Éducateur', comptable: 'Intendant / Comptable', assistante: 'Assistante de direction', gardien: 'Gardien', reprographe: 'Reprographe' };
+/** v3.22 : la classe est-elle à ma charge (censeur, éducateur) ? Sinon : consultation seulement. */
+const enChargeC = cl => { if (!S.session || S.session.parent || modeProf()) return true; const c = (S.session.profil || {}).charge; if (!c || !['censeur', 'educateur'].includes(role())) return true; const k = String(cl || '').toUpperCase().replace(/\s+/g, ''); return c.some(x => String(x).toUpperCase().replace(/\s+/g, '') === k); };
+function bandeauCharge(c, cl) {
+  if (!cl || enChargeC(cl) || $('.bandeau-charge', c)) return;
+  const N = S.signNoms || stock.lire('signNoms') || {}, qui = role() === 'censeur' ? (N.censeurs || {})[cl] : (N.educateurs || {})[cl];
+  ['#cc-visa', '#bc-val', '#bc-ann'].forEach(k => { const b = $(k, c); if (b) b.remove(); });
+  c.insertAdjacentHTML('afterbegin', `<div class="bandeau-charge">👁 Consultation seulement — ${esc(cl)} n'est pas dans votre charge${qui ? ` (suivie par ${esc(qui)})` : ''}. Vous pouvez tout voir, mais pas modifier.</div>`);
+}
 /* droits réglables (v2.3) : niveau effectif AGIT / CONSULTE / AUCUN d'un module pour l'utilisateur */
 const RANG_DROIT = { AUCUN: 0, CONSULTE: 1, AGIT: 2 };
 const droit = m => { if (!S.session || modeProf()) return undefined; if (role() === 'admin') return 'AGIT'; return (S.session.profil.droits || {})[m]; };
@@ -277,7 +287,7 @@ function redimensionnerPhoto(fichier) {
 
 /* ================= BOÎTE À SUGGESTIONS (v2.5) ================= */
 let SUGG_PAGE = '';
-const VERSION_SITE = '3.21.5';
+const VERSION_SITE = '3.22';
 /* ================= NOTIFICATIONS SUR LE TÉLÉPHONE (v2.6, Firebase) ================= */
 // configuration publique du projet Firebase (faite pour être dans le site) ; la clé privée reste dans Apps Script
 const FIREBASE_CFG = { apiKey: 'AIzaSyDVRNmLz5ph73vf2a9vFhd2RVni8H9swt0', authDomain: 'lpdaoukro-notification.firebaseapp.com', projectId: 'lpdaoukro-notification',
@@ -780,7 +790,7 @@ const PAGES = {
   'acces-atelier': { titre: 'Accès à l\'atelier', roles: ['admin'], fn: c => pageAccesAtelier(c) },
   'parents-com':   { titre: 'Parents', roles: ['admin', 'directeur', 'censeur', 'educateur', 'comptable', 'intervenant'], si: () => role() !== 'intervenant' || ((S.session.profil || {}).pp || []).length > 0, fn: (c, a) => pageParentsCom(c, a) },
   'cartes':        { titre: 'Cartes QR', roles: ['admin', 'directeur', 'censeur', 'educateur'], fn: (c, a) => pageCartes(c, a) },
-  'controle':      { titre: 'Contrôle des cartes', roles: ['admin', 'directeur', 'censeur', 'educateur', 'comptable', 'gardien', 'assistante'], fn: c => pageControle(c) },
+  'controle':      { titre: 'Contrôle des cartes', roles: ['admin', 'directeur', 'censeur', 'educateur', 'gardien', 'assistante'], fn: c => pageControle(c) },
   'visiteurs':     { titre: 'Visiteurs', roles: ['admin', 'directeur', 'censeur', 'educateur', 'gardien', 'assistante'], fn: (c, a) => pageVisiteurs(c, a) },
   'carte':         { titre: 'Contrôle des cartes', roles: ['admin', 'directeur', 'censeur', 'educateur', 'comptable', 'intervenant', 'gardien', 'assistante'], cache: true, fn: (c, a) => pageControle(c, a) },
   'cahier':        { titre: 'Cahier de textes', roles: ['intervenant', 'censeur', 'admin', 'directeur', 'educateur'], fn: (c, a) => pageCahier(c, a) },
@@ -923,7 +933,7 @@ function afficher() {
   window.scrollTo(0, 0);
   const tour = afficher.tour = (afficher.tour || 0) + 1;
   const accueil = afficher.accueil;
-  Promise.resolve(PAGES[page].fn(c, decodeURIComponent(arg || ''))).then(() => { if (pageOff(page) && c.isConnected && !$('.bandeau-desact', c)) c.insertAdjacentHTML('afterbegin', '<div class="bandeau-desact">⛔ Rubrique désactivée : elle est cachée pour tout le monde, sauf pour vous. <a href="#/rubriques">Réactiver</a></div>'); if (accueil && tour === afficher.tour && c.isConnected) { if (!$('.salut', c)) c.insertAdjacentHTML('afterbegin', ligneSalut()); if (!$('#av', c)) { $('.salut', c).insertAdjacentHTML('afterend', '<div id="av"></div>'); accueilVivant($('#av', c)); } } }).then(lancerCarrousels).catch(e => {
+  Promise.resolve(PAGES[page].fn(c, decodeURIComponent(arg || ''))).then(() => { if (['cahier-classe', 'conseil'].includes(page) || (page === 'bulletins' && arg)) bandeauCharge(c, decodeURIComponent(arg || '')); if (pageOff(page) && c.isConnected && !$('.bandeau-desact', c)) c.insertAdjacentHTML('afterbegin', '<div class="bandeau-desact">⛔ Rubrique désactivée : elle est cachée pour tout le monde, sauf pour vous. <a href="#/rubriques">Réactiver</a></div>'); if (accueil && tour === afficher.tour && c.isConnected) { if (!$('.salut', c)) c.insertAdjacentHTML('afterbegin', ligneSalut()); if (!$('#av', c)) { $('.salut', c).insertAdjacentHTML('afterend', '<div id="av"></div>'); accueilVivant($('#av', c)); } } }).then(lancerCarrousels).catch(e => {
     if (tour !== afficher.tour) return;   // une autre page a été ouverte entre-temps
     c.innerHTML = `<div class="erreur">${esc(e.message)}</div>${e instanceof HorsLigne ? '<p class="aide">Cette page a besoin de la connexion. Le pointage, l\'appel et la saisie des notes fonctionnent hors connexion dès que l\'application a été ouverte une fois avec internet.</p>' : ''}`;
   }).then(appliquerPhotos);
@@ -935,7 +945,7 @@ document.addEventListener('DOMContentLoaded', () => {
   $('#btn-actions').onclick = () => { location.hash = '#/actions'; };
   if (!$('#btn-sugg')) { const b = document.createElement('button'); b.id = 'btn-sugg'; b.className = 'btn-actions'; b.title = 'Suggestion ou problème : écrire à l\'administrateur'; b.textContent = '💡'; b.hidden = true;
     $('#btn-actions').before(b); b.onclick = () => { if (!location.hash.startsWith('#/suggestion')) SUGG_PAGE = (location.hash.slice(2) || '').split('/')[0]; location.hash = '#/suggestion'; }; }
-  $('#btn-mode').onclick = () => { stock.ecrire('mode', modeProf() ? 'admin' : 'professeur'); NT.ref = null; history.replaceState(null, '', '#/'); toast(modeProf() ? 'Mode Professeur : interface enseignant.' : 'Mode Administrateur.'); afficher(); majActions(true); };
+  $('#btn-mode').onclick = () => { stock.ecrire('mode', modeProf() ? 'admin' : 'professeur'); NT.ref = null; history.replaceState(null, '', '#/'); toast(modeProf() ? 'Mode Enseignant : interface professeur.' : 'Mode ' + (LIB_FONCTION[roleFonction()] || 'fonction') + '.'); afficher.profilFrais = false; afficher(); majActions(true); };
   setInterval(() => majActions(true), 5 * 60 * 1000);
   if ('serviceWorker' in navigator) navigator.serviceWorker.register('sw.js').then(() => setTimeout(rafraichirPush, 4000)).catch(() => {});
   appliquerMarque(); chargerMarque().then(() => { if (!S.session) afficher(); });
@@ -1838,8 +1848,8 @@ async function carteBienvenue() {
 function choisirMode(suite) {
   const v = document.createElement('div'); v.className = 'bv-voile';
   v.innerHTML = `<div class="bv-carte"><div class="bv-tete"><img src="${logoBlanc()}" alt=""><div><b>${esc(MQ().court)}</b><span>Choix de l'espace</span></div></div>
-    <div class="bv-corps"><p class="bv-sal">Vous êtes administrateur et enseignant.</p><div class="bv-nom" style="font-size:1.1rem">Entrer comme :</div>
-    <div class="mode-choix"><button class="btn large" data-m="admin">⚙ Administrateur</button><button class="btn large vert" data-m="professeur">👨‍🏫 Professeur</button></div>
+    <div class="bv-corps"><p class="bv-sal">Vous êtes ${esc((LIB_FONCTION[roleFonction()] || 'membre de l\'administration').toLowerCase())} et enseignant.</p><div class="bv-nom" style="font-size:1.1rem">Entrer comme :</div>
+    <div class="mode-choix"><button class="btn large" data-m="admin">⚙ ${esc(LIB_FONCTION[roleFonction()] || 'Fonction')}</button><button class="btn large vert" data-m="professeur">👨‍🏫 Enseignant</button></div>
     <p class="aide">Vous pourrez changer à tout moment avec le bouton en haut de l'écran.</p></div></div>`;
   document.body.appendChild(v);
   $$('[data-m]', v).forEach(b => b.onclick = () => { stock.ecrire('mode', b.dataset.m); v.remove(); suite(); });
@@ -1848,7 +1858,7 @@ function majEnteteMode() {
   const b = $('#btn-mode'); if (!b) return;
   if (S.session && S.session.parent) { b.hidden = true; return; }
   const d = S.session && S.session.profil.double; b.hidden = !d;
-  if (d) { b.textContent = modeProf() ? '👨‍🏫 Prof' : '⚙ Admin'; b.dataset.court = modeProf() ? '👨‍🏫' : '⚙'; b.title = modeProf() ? 'Vous êtes en mode Professeur — passer en mode Administrateur' : 'Vous êtes en mode Administrateur — passer en mode Professeur'; b.classList.toggle('prof', modeProf()); }
+  if (d) { const lf = LIB_FONCTION[roleFonction()] || 'Fonction', court = { admin: 'Admin', comptable: 'Intendant', assistante: 'Assistante' }[roleFonction()] || lf; b.textContent = modeProf() ? '👨‍🏫 Enseignant' : '⚙ ' + court; b.dataset.court = modeProf() ? '👨‍🏫' : '⚙'; b.title = modeProf() ? 'Vous êtes en mode Enseignant — passer en mode ' + lf : 'Vous êtes en mode ' + lf + ' — passer en mode Enseignant'; b.classList.toggle('prof', modeProf()); }
   $('#btn-actions').hidden = !S.session;
   if ($('#btn-sugg')) $('#btn-sugg').hidden = !S.session || role() === 'admin';
 }

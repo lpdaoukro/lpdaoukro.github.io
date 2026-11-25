@@ -1051,3 +1051,6 @@ tr.sg-manque td:first-child { color: #B91C1C; }
 #impression .fiche-hebdo .signatures { margin-top: 8px; break-inside: avoid; }
 #impression .fiche-hebdo .signatures > div { height: 34mm; }
 @media print { @page hebdo { size: A4; margin: 8mm; } #impression .page.fiche-hebdo { page: hebdo; } }
+/* v3.22 : consultation d'une classe hors de sa charge */
+.bandeau-charge { background: #EEF4FB; color: #1E3A5F; border: 1px solid #BFD3EA; border-radius: 10px; padding: 8px 12px; margin-bottom: 10px; font-weight: 600; }
+html[data-theme=sombre] .bandeau-charge { background: #1C2B3D; color: #CFE0F5; border-color: #2F4A6B; }

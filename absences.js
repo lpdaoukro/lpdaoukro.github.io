@@ -359,6 +359,7 @@ async function pageAbsencesEleve(c, id) {
   const semC = E.semestres.find(s => auj >= s.du && auj <= s.au) || E.semestres[0];
   const contacts = [['Élève', '', e.telephone], ['Père', e.pere_nom, e.pere_tel], ['Mère', e.mere_nom, e.mere_tel], ['Tuteur', e.tuteur_nom, e.tuteur_tel]].filter(x => telInter(x[2]));
   const msg = messageParent(E, semC);
+  setTimeout(() => bandeauCharge(c, e.classe), 0);   // v3.22
   c.innerHTML = `${bandeauAncien(ancien)}<p><a href="#/absences">← Absences</a> · <a href="#/eleve/${e.id}">Fiche de l'élève</a></p>
     <div class="ident">${avatarEleve(e, 'grand')}<div><h1 style="margin:0">${esc(e.nom)} ${esc(e.prenoms)}</h1><div class="aide">${esc(e.classe)} — ${esc(e.libelle)} · Matricule ${esc(e.matricule || '—')}${e.pp ? ' · PP : ' + esc(e.pp) : ''}</div>
       ${semC.hNJ >= P.alerteNJ ? `<div class="alerte" style="margin-bottom:0">⚠ ${hTxt(semC.hNJ)} d'absence non justifiée(s) au semestre ${semC.n} (seuil : ${P.alerteNJ} h).</div>` : ''}</div></div>

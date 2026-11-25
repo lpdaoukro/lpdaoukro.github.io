@@ -609,7 +609,8 @@ async function pageBulletins(c, classe) {
     $$('tr[data-cls]', c).forEach(tr => tr.onclick = () => { location.hash = '#/bulletins/' + encodeURIComponent(tr.dataset.cls); });
     $('#bl-majors').onclick = () => imprimerMajors(sem).catch(e => toast(e.message, 5000));
     if ($('#bl-tout')) $('#bl-tout').onclick = async () => {
-      const pretes = r.classes.filter(k => k.statut === 'PRET').map(k => k.classe);
+      const pretes = r.classes.filter(k => k.statut === 'PRET' && enChargeC(k.classe)).map(k => k.classe);   // v3.22 : seulement les classes à ma charge
+      if (!pretes.length) return toast('Aucune classe prête parmi celles qui sont à votre charge.', 5000);
       if (!confirm(`Valider les bulletins du semestre ${sem} pour ${pretes.length} classe(s) : ${pretes.join(', ')} ?\n\nLes notes de ces classes seront bloquées.`)) return;
       try { toast((await api('validerBulletins', { semestre: sem, classes: pretes })).message, 5000); dessiner(); } catch (e) { toast(e.message, 5000); }
     };
@@ -671,6 +672,7 @@ async function vueBulletinsClasse(c, classe, sem) {
     ['Rang', 'Nom', 'Prénoms', 'Matricule', ...K.matieres.map(m => `${m.matiere} (c${m.coef})`), ...K.groupes.map(g => nomCourtUnite(g)), 'Moyenne', ...(sem === 2 ? ['Moy. S1', 'MGA', 'Rang annuel', 'Décision de fin d\'année'] : []), 'Abs. h', 'Abs. NJ', 'Distinction / sanction'],
     ...tri.map(e => [e.rang || '', e.nom, e.prenoms, e.matricule, ...K.matieres.map(m => e.moyennes[m.id] === null ? '' : e.moyennes[m.id]), ...K.groupes.map(g => e.unites[g].moy === null ? '' : e.unites[g].moy), e.moy === null ? '' : e.moy,
       ...(sem === 2 ? [e.s1 && e.s1.moy !== null ? e.s1.moy : '', e.annuelle === null ? '' : e.annuelle, e.rangAn || '', e.fin || e.finPropose || ''] : []), e.abs.heures, e.abs.hNJ, e.decision])] }]);
+  if (!enChargeC(K.classe)) { ['#bc-val', '#bc-ann'].forEach(k => { const b = $(k, c); if (b) b.remove(); }); bandeauCharge(c, K.classe); }   // v3.22
   if ($('#bc-val')) $('#bc-val').onclick = async () => {
     const pret = K.statut === 'PRET';
     if (!confirm(pret ? `Valider les bulletins de ${K.classe} (semestre ${sem}) ? Les notes seront bloquées.` : `Attention : ${K.statut === 'CONSEIL' ? 'le conseil de classe n\'est pas marqué comme terminé' : 'des notes manquent'}.\n\nValider quand même les bulletins de ${K.classe} ?`)) return;

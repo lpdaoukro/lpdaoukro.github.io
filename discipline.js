@@ -189,6 +189,7 @@ async function pageDisciplineEleve(c, id) {
   const contacts = [['Père', e.pere_nom, e.pere_tel], ['Mère', e.mere_nom, e.mere_tel], ['Tuteur', e.tuteur_nom, e.tuteur_tel]].filter(x => telInter(x[2]));
   const derniere = E.sanctions.find(s => s.statut === 'VALIDÉE');
   const msg = `Bonjour, le ${S.session.params.etablissement} vous informe que votre enfant ${e.nom} ${e.prenoms} (${e.classe})${derniere ? ` a fait l'objet de la sanction suivante : ${derniere.libelle}${derniere.type === 'EXCLU_TEMP' ? ` de ${derniere.jours} jour(s), du ${fr(derniere.date)} au ${fr(derniere.date_fin)} (retour le ${fr(dateRetour(derniere.date_fin))})` : ''} — motif : ${derniere.motif}.` : ' doit faire l\'objet d\'un entretien avec la Vie scolaire.'} Merci de passer au lycée. La Vie scolaire.`;
+  setTimeout(() => bandeauCharge(c, e.classe), 0);   // v3.22
   c.innerHTML = `<p><a href="#/discipline">← Discipline</a> · <a href="#/eleve/${e.id}">Fiche de l'élève</a></p>
     <div class="ident">${avatarEleve(e, 'grand')}<div><h1 style="margin:0">${nomEl(e)}</h1><div class="aide">${esc(e.classe)} — ${esc(e.libelle)} · Matricule ${esc(e.matricule || '—')}${e.pp ? ' · PP : ' + esc(e.pp) : ''}</div>
       ${e.situation !== 'INSCRIT' ? `<span class="badge A">${esc(e.situation)}</span>` : ''}</div></div>
